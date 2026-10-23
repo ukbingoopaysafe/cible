@@ -74,6 +74,8 @@
 
 - [`OWNER_DECISION_PACK.md`](./OWNER_DECISION_PACK.md) — حزمة مجمعة لمراجعة القرارات التجارية المفتوحة مع توصيات غير ملزمة.
 
+- [`V1_BLUEPRINT_PROPOSAL.md`](./V1_BLUEPRINT_PROPOSAL.md) — مخطط متكامل مقترح للإصدار الأول والقرارات التي ما زالت تمنع تثبيته.
+
 ## مراجعة الجاهزية
 
 - [`READINESS_REVIEW.md`](./READINESS_REVIEW.md) — تجميع الأسئلة حسب أثرها وبوابة بدء التنفيذ.
