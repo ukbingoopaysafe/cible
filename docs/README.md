@@ -72,6 +72,8 @@
 لا توجد حاليًا تطبيقات Laravel أو Filament، ولا قاعدة بيانات، ولا migrations، ولا اختبارات آلية. المستودع يحتوي على وثائق التخطيط وأصول العلامة التجارية فقط. راجع [`CURRENT_STATE.md`](./CURRENT_STATE.md).
 
 
+- [`OWNER_DECISION_PACK.md`](./OWNER_DECISION_PACK.md) — حزمة مجمعة لمراجعة القرارات التجارية المفتوحة مع توصيات غير ملزمة.
+
 ## مراجعة الجاهزية
 
 - [`READINESS_REVIEW.md`](./READINESS_REVIEW.md) — تجميع الأسئلة حسب أثرها وبوابة بدء التنفيذ.
