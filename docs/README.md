@@ -76,6 +76,8 @@
 
 - [`V1_BLUEPRINT_PROPOSAL.md`](./V1_BLUEPRINT_PROPOSAL.md) — مخطط متكامل مقترح للإصدار الأول والقرارات التي ما زالت تمنع تثبيته.
 
+- [`IMPLEMENTATION_READINESS_AUDIT.md`](./IMPLEMENTATION_READINESS_AUDIT.md) — تدقيق جاهزية التنفيذ، الأسئلة الحرجة، ومراحل التنفيذ المقترحة.
+
 ## مراجعة الجاهزية
 
 - [`READINESS_REVIEW.md`](./READINESS_REVIEW.md) — تجميع الأسئلة حسب أثرها وبوابة بدء التنفيذ.
