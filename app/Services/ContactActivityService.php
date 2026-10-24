@@ -51,6 +51,7 @@ class ContactActivityService
         return DB::transaction(fn (): Model => $request->activities()->create([
             'actor_user_id' => $actor->getKey(),
             'contact_party' => $contactParty,
+            'broker_id_snapshot' => $contactParty === ContactParty::Broker ? $request->broker_id : null,
             'contact_name_snapshot' => $contact->name,
             'channel' => $validated['channel'],
             'occurred_at' => $validated['occurred_at'],

@@ -14,6 +14,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use App\Enums\RequestStatus;
 
 class BrokerService
 {
@@ -103,6 +104,64 @@ class BrokerService
 
             throw $exception;
         }
+    }
+
+    public function delete(User $actor, Department $department, int $brokerId, string $reason): void
+    {
+        if (! $actor->canManageDepartment($department)) {
+            throw new AuthorizationException('حذف الوسيط متاح لمدير الشركة داخل القسم فقط.');
+        }
+
+        $reason = trim($reason);
+        if ($reason === '') {
+            throw ValidationException::withMessages(['reason' => 'سبب حذف الوسيط مطلوب.']);
+        }
+
+        $brokerClass = $this->brokerClass($department);
+        $requestClass = $department === Department::Rental ? \App\Models\RentalRequest::class : \App\Models\ResaleRequest::class;
+        $activityClass = $department === Department::Rental ? \App\Models\RentalActivity::class : \App\Models\ResaleActivity::class;
+        $requestForeignKey = $department === Department::Rental ? 'rental_request_id' : 'resale_request_id';
+
+        DB::transaction(function () use ($actor, $department, $brokerId, $brokerClass, $requestClass, $activityClass, $requestForeignKey, $reason): void {
+            $broker = $brokerClass::query()->lockForUpdate()->findOrFail($brokerId);
+            $requests = $requestClass::query()->where('broker_id', $broker->getKey())->lockForUpdate()->get();
+            if ($requests->contains(fn (Model $request): bool => $request->status !== RequestStatus::Closed)) {
+                throw ValidationException::withMessages(['broker' => 'لا يمكن حذف الوسيط لارتباطه بطلب نشط أو متوقف. أغلق الطلبات أو أعد تعيينها يدويًا أولًا.']);
+            }
+
+            $requestIds = $requests->modelKeys();
+            $activityCount = $requestIds === [] ? 0 : $activityClass::query()
+                ->where(function ($query) use ($broker, $requestIds, $requestForeignKey): void {
+                    $query->where('broker_id_snapshot', $broker->getKey())
+                        ->orWhere(function ($legacy) use ($broker, $requestIds, $requestForeignKey): void {
+                            $legacy->whereNull('broker_id_snapshot')
+                                ->whereIn($requestForeignKey, $requestIds)
+                                ->where('contact_party', 'broker')
+                                ->where('contact_name_snapshot', $broker->name);
+                        });
+                })
+                ->count();
+
+            foreach ($requests as $request) {
+                $request->broker_name_snapshot = $broker->name;
+                $request->broker_phone_snapshot = $broker->phone_e164;
+                $request->broker_id = null;
+                $request->save();
+            }
+
+            AuditEvent::query()->create([
+                'actor_user_id' => $actor->id,
+                'department' => $department->value,
+                'event_key' => 'broker.deleted',
+                'subject_type' => $broker::class,
+                'subject_id' => $broker->getKey(),
+                'before_values' => ['name' => $broker->name, 'phone_e164' => $broker->phone_e164, 'request_count' => $requests->count(), 'activity_count' => $activityCount],
+                'after_values' => null,
+                'reason' => $reason,
+                'created_at' => now(),
+            ]);
+            $broker->delete();
+        });
     }
 
     /**

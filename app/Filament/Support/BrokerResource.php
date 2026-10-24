@@ -8,6 +8,7 @@ use App\Services\BrokerService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Textarea;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
@@ -51,7 +52,10 @@ abstract class BrokerResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return false;
+        $modelClass = static::getModel();
+        $actor = auth()->user();
+
+        return static::canViewAny() && $actor instanceof User && $actor->canManageDepartment(static::department()) && $record instanceof $modelClass;
     }
 
     public static function table(Table $table): Table
@@ -88,7 +92,37 @@ abstract class BrokerResource extends Resource
                         );
                     })
                     ->successNotificationTitle('تم تحديث بيانات الوسيط'),
+                Action::make('deleteBroker')
+                    ->label('حذف الوسيط نهائيًا')
+                    ->color('danger')
+                    ->icon('heroicon-o-trash')
+                    ->visible(fn (Model $record): bool => static::canDelete($record))
+                    ->modalHeading('تأكيد حذف الوسيط نهائيًا')
+                    ->modalDescription(fn (Model $record): string => "سيتم حذف {$record->name} نهائيًا. الطلبات المرتبطة: {$record->requests()->count()}، أنشطة التواصل مع الوسيط: ".static::activityCount($record).'. لا يمكن التراجع عن هذا الإجراء؛ تُحفظ بيانات الوسيط التاريخية على الطلبات المغلقة.')
+                    ->schema([Textarea::make('reason')->label('سبب الحذف')->required()->maxLength(2000)])
+                    ->requiresConfirmation()
+                    ->action(function (Model $record, array $data): void {
+                        $actor = auth()->user();
+                        abort_unless($actor instanceof User, 403);
+                        app(BrokerService::class)->delete($actor, static::department(), (int) $record->getKey(), $data['reason']);
+                    })
+                    ->successNotificationTitle('تم حذف الوسيط وتسجيل العملية'),
             ]);
+    }
+
+    private static function activityCount(Model $broker): int
+    {
+        $requestIds = $broker->requests()->pluck($broker->requests()->getRelated()->getQualifiedKeyName());
+        $activityClass = static::department() === Department::Rental ? \App\Models\RentalActivity::class : \App\Models\ResaleActivity::class;
+        $foreignKey = static::department() === Department::Rental ? 'rental_request_id' : 'resale_request_id';
+
+        return $activityClass::query()->where(function ($query) use ($broker, $requestIds, $foreignKey): void {
+            $query->where('broker_id_snapshot', $broker->getKey())
+                ->orWhere(function ($legacy) use ($broker, $requestIds, $foreignKey): void {
+                    $legacy->whereNull('broker_id_snapshot')->whereIn($foreignKey, $requestIds)
+                        ->where('contact_party', 'broker')->where('contact_name_snapshot', $broker->name);
+                });
+        })->count();
     }
 
     public static function createBrokerAction(): Action

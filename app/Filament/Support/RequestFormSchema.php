@@ -226,7 +226,7 @@ final class RequestFormSchema
             Section::make('أطراف الطلب والموقع')
                 ->schema([
                     TextEntry::make('customer.name')->label('العميل')->placeholder('غير معروف'),
-                    TextEntry::make('broker.name')->label('الوسيط')->placeholder('—'),
+                    TextEntry::make('broker.name')->label('الوسيط')->state(fn ($record): ?string => $record?->broker?->name ?? $record?->broker_name_snapshot)->placeholder('—'),
                     TextEntry::make('contact_party')->label('جهة الاتصال')->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
                         'customer' => 'العميل',
                         'broker' => 'الوسيط',
