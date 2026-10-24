@@ -132,6 +132,14 @@ abstract class SectionRequestResource extends Resource
                         'unlinked' => $query->whereNull('customer_id'),
                         default => $query,
                     }),
+                SelectFilter::make('owner_id')
+                    ->label('المسؤول')
+                    ->options(fn (): array => User::query()
+                        ->whereHas('departmentMemberships', fn (Builder $query) => $query->where('department', static::department()->value))
+                        ->orderBy('name')
+                        ->pluck('name', 'id')
+                        ->all())
+                    ->searchable(),
                 SelectFilter::make('stage')->label('المرحلة')->options(RequestFormSchema::stageOptions(static::department())),
                 SelectFilter::make('follow_up_window')
                     ->label('موعد المتابعة')
