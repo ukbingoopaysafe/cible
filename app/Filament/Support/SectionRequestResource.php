@@ -117,6 +117,37 @@ abstract class SectionRequestResource extends Resource
                     RequestStatus::Closed->value => 'مغلق',
                 ]),
                 SelectFilter::make('stage')->label('المرحلة')->options(RequestFormSchema::stageOptions(static::department())),
+                SelectFilter::make('follow_up_window')
+                    ->label('موعد المتابعة')
+                    ->options([
+                        'overdue' => 'متأخرة',
+                        'today' => 'اليوم',
+                        'next_7_days' => 'خلال 7 أيام',
+                        'later' => 'بعد 7 أيام',
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        $window = $data['value'] ?? null;
+                        if (blank($window)) {
+                            return $query;
+                        }
+
+                        $current = now();
+                        $todayEnd = $current->copy()->endOfDay();
+                        $tomorrow = $current->copy()->addDay()->startOfDay();
+                        $weekEnd = $current->copy()->addDays(7)->endOfDay();
+
+                        return match ($window) {
+                            'overdue' => $query->where('status', RequestStatus::Active->value)
+                                ->where('next_follow_up_at', '<', $current),
+                            'today' => $query->where('status', RequestStatus::Active->value)
+                                ->whereBetween('next_follow_up_at', [$current, $todayEnd]),
+                            'next_7_days' => $query->where('status', RequestStatus::Active->value)
+                                ->whereBetween('next_follow_up_at', [$tomorrow, $weekEnd]),
+                            'later' => $query->where('status', RequestStatus::Active->value)
+                                ->where('next_follow_up_at', '>', $weekEnd),
+                            default => $query,
+                        };
+                    }),
             ])
             ->recordActions([
                 ViewAction::make()->label('عرض الطلب'),
