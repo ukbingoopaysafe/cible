@@ -28,6 +28,7 @@ class StaffManagementService
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:12'],
+            'can_add_rental_areas' => ['sometimes', 'boolean'],
         ])->validate();
 
         return DB::transaction(function () use ($actor, $validated, $departments): User {
@@ -36,6 +37,8 @@ class StaffManagementService
                 'email' => mb_strtolower(trim($validated['email'])),
                 'password' => $validated['password'],
                 'is_company_manager' => false,
+                'can_add_rental_areas' => in_array(Department::Rental, $departments, true)
+                    && (bool) ($validated['can_add_rental_areas'] ?? false),
             ]);
             foreach ($departments as $department) {
                 $user->departmentMemberships()->create(['department' => $department]);
@@ -43,6 +46,7 @@ class StaffManagementService
                     'name' => $user->name,
                     'department_access' => true,
                     'email_set' => true,
+                    'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
                 ]);
             }
 
@@ -60,16 +64,20 @@ class StaffManagementService
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
             'password' => ['nullable', 'string', 'min:12'],
+            'can_add_rental_areas' => ['sometimes', 'boolean'],
         ])->validate();
 
         $beforeName = $user->name;
         $beforeEmail = $user->email;
         $beforeDepartments = $user->departmentMemberships->pluck('department')->all();
+        $beforeCanAddRentalAreas = $user->can_add_rental_areas;
         $passwordChanged = filled($validated['password'] ?? null);
 
-        return DB::transaction(function () use ($actor, $user, $validated, $departments, $managed, $beforeName, $beforeEmail, $beforeDepartments, $passwordChanged): User {
+        return DB::transaction(function () use ($actor, $user, $validated, $departments, $managed, $beforeName, $beforeEmail, $beforeDepartments, $beforeCanAddRentalAreas, $passwordChanged): User {
             $user->name = trim($validated['name']);
             $user->email = mb_strtolower(trim($validated['email']));
+            $user->can_add_rental_areas = in_array(Department::Rental, $departments, true)
+                && (bool) ($validated['can_add_rental_areas'] ?? false);
             if (filled($validated['password'] ?? null)) {
                 $user->password = $validated['password'];
             }
@@ -96,12 +104,14 @@ class StaffManagementService
                     'department_access' => $hasBefore,
                     'email_changed' => false,
                     'password_changed' => false,
+                    'can_add_rental_areas' => $department === Department::Rental ? $beforeCanAddRentalAreas : null,
                 ];
                 $after = [
                     'name' => $user->name,
                     'department_access' => $hasAfter,
                     'email_changed' => $beforeEmail !== $user->email,
                     'password_changed' => $passwordChanged,
+                    'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
                 ];
                 if ($before !== $after) {
                     $this->recordAudit($actor, $department, 'staff.employee_updated', $user, $before, $after);

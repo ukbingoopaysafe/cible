@@ -9,6 +9,8 @@ use App\Services\StaffManagementService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Toggle;
+use Filament\Forms\Get;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
@@ -73,6 +75,9 @@ class StaffResource extends Resource
                 ->label('الأقسام')
                 ->state(fn (User $record): string => $record->departmentMemberships
                     ->map(fn ($membership): string => $membership->department->label())->join('، ')),
+            TextColumn::make('can_add_rental_areas')
+                ->label('إضافة مناطق الإيجار')
+                ->state(fn (User $record): string => $record->can_add_rental_areas ? 'مسموح' : 'غير مسموح'),
             TextColumn::make('created_at')->label('تاريخ إنشاء الحساب')->dateTime('d/m/Y H:i')->sortable(),
         ])->recordActions([
             Action::make('editEmployee')
@@ -89,6 +94,7 @@ class StaffResource extends Resource
                         'departments' => $record->departmentMemberships()
                             ->whereIn('department', array_map(fn (Department $d): string => $d->value, $managed))
                             ->pluck('department')->all(),
+                        'can_add_rental_areas' => $record->can_add_rental_areas,
                     ];
                 })
                 ->action(function (User $record, array $data): void {
@@ -125,6 +131,10 @@ class StaffResource extends Resource
                 ->label('الأقسام المصرح بها')
                 ->multiple()->required(! $editing)->minItems($editing ? 0 : 1)
                 ->options(collect($departments)->mapWithKeys(fn (Department $department): array => [$department->value => $department->label()])->all()),
+            Toggle::make('can_add_rental_areas')
+                ->label('السماح بإضافة مناطق للإيجار')
+                ->default(false)
+                ->visible(fn (Get $get): bool => in_array(Department::Rental->value, $get('departments') ?? [], true)),
         ];
     }
 }

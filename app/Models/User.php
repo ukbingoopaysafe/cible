@@ -49,6 +49,7 @@ class User extends Authenticatable implements FilamentUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_company_manager' => 'boolean',
+            'can_add_rental_areas' => 'boolean',
         ];
     }
 
@@ -71,6 +72,11 @@ class User extends Authenticatable implements FilamentUser
     public function canManageDepartment(Department $department): bool
     {
         return $this->is_company_manager;
+    }
+
+    public function canAddRentalAreas(): bool
+    {
+        return $this->is_company_manager || $this->can_add_rental_areas;
     }
 
     public function canAccessPanel(Panel $panel): bool
