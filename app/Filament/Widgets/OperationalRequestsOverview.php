@@ -5,7 +5,9 @@ namespace App\Filament\Widgets;
 use App\Enums\Department;
 use App\Enums\RequestStatus;
 use App\Models\RentalRequest;
+use App\Models\RentalAftercare;
 use App\Models\ResaleRequest;
+use App\Models\ResaleAftercare;
 use App\Models\User;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -28,7 +30,7 @@ class OperationalRequestsOverview extends StatsOverviewWidget
 
     protected function getDescription(): ?string
     {
-        return 'أعداد تشغيلية مباشرة للطلبات ومواعيد متابعتها. تظهر بيانات الأقسام المسندة إلى حسابك فقط.';
+        return 'مؤشرات الطلبات ومواعيد ما بعد الصفقة ضمن الأقسام المسندة إلى حسابك فقط.';
     }
 
     /** @return array<Stat> */
@@ -46,6 +48,7 @@ class OperationalRequestsOverview extends StatsOverviewWidget
             }
 
             $requestClass = $department === Department::Rental ? RentalRequest::class : ResaleRequest::class;
+            $aftercareClass = $department === Department::Rental ? RentalAftercare::class : ResaleAftercare::class;
             $baseQuery = $requestClass::query();
             $activeQuery = (clone $baseQuery)->where('status', RequestStatus::Active->value);
             $now = now();
@@ -65,6 +68,13 @@ class OperationalRequestsOverview extends StatsOverviewWidget
             $stats[] = Stat::make($department->label().' • متوقفة مؤقتًا', (clone $baseQuery)->where('status', RequestStatus::Paused->value)->count())
                 ->description('تُستأنف من مرحلتها السابقة')
                 ->color('gray');
+            $aftercareQuery = $aftercareClass::query();
+            $stats[] = Stat::make($department->label().' • متابعات ما بعد الصفقة المتأخرة', (clone $aftercareQuery)->where('next_follow_up_at', '<', $now)->count())
+                ->description('تواصل اختياري بعد صفقة ناجحة')
+                ->color('danger');
+            $stats[] = Stat::make($department->label().' • متابعات ما بعد الصفقة اليوم', (clone $aftercareQuery)->whereBetween('next_follow_up_at', [$now, $now->copy()->endOfDay()])->count())
+                ->description('مواعيد اليوم حتى نهاية اليوم')
+                ->color('warning');
         }
 
         return $stats;

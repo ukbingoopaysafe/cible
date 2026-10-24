@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Models\Concerns\HasCustomerIdentity;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RentalCustomer extends Model
 {
@@ -13,5 +14,10 @@ class RentalCustomer extends Model
     public function requests(): HasMany
     {
         return $this->hasMany(RentalRequest::class, 'customer_id');
+    }
+
+    public function aftercare(): HasOne
+    {
+        return $this->hasOne(RentalAftercare::class, 'customer_id');
     }
 }

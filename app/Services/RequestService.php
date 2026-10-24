@@ -537,6 +537,13 @@ class RequestService
             }
             $request->save();
 
+            $deal = $request->deal;
+            if ($deal) {
+                $deal->customer_id = $customerId;
+                $deal->save();
+                app(AftercareService::class)->startForDeal($actor, $department, $deal);
+            }
+
             AuditEvent::query()->create([
                 'actor_user_id' => $actor->id,
                 'department' => $department->value,

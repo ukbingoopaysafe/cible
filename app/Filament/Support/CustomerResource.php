@@ -3,17 +3,22 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Enums\ContactActivityChannel;
 use App\Exports\RentalCustomerExporter;
 use App\Exports\ResaleCustomerExporter;
 use App\Filament\Resources\RentalRequests\RentalRequestResource;
 use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
 use App\Models\User;
 use App\Services\CustomerService;
+use App\Services\AftercareService;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
@@ -35,6 +40,7 @@ abstract class CustomerResource extends Resource
         $actor = auth()->user();
 
         return parent::getEloquentQuery()
+            ->with('aftercare.owner')
             ->withCount('requests')
             ->when(
                 ! $actor instanceof User || ! $actor->canWorkInDepartment(static::department()),
@@ -81,6 +87,8 @@ abstract class CustomerResource extends Resource
                 TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable(),
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—'),
                 TextColumn::make('requests_count')->label('عدد الطلبات')->sortable(),
+                TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—'),
+                TextColumn::make('aftercare.next_follow_up_at')->label('متابعة ما بعد الصفقة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->recordActions([
@@ -106,6 +114,51 @@ abstract class CustomerResource extends Resource
                     ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب مشتري')
                     ->icon('heroicon-o-plus-circle')
                     ->url(fn (Model $record): string => (static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class)::getUrl('create', ['customer_id' => $record->getKey()])),
+                Action::make('startAftercare')
+                    ->label('بدء ما بعد الصفقة')
+                    ->icon('heroicon-o-heart')
+                    ->action(function (Model $record): void {
+                        $actor = auth()->user();
+                        abort_unless($actor instanceof User, 403);
+                        app(AftercareService::class)->startForCustomer($actor, static::department(), (int) $record->getKey());
+                    })
+                    ->visible(function (Model $record): bool {
+                        $dealClass = static::department() === Department::Rental ? \App\Models\RentalDeal::class : \App\Models\ResaleDeal::class;
+
+                        return $record->aftercare === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
+                    })
+                    ->successNotificationTitle('تم بدء سجل ما بعد الصفقة'),
+                Action::make('recordAftercareActivity')
+                    ->label('تسجيل تواصل ما بعد الصفقة')
+                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                    ->schema([
+                        Select::make('deal_id')->label('الصفقة المرتبطة (اختياري)')->options(fn (Model $record): array => (static::department() === Department::Rental ? \App\Models\RentalDeal::class : \App\Models\ResaleDeal::class)::query()
+                            ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
+                            ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
+                        Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
+                        DateTimePicker::make('occurred_at')->label('وقت التواصل')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
+                        Textarea::make('result')->label('نتيجة التواصل')->rows(3)->required()->maxLength(10000),
+                        Textarea::make('notes')->label('ملاحظات (اختيارية)')->rows(2)->maxLength(10000),
+                        Textarea::make('referral_details')->label('إحالة أو فرصة مستقبلية (اختياري)')->rows(2)->maxLength(10000),
+                        DateTimePicker::make('next_follow_up_at')->label('موعد المتابعة القادمة (اختياري)')->native(false)->seconds(false)->minDate(now()->addMinute()),
+                    ])
+                    ->action(function (Model $record, array $data): void {
+                        $actor = auth()->user();
+                        abort_unless($actor instanceof User, 403);
+                        app(AftercareService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
+                    })
+                    ->visible(fn (Model $record): bool => $record->aftercare !== null)
+                    ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
+                Action::make('aftercareHistory')
+                    ->label('سجل ما بعد الصفقة')
+                    ->icon('heroicon-o-clock')
+                    ->modalHeading(fn (Model $record): string => "سجل ما بعد الصفقة: {$record->name}")
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('إغلاق')
+                    ->modalContent(fn (Model $record) => view('filament.modals.aftercare-history', [
+                        'aftercare' => $record->aftercare?->load(['owner', 'activities.actor', 'activities.deal']),
+                    ]))
+                    ->visible(fn (Model $record): bool => $record->aftercare !== null),
                 Action::make('editCustomer')
                     ->label('تعديل بيانات العميل')
                     ->icon('heroicon-o-pencil-square')
