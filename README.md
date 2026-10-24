@@ -4,7 +4,7 @@ Arabic-first internal CRM for rental and resale operations.
 
 ## Project status
 
-The repository contains the Laravel 12 and Filament 5 foundation, user department access, and separate rental/resale customer storage. CRM screens, request workflows, and product tests have not been implemented yet. The approved scope and remaining decisions are documented in [`docs/README.md`](docs/README.md) and [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).
+The repository contains the Laravel 12 and Filament 5 foundation, user department access, separate rental/resale customer storage, and the initial request models, migrations, and domain service. Request migrations have not been run, and CRM screens and product tests are not implemented yet. The approved scope and remaining decisions are documented in [`docs/README.md`](docs/README.md) and [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).
 
 ## Local setup
 

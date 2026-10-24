@@ -1,0 +1,64 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\ContactParty;
+use App\Enums\RequestOutcome;
+use App\Enums\RequestStatus;
+use App\Enums\RequestUnitType;
+use App\Enums\ResaleRequestStage;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+
+class ResaleRequest extends Model
+{
+    protected $guarded = ['id'];
+
+    protected function casts(): array
+    {
+        return [
+            'contact_party' => ContactParty::class,
+            'status' => RequestStatus::class,
+            'stage' => ResaleRequestStage::class,
+            'outcome' => RequestOutcome::class,
+            'unit_type' => RequestUnitType::class,
+            'next_follow_up_at' => 'datetime',
+            'paused_at' => 'datetime',
+            'closed_at' => 'datetime',
+            'area_min' => 'decimal:2',
+            'area_max' => 'decimal:2',
+            'budget_declared' => 'decimal:2',
+            'budget_targeted' => 'decimal:2',
+        ];
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(ResaleCustomer::class);
+    }
+
+    public function broker(): BelongsTo
+    {
+        return $this->belongsTo(ResaleBroker::class);
+    }
+
+    public function area(): BelongsTo
+    {
+        return $this->belongsTo(ResaleArea::class, 'area_id');
+    }
+
+    public function leadSource(): BelongsTo
+    {
+        return $this->belongsTo(ResaleLeadSource::class, 'lead_source_id');
+    }
+
+    public function closeReason(): BelongsTo
+    {
+        return $this->belongsTo(ResaleRequestCloseReason::class, 'outcome_reason_id');
+    }
+
+    public function owner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'owner_user_id');
+    }
+}
