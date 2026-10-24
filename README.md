@@ -4,7 +4,7 @@ Arabic-first internal CRM for rental and resale operations.
 
 ## Project status
 
-The repository contains the Laravel 12 and Filament 5 foundation, separate rental/resale CRM workflows, scoped staff and reference-data management, audited reassignment, customer WhatsApp links, customer request history and creation shortcuts, follow-up filters, request contact history, audited broker deletion, and department-scoped XLSX import/export for customers plus XLSX export for requests. Application migrations are applied to the local `cible` database; product tests have not been executed. The approved scope and remaining decisions are documented in [`docs/README.md`](docs/README.md) and [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).
+The repository contains the Laravel 12 and Filament 5 foundation, separate rental/resale CRM workflows, scoped staff and reference-data management, audited reassignment, customer WhatsApp links, customer request history and creation shortcuts, follow-up filters, request contact history, audited broker deletion, department-scoped XLSX customer import/export and request export, and an operational dashboard scoped to each user's department memberships. Application migrations are applied to the local `cible` database; product tests have not been executed. The approved scope and remaining decisions are documented in [`docs/README.md`](docs/README.md) and [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md).
 
 ## Local setup
 
