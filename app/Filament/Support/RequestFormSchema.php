@@ -64,12 +64,15 @@ final class RequestFormSchema
                             TextInput::make('phone')->label('رقم الهاتف')->required()->maxLength(40),
                             TextInput::make('phone_country')->label('رمز الدولة')->default('EG')->required()->length(2)->helperText('رمز الدولة الدولي، مثل EG لمصر.'),
                             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
+                            Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا عميل مختلف.'),
                         ])
                         ->createOptionUsing(function (array $data) use ($department): int {
                             $actor = auth()->user();
                             abort_unless($actor instanceof User, 403);
+                            $reviewedSimilarNames = (bool) ($data['reviewed_similar_names'] ?? false);
+                            unset($data['reviewed_similar_names']);
 
-                            return (int) app(CustomerService::class)->create($actor, $department, $data)->getKey();
+                            return (int) app(CustomerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey();
                         })
                         ->live(),
                     Select::make('broker_id')
