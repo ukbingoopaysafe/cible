@@ -19,3 +19,5 @@ Requirements: PHP 8.2+, Composer, and MySQL.
 7. Serve the app with `php artisan serve` and open `/admin`.
 
 The Filament panel requires an authorized user account with an explicit department assignment. The account command prompts for employee/manager role and one or both departments. Managers can manage employee accounts within their department scope. No demo accounts are seeded.
+
+For XAMPP with this repository at `htdocs/cible`, start Apache and MySQL, then open `http://localhost/cible/public/admin`. The first visit redirects to the login page. Create the first manager from the project directory with `php artisan cible:user:create`; there are no preconfigured login credentials or demo users. The public web entry point is `public/`.
