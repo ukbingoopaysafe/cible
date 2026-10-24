@@ -4,6 +4,7 @@ namespace App\Filament\Resources\RentalRequests;
 
 use App\Enums\Department;
 use App\Filament\Resources\RentalRequests\Pages\CreateRentalRequest;
+use App\Filament\Resources\RentalRequests\Pages\EditRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
 use App\Filament\Resources\RentalRequests\Pages\ViewRentalRequest;
 use App\Filament\Support\SectionRequestResource;
@@ -35,6 +36,7 @@ class RentalRequestResource extends SectionRequestResource
         return [
             'index' => ListRentalRequests::route('/'),
             'create' => CreateRentalRequest::route('/create'),
+            'edit' => EditRentalRequest::route('/{record}/edit'),
             'view' => ViewRentalRequest::route('/{record}'),
         ];
     }

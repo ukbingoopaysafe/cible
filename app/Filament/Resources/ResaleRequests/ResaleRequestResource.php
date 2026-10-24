@@ -4,6 +4,7 @@ namespace App\Filament\Resources\ResaleRequests;
 
 use App\Enums\Department;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
+use App\Filament\Resources\ResaleRequests\Pages\EditResaleRequest;
 use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\ResaleRequests\Pages\ViewResaleRequest;
 use App\Filament\Support\SectionRequestResource;
@@ -35,6 +36,7 @@ class ResaleRequestResource extends SectionRequestResource
         return [
             'index' => ListResaleRequests::route('/'),
             'create' => CreateResaleRequest::route('/create'),
+            'edit' => EditResaleRequest::route('/{record}/edit'),
             'view' => ViewResaleRequest::route('/{record}'),
         ];
     }

@@ -33,6 +33,156 @@ use Illuminate\Validation\ValidationException;
 class RequestService
 {
     /** @param array<string, mixed> $data */
+    public function updateDetails(User $actor, Department $department, int $requestId, array $data): Model
+    {
+        $this->authorizeDepartment($actor, $department);
+        $classes = $this->classesFor($department);
+        $request = $classes['request']::query()->findOrFail($requestId);
+
+        $editable = [
+            'customer_id', 'broker_id', 'area_id', 'lead_source_id', 'lead_source_other', 'contact_party',
+            'unit_type', 'unit_type_other', 'budget_declared', 'budget_targeted', 'budget_currency',
+            'other_requirements', 'notes',
+        ];
+        $editable = $department === Department::Rental
+            ? [...$editable, 'bedrooms', 'occupants', 'household', 'rental_term', 'rental_term_count', 'finishing', 'finishing_other', 'floor_preference', 'elevator_required']
+            : [...$editable, 'area_min', 'area_max'];
+        $data = array_intersect_key($data, array_flip($editable));
+        $data = array_merge(array_fill_keys($editable, null), $data);
+
+        $rules = [
+            'customer_id' => ['nullable', 'integer', Rule::exists($classes['customer']::query()->getModel()->getTable(), 'id')],
+            'broker_id' => ['nullable', 'integer', Rule::exists($classes['broker']::query()->getModel()->getTable(), 'id')],
+            'area_id' => ['required', 'integer', Rule::exists($classes['area_table'], 'id')],
+            'lead_source_id' => ['nullable', 'integer', Rule::exists($classes['lead_source']::query()->getModel()->getTable(), 'id')],
+            'lead_source_other' => ['nullable', 'string', 'max:255'],
+            'contact_party' => ['nullable', Rule::enum(ContactParty::class)],
+            'unit_type' => ['nullable', Rule::enum(RequestUnitType::class)],
+            'unit_type_other' => ['nullable', 'string', 'max:255'],
+            'budget_declared' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
+            'budget_targeted' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
+            'budget_currency' => ['nullable', Rule::in(['EGP', 'USD'])],
+            'other_requirements' => ['nullable', 'string', 'max:10000'],
+            'notes' => ['nullable', 'string', 'max:10000'],
+        ];
+
+        if ($department === Department::Rental) {
+            $rules += [
+                'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
+                'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                'household' => ['nullable', 'boolean'],
+                'rental_term' => ['nullable', Rule::enum(\App\Enums\RentalTerm::class)],
+                'rental_term_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
+                'finishing' => ['nullable', Rule::enum(FinishingLevel::class)],
+                'finishing_other' => ['nullable', 'string', 'max:255'],
+                'floor_preference' => ['nullable', Rule::enum(FloorPreference::class)],
+                'elevator_required' => ['nullable', 'boolean'],
+            ];
+        } else {
+            $rules += [
+                'area_min' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
+                'area_max' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
+            ];
+        }
+
+        $validator = Validator::make($data, $rules);
+        $validator->after(function ($validator) use ($data, $classes, $department, $request): void {
+            $customerId = $data['customer_id'];
+            $brokerId = $data['broker_id'];
+            $contactParty = $data['contact_party'];
+
+            if (! $customerId && ! $brokerId) {
+                $validator->errors()->add('customer_id', 'يجب ربط الطلب بعميل معروف أو وسيط واحد على الأقل.');
+            }
+            if ($customerId && $brokerId && ! $contactParty) {
+                $validator->errors()->add('contact_party', 'حدد العميل أو الوسيط كجهة الاتصال الحالية.');
+            }
+            if ($contactParty === ContactParty::Customer->value && ! $customerId) {
+                $validator->errors()->add('contact_party', 'يجب ربط العميل قبل اختياره كجهة اتصال.');
+            }
+            if ($contactParty === ContactParty::Broker->value && ! $brokerId) {
+                $validator->errors()->add('contact_party', 'يجب ربط الوسيط قبل اختياره كجهة اتصال.');
+            }
+            if ($customerId && ! $classes['customer']::query()->whereKey($customerId)->exists()) {
+                $validator->errors()->add('customer_id', 'العميل غير موجود في هذا القسم.');
+            }
+            if ($brokerId && ! $classes['broker']::query()->whereKey($brokerId)->exists()) {
+                $validator->errors()->add('broker_id', 'الوسيط غير موجود في هذا القسم.');
+            }
+
+            $sourceId = $data['lead_source_id'];
+            $source = $sourceId ? $classes['lead_source']::query()->find($sourceId) : null;
+            if ($sourceId && (! $source || (! $source->is_active && (int) $sourceId !== (int) $request->lead_source_id))) {
+                $validator->errors()->add('lead_source_id', 'مصدر الوصول غير متاح للاستخدام.');
+            }
+            if ($source?->is_other && empty($data['lead_source_other'])) {
+                $validator->errors()->add('lead_source_other', 'اكتب مصدر الوصول عند اختيار «أخرى».');
+            }
+            if (! $source?->is_other && ! empty($data['lead_source_other'])) {
+                $validator->errors()->add('lead_source_other', 'يُستخدم هذا الوصف مع مصدر الوصول «أخرى» فقط.');
+            }
+            if ($data['unit_type'] === RequestUnitType::Other->value && empty($data['unit_type_other'])) {
+                $validator->errors()->add('unit_type_other', 'اكتب نوع الوحدة عند اختيار «أخرى».');
+            }
+            if ($data['unit_type'] !== RequestUnitType::Other->value && ! empty($data['unit_type_other'])) {
+                $validator->errors()->add('unit_type_other', 'يُستخدم هذا الوصف مع نوع الوحدة «أخرى» فقط.');
+            }
+            if ($department === Department::Rental) {
+                if ($data['finishing'] === FinishingLevel::Other->value && empty($data['finishing_other'])) {
+                    $validator->errors()->add('finishing_other', 'اكتب مستوى التشطيب عند اختيار «أخرى».');
+                }
+                if ($data['finishing'] !== FinishingLevel::Other->value && ! empty($data['finishing_other'])) {
+                    $validator->errors()->add('finishing_other', 'يُستخدم هذا الوصف مع مستوى التشطيب «أخرى» فقط.');
+                }
+            } elseif ($data['area_min'] && $data['area_max'] && $data['area_min'] > $data['area_max']) {
+                $validator->errors()->add('area_max', 'يجب ألا تقل المساحة القصوى عن المساحة الدنيا.');
+            }
+        });
+
+        $attributes = $validator->validate();
+        if (! $attributes['contact_party']) {
+            $attributes['contact_party'] = $attributes['customer_id'] ? ContactParty::Customer : ContactParty::Broker;
+        }
+        $attributes['budget_currency'] = ($attributes['budget_declared'] || $attributes['budget_targeted'])
+            ? ($attributes['budget_currency'] ?: 'EGP')
+            : null;
+
+        $before = [];
+        $after = [];
+        foreach ($attributes as $key => $value) {
+            $current = $request->getAttribute($key);
+            $current = $current instanceof \BackedEnum ? $current->value : $current;
+            $normalized = $value instanceof \BackedEnum ? $value->value : $value;
+            if ((string) ($current ?? '') !== (string) ($normalized ?? '')) {
+                $before[$key] = $current;
+                $after[$key] = $normalized;
+            }
+        }
+
+        if ($after === []) {
+            return $request;
+        }
+
+        return DB::transaction(function () use ($request, $attributes, $before, $after, $department, $actor): Model {
+            $request->fill($attributes);
+            $request->save();
+            AuditEvent::query()->create([
+                'actor_user_id' => $actor->id,
+                'department' => $department->value,
+                'event_key' => 'request.details_updated',
+                'subject_type' => $request::class,
+                'subject_id' => $request->getKey(),
+                'before_values' => $before,
+                'after_values' => $after,
+                'reason' => null,
+                'created_at' => now(),
+            ]);
+
+            return $request;
+        });
+    }
+
+    /** @param array<string, mixed> $data */
     public function create(User $actor, Department $department, array $data): Model
     {
         $this->authorizeDepartment($actor, $department);

@@ -32,7 +32,7 @@ use Filament\Schemas\Schema;
 
 final class RequestFormSchema
 {
-    public static function configure(Schema $schema, Department $department): Schema
+    public static function configure(Schema $schema, Department $department, bool $editing = false): Schema
     {
         [$customerClass, $brokerClass, $areaClass, $sourceClass] = match ($department) {
             Department::Rental => [RentalCustomer::class, RentalBroker::class, RentalArea::class, RentalLeadSource::class],
@@ -105,7 +105,9 @@ final class RequestFormSchema
                         ->required(),
                     Select::make('lead_source_id')
                         ->label('مصدر الوصول')
-                        ->options(fn (): array => $sourceClass::query()->where('is_active', true)->orderBy('name')->pluck('name', 'id')->all())
+                        ->options(fn (): array => $sourceClass::query()
+                            ->when(! $editing, fn ($query) => $query->where('is_active', true))
+                            ->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
                         ->live(),
                     TextInput::make('lead_source_other')
@@ -113,7 +115,7 @@ final class RequestFormSchema
                         ->maxLength(255)
                         ->visible(fn (Get $get): bool => filled($get('lead_source_id')) && $sourceClass::query()->whereKey($get('lead_source_id'))->where('is_other', true)->exists())
                         ->required(fn (Get $get): bool => filled($get('lead_source_id')) && $sourceClass::query()->whereKey($get('lead_source_id'))->where('is_other', true)->exists()),
-                    Select::make('owner_user_id')
+                    ...(! $editing ? [Select::make('owner_user_id')
                         ->label('الموظف المسؤول')
                         ->options(function () use ($department): array {
                             $actor = auth()->user();
@@ -128,13 +130,13 @@ final class RequestFormSchema
                         })
                         ->default(fn (): ?int => auth()->id())
                         ->searchable()
-                        ->required(),
-                    DateTimePicker::make('next_follow_up_at')
+                        ->required()] : []),
+                    ...(! $editing ? [DateTimePicker::make('next_follow_up_at')
                         ->label('موعد المتابعة القادمة')
                         ->native(false)
                         ->seconds(false)
                         ->minDate(now()->addMinute())
-                        ->required(),
+                        ->required()] : []),
                 ])
                 ->columns(2),
         ];

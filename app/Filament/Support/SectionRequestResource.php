@@ -10,6 +10,7 @@ use App\Models\RentalCustomer;
 use App\Models\ResaleCustomer;
 use App\Services\RequestService;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Radio;
@@ -33,6 +34,11 @@ abstract class SectionRequestResource extends Resource
     public static function form(Schema $schema): Schema
     {
         return RequestFormSchema::configure($schema, static::department());
+    }
+
+    public static function editForm(Schema $schema): Schema
+    {
+        return RequestFormSchema::configure($schema, static::department(), editing: true);
     }
 
     public static function infolist(Schema $schema): Schema
@@ -71,7 +77,9 @@ abstract class SectionRequestResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return false;
+        $modelClass = static::getModel();
+
+        return static::canViewAny() && $record instanceof $modelClass;
     }
 
     public static function canDelete(Model $record): bool
@@ -105,7 +113,9 @@ abstract class SectionRequestResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make()->label('عرض الطلب'),
+                EditAction::make()->label('تعديل التفاصيل'),
                 self::linkCustomerAction(),
+                self::setFollowUpAction(),
                 self::changeStageAction(),
                 self::pauseAction(),
                 self::resumeAction(),
@@ -160,6 +170,34 @@ abstract class SectionRequestResource extends Resource
                 app(RequestService::class)->changeStage($actor, static::department(), (int) $record->getKey(), $data['stage'], $data['notes'] ?? null);
             })
             ->successNotificationTitle('تم تحديث مرحلة الطلب');
+    }
+
+    private static function setFollowUpAction(): Action
+    {
+        return Action::make('setFollowUp')
+            ->label('تحديد المتابعة')
+            ->icon('heroicon-o-calendar-days')
+            ->schema([
+                DateTimePicker::make('next_follow_up_at')
+                    ->label('موعد المتابعة القادمة')
+                    ->native(false)
+                    ->seconds(false)
+                    ->minDate(now()->addMinute())
+                    ->required(),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
+            ->fillForm(fn (Model $record): array => ['next_follow_up_at' => $record->next_follow_up_at])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->setNextFollowUp(
+                    $actor,
+                    static::department(),
+                    (int) $record->getKey(),
+                    $data['next_follow_up_at'],
+                );
+            })
+            ->successNotificationTitle('تم تحديث موعد المتابعة');
     }
 
     private static function pauseAction(): Action
