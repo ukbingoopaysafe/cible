@@ -59,6 +59,10 @@ class User extends Authenticatable implements FilamentUser
 
     public function canWorkInDepartment(Department $department): bool
     {
+        if ($this->is_company_manager) {
+            return true;
+        }
+
         return $this->departmentMemberships()
             ->where('department', $department->value)
             ->exists();
@@ -66,11 +70,11 @@ class User extends Authenticatable implements FilamentUser
 
     public function canManageDepartment(Department $department): bool
     {
-        return $this->is_company_manager && $this->canWorkInDepartment($department);
+        return $this->is_company_manager;
     }
 
     public function canAccessPanel(Panel $panel): bool
     {
-        return $this->departmentMemberships()->exists();
+        return $this->is_company_manager || $this->departmentMemberships()->exists();
     }
 }

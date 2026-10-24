@@ -18,8 +18,7 @@ class StaffManagementService
     {
         abort_unless($actor->is_company_manager, 403);
 
-        return $actor->departmentMemberships()->pluck('department')
-            ->map(fn (string $value): Department => Department::from($value))->all();
+        return Department::cases();
     }
 
     public function createEmployee(User $actor, array $data): User

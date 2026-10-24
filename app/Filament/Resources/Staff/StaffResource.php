@@ -29,7 +29,7 @@ class StaffResource extends Resource
     {
         $actor = auth()->user();
         $departments = $actor instanceof User && $actor->is_company_manager
-            ? $actor->departmentMemberships()->pluck('department')->all()
+            ? array_map(fn (Department $department): string => $department->value, Department::cases())
             : [];
 
         return parent::getEloquentQuery()

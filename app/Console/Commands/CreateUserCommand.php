@@ -39,10 +39,13 @@ class CreateUserCommand extends Command
         }
 
         $role = $this->choice('نوع الحساب', ['موظف', 'مدير الشركة']);
-        $departments = $this->choice('الأقسام المصرح بها', [
+        $departmentOptions = [
             Department::Rental->label(),
             Department::Resale->label(),
-        ], null, null, true);
+        ];
+        $departments = $role === 'مدير الشركة'
+            ? $departmentOptions
+            : $this->choice('الأقسام المصرح بها', $departmentOptions, null, null, true);
 
         if ($departments === []) {
             $this->components->error('يجب اختيار قسم واحد على الأقل.');
