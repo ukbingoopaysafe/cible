@@ -321,7 +321,7 @@ class RequestService
         });
     }
 
-    /** @param array{outcome: string, outcome_reason_id?: int|null, outcome_reason_other?: string|null, outcome_notes?: string|null} $data */
+    /** @param array{outcome: string, outcome_reason_text?: string|null, outcome_reason_id?: int|null, outcome_notes?: string|null} $data */
     public function close(User $actor, Department $department, int $requestId, array $data): Model
     {
         $this->authorizeDepartment($actor, $department);
@@ -329,7 +329,7 @@ class RequestService
         $validated = Validator::make($data, [
             'outcome' => ['required', Rule::enum(RequestOutcome::class)],
             'outcome_reason_id' => ['nullable', 'integer', Rule::exists($classes['close_reason']::query()->getModel()->getTable(), 'id')],
-            'outcome_reason_other' => ['nullable', 'string', 'max:255'],
+            'outcome_reason_text' => ['nullable', 'string', 'max:10000'],
             'outcome_notes' => ['nullable', 'string', 'max:10000'],
         ])->validate();
 
@@ -337,20 +337,15 @@ class RequestService
             ? $classes['close_reason']::query()->where('is_active', true)->find($validated['outcome_reason_id'])
             : null;
 
-        if ($validated['outcome'] === RequestOutcome::Unsuccessful->value && ! $reason) {
-            throw ValidationException::withMessages(['outcome_reason_id' => 'اختر سببًا لإغلاق الطلب دون نجاح.']);
+        if (! empty($validated['outcome_reason_id']) && ! $reason) {
+            throw ValidationException::withMessages(['outcome_reason_id' => 'تصنيف سبب الإغلاق غير متاح.']);
         }
-        if ($validated['outcome'] === RequestOutcome::Successful->value && ! empty($validated['outcome_reason_id'])) {
-            throw ValidationException::withMessages(['outcome_reason_id' => 'لا يسجل سبب إغلاق غير ناجح عند نجاح الطلب.']);
+
+        if ($validated['outcome'] === RequestOutcome::Unsuccessful->value && blank($validated['outcome_reason_text'] ?? null)) {
+            throw ValidationException::withMessages(['outcome_reason_text' => 'اكتب سبب إغلاق الطلب دون نجاح.']);
         }
-        if ($validated['outcome'] === RequestOutcome::Successful->value && ! empty($validated['outcome_reason_other'])) {
-            throw ValidationException::withMessages(['outcome_reason_other' => 'لا يسجل نص سبب خسارة عند نجاح الطلب.']);
-        }
-        if ($reason?->is_other && empty($validated['outcome_reason_other'])) {
-            throw ValidationException::withMessages(['outcome_reason_other' => 'اكتب السبب عند اختيار «أخرى».']);
-        }
-        if (! $reason?->is_other && ! empty($validated['outcome_reason_other'])) {
-            throw ValidationException::withMessages(['outcome_reason_other' => 'يُستخدم النص الحر مع سبب «أخرى» فقط.']);
+        if ($validated['outcome'] === RequestOutcome::Successful->value && (! empty($validated['outcome_reason_id']) || ! empty($validated['outcome_reason_text']))) {
+            throw ValidationException::withMessages(['outcome_reason_text' => 'لا يسجل سبب إغلاق غير ناجح عند نجاح الطلب.']);
         }
 
         $request = $classes['request']::query()->findOrFail($requestId);
@@ -365,10 +360,15 @@ class RequestService
             $request->next_follow_up_at = null;
             $request->outcome = $validated['outcome'];
             $request->outcome_reason_id = $validated['outcome_reason_id'] ?? null;
-            $request->outcome_reason_other = $validated['outcome_reason_other'] ?? null;
+            $request->outcome_reason_text = $validated['outcome_reason_text'] ?? null;
+            $request->outcome_reason_other = null;
             $request->outcome_notes = $validated['outcome_notes'] ?? null;
             $request->save();
-            $this->recordStatusChange($department, $request, $from, RequestStatus::Closed, $actor, $validated['outcome_notes'] ?? null);
+            $historyNotes = trim(implode("\n\n", array_filter([
+                $validated['outcome_reason_text'] ?? null,
+                $validated['outcome_notes'] ?? null,
+            ])));
+            $this->recordStatusChange($department, $request, $from, RequestStatus::Closed, $actor, $historyNotes !== '' ? $historyNotes : null);
 
             return $request;
         });
