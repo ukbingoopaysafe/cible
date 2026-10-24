@@ -64,6 +64,13 @@ abstract class CustomerResource extends Resource
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable(),
             ])
             ->recordActions([
+                Action::make('openWhatsApp')
+                    ->label('فتح WhatsApp')
+                    ->icon('heroicon-o-chat-bubble-left-right')
+                    ->color('success')
+                    ->url(fn (Model $record): string => static::whatsAppUrl($record->phone_e164))
+                    ->openUrlInNewTab()
+                    ->visible(fn (Model $record): bool => static::hasValidWhatsAppPhone($record->phone_e164)),
                 Action::make('editCustomer')
                     ->label('تعديل بيانات العميل')
                     ->icon('heroicon-o-pencil-square')
@@ -117,5 +124,17 @@ abstract class CustomerResource extends Resource
             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
             Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا عميل مختلف.'),
         ];
+    }
+
+    private static function hasValidWhatsAppPhone(?string $phone): bool
+    {
+        return is_string($phone) && preg_match('/^\\+[1-9]\\d{7,14}$/', $phone) === 1;
+    }
+
+    private static function whatsAppUrl(string $phone): string
+    {
+        abort_unless(static::hasValidWhatsAppPhone($phone), 404);
+
+        return 'https://wa.me/'.substr($phone, 1);
     }
 }
