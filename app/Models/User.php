@@ -2,13 +2,17 @@
 
 namespace App\Models;
 
+use App\Enums\Department;
+use Filament\Models\Contracts\FilamentUser;
+use Filament\Panel;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Notifications\Notifiable;
 
-class User extends Authenticatable
+class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
@@ -44,6 +48,29 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'is_company_manager' => 'boolean',
         ];
+    }
+
+    public function departmentMemberships(): HasMany
+    {
+        return $this->hasMany(UserDepartment::class);
+    }
+
+    public function canWorkInDepartment(Department $department): bool
+    {
+        return $this->departmentMemberships()
+            ->where('department', $department->value)
+            ->exists();
+    }
+
+    public function canManageDepartment(Department $department): bool
+    {
+        return $this->is_company_manager && $this->canWorkInDepartment($department);
+    }
+
+    public function canAccessPanel(Panel $panel): bool
+    {
+        return $this->departmentMemberships()->exists();
     }
 }
