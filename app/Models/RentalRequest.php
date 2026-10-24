@@ -79,4 +79,9 @@ class RentalRequest extends Model
     {
         return $this->hasMany(RentalActivity::class, 'rental_request_id');
     }
+
+    public function deal(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(RentalDeal::class, 'request_id');
+    }
 }

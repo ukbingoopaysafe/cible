@@ -14,6 +14,7 @@ use App\Models\ResaleCustomer;
 use App\Models\RentalRequestReassignment;
 use App\Models\ResaleRequestReassignment;
 use App\Services\RequestService;
+use App\Services\DealService;
 use App\Services\ContactActivityService;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
@@ -21,12 +22,17 @@ use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -63,7 +69,7 @@ abstract class SectionRequestResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason'])
+        return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason', 'deal.commissions'])
             ->withCount('activities')
             ->withCount(['reassignments as pending_reassignment_count' => fn (Builder $relationQuery) => $relationQuery->where('status', 'pending')]);
     }
@@ -125,6 +131,7 @@ abstract class SectionRequestResource extends Resource
                 }),
                 TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
                 TextColumn::make('activities_count')->label('سجل التواصل')->sortable(),
+                TextColumn::make('deal.agreed_total_value')->label('الصفقة')->money(fn (Model $record): string => $record->deal?->currency ?? 'EGP')->placeholder('—'),
             ])
             ->filters([
                 SelectFilter::make('status')->label('الحالة')->options([
@@ -199,6 +206,8 @@ abstract class SectionRequestResource extends Resource
                 self::pauseAction(),
                 self::resumeAction(),
                 self::closeAction(),
+                self::createDealAction(),
+                self::viewDealAction(),
             ])
             ->defaultSort('next_follow_up_at');
     }
@@ -562,6 +571,90 @@ abstract class SectionRequestResource extends Resource
                 app(RequestService::class)->close($actor, static::department(), (int) $record->getKey(), $data);
             })
             ->successNotificationTitle('تم إغلاق الطلب');
+    }
+
+    private static function createDealAction(): Action
+    {
+        return Action::make('createDeal')
+            ->label('إنشاء صفقة')
+            ->icon('heroicon-o-banknotes')
+            ->color('success')
+            ->schema([
+                DatePicker::make('deal_date')->label('تاريخ الصفقة')->default(now())->required(),
+                TextInput::make('agreed_total_value')->label('القيمة الإجمالية المتفق عليها')->numeric()->minValue(0.01)->required(),
+                Select::make('currency')->label('العملة')->options(['EGP' => 'جنيه مصري', 'USD' => 'دولار أمريكي'])->default('EGP')->required(),
+                TextInput::make('unit_code')->label('كود الوحدة في التطبيق الخارجي (اختياري)')->numeric()->maxLength(40),
+                TextInput::make('unit_type')->label('نوع الوحدة (اختياري)')->maxLength(80),
+                TextInput::make('unit_area')->label('المساحة بالمتر (اختياري)')->numeric()->minValue(0.01),
+                TextInput::make('unit_location')->label('وصف موقع الوحدة (اختياري)')->maxLength(255),
+                TextInput::make('contact_representative')->label('ممثل التواصل وقت الصفقة (اختياري)')->maxLength(160),
+                TextInput::make('field_agent_name')->label('اسم المندوب الميداني (اختياري)')->maxLength(160),
+                ...(static::department() === Department::Rental ? [
+                    Select::make('rental_term')->label('مدة الإيجار')->options([
+                        'daily' => 'يومي', 'monthly' => 'شهري', 'half_yearly' => 'نصف سنوي', 'yearly' => 'سنوي',
+                    ])->default(fn (Model $record): ?string => $record->rental_term?->value)->live()->afterStateUpdated(fn (Set $set, ?string $state) => $set('payment_schedule', $state === 'daily' ? 'daily' : 'monthly'))->required(),
+                    TextInput::make('rental_term_count')->label('عدد مدد العقد الكامل')->numeric()->minValue(1)->maxValue(120)->default(fn (Model $record): ?int => $record->rental_term_count)->required(),
+                    Select::make('payment_schedule')->label('دورية الدفع')->options([
+                        'daily' => 'يومي', 'monthly' => 'شهري',
+                    ])->default(fn (Get $get): string => $get('rental_term') === 'daily' ? 'daily' : 'monthly')->required()->disabled()->dehydrated(),
+                ] : [
+                    TextInput::make('seller_name')->label('اسم البائع (اختياري)')->maxLength(160),
+                    TextInput::make('seller_phone')->label('هاتف البائع (اختياري)')->tel()->maxLength(30),
+                ]),
+                Repeater::make('commissions')->label('اتفاقات العمولة (اختيارية)')->schema([
+                    TextInput::make('payer')->label('الملتزم بالدفع')->required()->maxLength(160),
+                    TextInput::make('recipient')->label('المستفيد')->required()->maxLength(160),
+                    Select::make('calculation_type')->label('طريقة الاتفاق')->options(['amount' => 'قيمة ثابتة', 'percentage' => 'نسبة مئوية'])->required(),
+                    TextInput::make('agreed_value')->label('القيمة أو النسبة')->numeric()->minValue(0.01)->required(),
+                    Textarea::make('conditions')->label('شروط الاتفاق (اختيارية)')->rows(2),
+                ])->columns(2)->defaultItems(0)->maxItems(20),
+                Textarea::make('notes')->label('ملاحظات الصفقة (اختيارية)')->rows(3),
+            ])
+            ->visible(function (Model $record): bool {
+                $dealClass = static::department() === Department::Rental
+                    ? \App\Models\RentalDeal::class
+                    : \App\Models\ResaleDeal::class;
+
+                return $record->status === RequestStatus::Closed
+                    && $record->outcome === RequestOutcome::Successful
+                    && ! $dealClass::query()->where('request_id', $record->getKey())->exists();
+            })
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(DealService::class)->createFromRequest($actor, static::department(), (int) $record->getKey(), $data);
+            })
+            ->successNotificationTitle('تم إنشاء الصفقة وربطها بالطلب');
+    }
+
+    private static function viewDealAction(): Action
+    {
+        return Action::make('viewDeal')
+            ->label('عرض الصفقة')
+            ->icon('heroicon-o-eye')
+            ->schema([
+                Placeholder::make('deal_date')->label('تاريخ الصفقة')->content(fn (Model $record): string => $record->deal?->deal_date?->format('d/m/Y') ?? '—'),
+                Placeholder::make('deal_value')->label('القيمة الإجمالية')->content(fn (Model $record): string => $record->deal ? number_format((float) $record->deal->agreed_total_value, 2).' '.$record->deal->currency : '—'),
+                Placeholder::make('deal_unit')->label('الوحدة')->content(fn (Model $record): string => implode(' — ', array_filter([$record->deal?->unit_type, $record->deal?->unit_area ? $record->deal->unit_area.' م²' : null, $record->deal?->unit_location, $record->deal?->unit_code ? 'كود '.$record->deal->unit_code : null])) ?: '—'),
+                Placeholder::make('deal_contact')->label('ممثل التواصل / المندوب')->content(fn (Model $record): string => implode(' / ', array_filter([$record->deal?->contact_representative, $record->deal?->field_agent_name])) ?: '—'),
+                Placeholder::make('deal_context')->label(static::department() === Department::Rental ? 'مدة العقد ودورية الدفع' : 'بيانات البائع')->content(function (Model $record): string {
+                    $deal = $record->deal;
+                    if (! $deal) {
+                        return '—';
+                    }
+                    if (static::department() === Department::Rental) {
+                        $terms = ['daily' => 'يومي', 'monthly' => 'شهري', 'half_yearly' => 'نصف سنوي', 'yearly' => 'سنوي'];
+                        $payments = ['daily' => 'يومي', 'monthly' => 'شهري'];
+
+                        return ($terms[$deal->rental_term] ?? '—').' × '.($deal->rental_term_count ?? '—').' — سداد '.($payments[$deal->payment_schedule] ?? '—');
+                    }
+
+                    return implode(' — ', array_filter([$deal->seller_name, $deal->seller_phone])) ?: '—';
+                }),
+                Placeholder::make('deal_commissions')->label('اتفاقات العمولة')->content(fn (Model $record): string => $record->deal?->commissions->map(fn (Model $commission): string => $commission->payer.' → '.$commission->recipient.': '.($commission->calculation_type === 'percentage' ? $commission->agreed_value.'%' : $commission->agreed_value.' '.$record->deal->currency).($commission->conditions ? ' ('.$commission->conditions.')' : ''))->implode("\n") ?: 'لا توجد اتفاقات مسجلة'),
+                Placeholder::make('deal_notes')->label('ملاحظات الصفقة')->content(fn (Model $record): string => $record->deal?->notes ?: '—'),
+            ])
+            ->visible(fn (Model $record): bool => $record->deal !== null);
     }
 
     /** @return array<int, string> */

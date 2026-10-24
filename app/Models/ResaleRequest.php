@@ -72,4 +72,9 @@ class ResaleRequest extends Model
     {
         return $this->hasMany(ResaleActivity::class, 'resale_request_id');
     }
+
+    public function deal(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(ResaleDeal::class, 'request_id');
+    }
 }
