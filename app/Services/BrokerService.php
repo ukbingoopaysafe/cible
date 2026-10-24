@@ -22,6 +22,92 @@ class BrokerService
     /**
      * @param array{name: string, phone?: string|null, phone_country?: string|null} $data
      */
+    public function update(User $actor, Department $department, int $brokerId, array $data, bool $reviewedSimilarNames = false): Model
+    {
+        $this->authorizeDepartment($actor, $department);
+        $brokerClass = $this->brokerClass($department);
+        $broker = $brokerClass::query()->findOrFail($brokerId);
+        $attributes = Validator::make($data, [
+            'name' => ['required', 'string', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:40'],
+            'phone_country' => ['nullable', 'string', 'size:2'],
+        ])->validate();
+
+        $attributes['name'] = trim($attributes['name']);
+        if ($attributes['name'] === '') {
+            throw ValidationException::withMessages(['name' => 'اسم الوسيط مطلوب.']);
+        }
+        if (empty($attributes['phone']) && ! empty($attributes['phone_country'])) {
+            throw ValidationException::withMessages(['phone_country' => 'أدخل رقم الهاتف قبل اختيار رمز الدولة.']);
+        }
+
+        $phone = null;
+        if (! empty($attributes['phone'])) {
+            $phone = $this->phoneNormalizer->normalize($attributes['phone'], $attributes['phone_country'] ?? null);
+            if ($brokerClass::query()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($brokerId)->exists()) {
+                throw ValidationException::withMessages([
+                    'phone' => 'رقم الهاتف مسجل لوسيط آخر في هذا القسم. راجع سجل الوسيط القائم.',
+                ]);
+            }
+        }
+
+        $similarBrokers = $this->findSimilarNames($actor, $department, $attributes['name'])
+            ->reject(fn (Model $match): bool => (int) $match->getKey() === $brokerId);
+        if ($similarBrokers->isNotEmpty() && ! $reviewedSimilarNames) {
+            $labels = $similarBrokers->map(fn (Model $match): string => "#{$match->getKey()} {$match->name}")->implode('، ');
+            throw ValidationException::withMessages([
+                'name' => "قد يوجد وسيط مشابه بهذا الاسم ({$labels}). راجع السجلات ثم أكد المتابعة إذا كان وسيطًا مختلفًا.",
+            ]);
+        }
+
+        $before = [
+            'name' => $broker->name,
+            'phone_e164' => $broker->phone_e164,
+            'phone_country' => $broker->phone_country,
+        ];
+        $after = [
+            'name' => $attributes['name'],
+            'phone_e164' => $phone['phone_e164'] ?? null,
+            'phone_country' => $phone['phone_country'] ?? null,
+        ];
+        if ($before === $after) {
+            return $broker;
+        }
+
+        try {
+            return DB::transaction(function () use ($broker, $after, $before, $actor, $department): Model {
+                $broker->name = $after['name'];
+                $broker->phone_e164 = $after['phone_e164'];
+                $broker->phone_country = $after['phone_country'];
+                $broker->save();
+                AuditEvent::query()->create([
+                    'actor_user_id' => $actor->id,
+                    'department' => $department->value,
+                    'event_key' => 'broker.updated',
+                    'subject_type' => $broker::class,
+                    'subject_id' => $broker->getKey(),
+                    'before_values' => $before,
+                    'after_values' => $after,
+                    'reason' => null,
+                    'created_at' => now(),
+                ]);
+
+                return $broker;
+            });
+        } catch (QueryException $exception) {
+            if ($phone && $brokerClass::query()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($brokerId)->exists()) {
+                throw ValidationException::withMessages([
+                    'phone' => 'رقم الهاتف مسجل لوسيط آخر في هذا القسم. راجع سجل الوسيط القائم.',
+                ]);
+            }
+
+            throw $exception;
+        }
+    }
+
+    /**
+     * @param array{name: string, phone?: string|null, phone_country?: string|null} $data
+     */
     public function create(User $actor, Department $department, array $data, bool $reviewedSimilarNames = false): Model
     {
         $this->authorizeDepartment($actor, $department);
