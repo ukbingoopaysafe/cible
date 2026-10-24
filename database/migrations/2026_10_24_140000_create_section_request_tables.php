@@ -144,32 +144,6 @@ return new class extends Migration
             $table->index(['owner_user_id', 'status']);
         });
 
-        foreach (['rental_request_stage_histories' => 'rental_requests', 'resale_request_stage_histories' => 'resale_requests'] as $historyTable => $requestTable) {
-            Schema::create($historyTable, function (Blueprint $table) use ($requestTable): void {
-                $table->id();
-                $table->foreignId('request_id')->constrained($requestTable)->restrictOnDelete();
-                $table->string('from_stage', 24)->nullable();
-                $table->string('to_stage', 24);
-                $table->foreignId('changed_by')->constrained('users')->restrictOnDelete();
-                $table->text('notes')->nullable();
-                $table->timestamp('created_at')->useCurrent();
-                $table->index(['request_id', 'created_at']);
-            });
-        }
-
-        foreach (['rental_request_status_histories' => 'rental_requests', 'resale_request_status_histories' => 'resale_requests'] as $historyTable => $requestTable) {
-            Schema::create($historyTable, function (Blueprint $table) use ($requestTable): void {
-                $table->id();
-                $table->foreignId('request_id')->constrained($requestTable)->restrictOnDelete();
-                $table->string('from_status', 16)->nullable();
-                $table->string('to_status', 16);
-                $table->foreignId('changed_by')->constrained('users')->restrictOnDelete();
-                $table->text('notes')->nullable();
-                $table->timestamp('created_at')->useCurrent();
-                $table->index(['request_id', 'created_at']);
-            });
-        }
-
         Schema::create('resale_requests', function (Blueprint $table): void {
             $table->id();
             $table->foreignId('customer_id')->nullable()->constrained('resale_customers')->restrictOnDelete();
@@ -200,6 +174,33 @@ return new class extends Migration
             $table->index(['status', 'next_follow_up_at']);
             $table->index(['owner_user_id', 'status']);
         });
+
+        foreach (['rental_request_stage_histories' => 'rental_requests', 'resale_request_stage_histories' => 'resale_requests'] as $historyTable => $requestTable) {
+            Schema::create($historyTable, function (Blueprint $table) use ($requestTable): void {
+                $table->id();
+                $table->foreignId('request_id')->constrained($requestTable)->restrictOnDelete();
+                $table->string('from_stage', 24)->nullable();
+                $table->string('to_stage', 24);
+                $table->foreignId('changed_by')->constrained('users')->restrictOnDelete();
+                $table->text('notes')->nullable();
+                $table->timestamp('created_at')->useCurrent();
+                $table->index(['request_id', 'created_at']);
+            });
+        }
+
+        foreach (['rental_request_status_histories' => 'rental_requests', 'resale_request_status_histories' => 'resale_requests'] as $historyTable => $requestTable) {
+            Schema::create($historyTable, function (Blueprint $table) use ($requestTable): void {
+                $table->id();
+                $table->foreignId('request_id')->constrained($requestTable)->restrictOnDelete();
+                $table->string('from_status', 16)->nullable();
+                $table->string('to_status', 16);
+                $table->foreignId('changed_by')->constrained('users')->restrictOnDelete();
+                $table->text('notes')->nullable();
+                $table->timestamp('created_at')->useCurrent();
+                $table->index(['request_id', 'created_at']);
+            });
+        }
+
     }
 
     public function down(): void
