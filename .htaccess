@@ -1,0 +1,15 @@
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Keep the Laravel public directory reachable while preventing Apache from
+    # serving project files outside it.
+    RewriteRule ^public(?:/|$) - [L]
+
+    # Deny hidden files and Laravel's private source, configuration, and data.
+    RewriteRule (^|/)\. - [F,L]
+    RewriteRule ^(?:app|bootstrap|config|database|docs|resources|routes|storage|tests|vendor)(?:/|$) - [F,L,NC]
+    RewriteRule ^(?:artisan|composer\.(?:json|lock)|phpunit\.xml(?:\.dist)?|\.env(?:\..*)?)$ - [F,L,NC]
+
+    # Root-level URLs use Laravel's public entry point.
+    RewriteRule ^(.*)$ public/$1 [L]
+</IfModule>
