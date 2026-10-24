@@ -9,6 +9,7 @@ use App\Enums\RequestUnitType;
 use App\Enums\ResaleRequestStage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ResaleRequest extends Model
 {
@@ -60,5 +61,10 @@ class ResaleRequest extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function reassignments(): HasMany
+    {
+        return $this->hasMany(ResaleRequestReassignment::class, 'request_id');
     }
 }

@@ -17,11 +17,13 @@ use App\Models\AuditEvent;
 use App\Models\RentalRequest;
 use App\Models\RentalLeadSource;
 use App\Models\RentalRequestCloseReason;
+use App\Models\RentalRequestReassignment;
 use App\Models\ResaleBroker;
 use App\Models\ResaleCustomer;
 use App\Models\ResaleRequest;
 use App\Models\ResaleLeadSource;
 use App\Models\ResaleRequestCloseReason;
+use App\Models\ResaleRequestReassignment;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
@@ -32,6 +34,184 @@ use Illuminate\Validation\ValidationException;
 
 class RequestService
 {
+    public function requestReassignment(User $actor, Department $department, int $requestId, int $targetUserId, string $reason): Model
+    {
+        $this->authorizeDepartment($actor, $department);
+        $reason = trim($reason);
+        if ($actor->canManageDepartment($department)) {
+            throw ValidationException::withMessages(['request' => 'يستخدم المدير إعادة التعيين المباشرة بدل طلب الموافقة.']);
+        }
+
+        $validated = Validator::make(['target_user_id' => $targetUserId, 'reason' => $reason], [
+            'target_user_id' => ['required', 'integer', 'exists:users,id'],
+            'reason' => ['required', 'string', 'max:10000'],
+        ])->validate();
+        $target = User::query()->findOrFail($validated['target_user_id']);
+        if (! $target->canWorkInDepartment($department)) {
+            throw ValidationException::withMessages(['target_user_id' => 'الموظف المختار ليس عضوًا في هذا القسم.']);
+        }
+        if ($target->is_company_manager) {
+            throw ValidationException::withMessages(['target_user_id' => 'إعادة التعيين إلى مدير تحتاج إجراءً خاصًا غير متاح حاليًا.']);
+        }
+        if ((int) $target->id === (int) $actor->id) {
+            throw ValidationException::withMessages(['target_user_id' => 'اختر موظفًا آخر في القسم.']);
+        }
+
+        $classes = $this->classesFor($department);
+        $reassignmentClass = $this->reassignmentClassFor($department);
+
+        return DB::transaction(function () use ($classes, $reassignmentClass, $requestId, $target, $actor, $department, $validated): Model {
+            $request = $classes['request']::query()->lockForUpdate()->findOrFail($requestId);
+            if ($request->status === RequestStatus::Closed) {
+                throw ValidationException::withMessages(['request' => 'لا يمكن إعادة تعيين طلب مغلق.']);
+            }
+            if ((int) $request->owner_user_id === (int) $target->id) {
+                throw ValidationException::withMessages(['target_user_id' => 'الموظف المختار مسؤول الطلب بالفعل.']);
+            }
+            if ($reassignmentClass::query()->where('request_id', $requestId)->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages(['request' => 'يوجد طلب إعادة تعيين بانتظار قرار المدير بالفعل.']);
+            }
+
+            $reassignment = $reassignmentClass::query()->create([
+                'request_id' => $requestId,
+                'requested_by' => $actor->id,
+                'from_user_id' => $request->owner_user_id,
+                'to_user_id' => $target->id,
+                'reason' => trim($validated['reason']),
+                'status' => 'pending',
+            ]);
+            $this->recordAuditEvent($actor, $department, 'request.reassignment.requested', $request, [
+                'owner_user_id' => $request->owner_user_id,
+            ], [
+                'owner_user_id' => $request->owner_user_id,
+                'target_user_id' => $target->id,
+                'reassignment_id' => $reassignment->getKey(),
+                'status' => 'pending',
+            ], $validated['reason']);
+
+            return $reassignment;
+        });
+    }
+
+    public function decideReassignment(User $actor, Department $department, int $requestId, bool $approved): Model
+    {
+        if (! $actor->canManageDepartment($department)) {
+            throw new AuthorizationException('إدارة طلبات إعادة التعيين متاحة لمدير القسم فقط.');
+        }
+
+        $classes = $this->classesFor($department);
+        $reassignmentClass = $this->reassignmentClassFor($department);
+
+        return DB::transaction(function () use ($classes, $reassignmentClass, $requestId, $actor, $department, $approved): Model {
+            $request = $classes['request']::query()->lockForUpdate()->findOrFail($requestId);
+            $reassignment = $reassignmentClass::query()
+                ->where('request_id', $requestId)
+                ->where('status', 'pending')
+                ->lockForUpdate()
+                ->latest('id')
+                ->firstOrFail();
+
+            if ($request->status === RequestStatus::Closed || (int) $request->owner_user_id !== (int) $reassignment->from_user_id) {
+                throw ValidationException::withMessages(['request' => 'تغير الطلب منذ إرسال إعادة التعيين، ولا يمكن اعتمادها.']);
+            }
+            if ($approved) {
+                if ((int) $reassignment->to_user_id === (int) $actor->id) {
+                    throw ValidationException::withMessages(['request' => 'لا يمكن للمدير اعتماد طلب يستهدف تعيينه هو؛ يلزم حسم هذا المسار قبل التنفيذ.']);
+                }
+                $target = User::query()->findOrFail($reassignment->to_user_id);
+                if (! $target->canWorkInDepartment($department)) {
+                    throw ValidationException::withMessages(['request' => 'الموظف المستهدف لم يعد عضوًا في القسم.']);
+                }
+                if ($target->is_company_manager) {
+                    throw ValidationException::withMessages(['request' => 'إعادة التعيين إلى مدير تحتاج إجراءً خاصًا غير متاح حاليًا.']);
+                }
+            }
+
+            $previousOwnerId = (int) $request->owner_user_id;
+            $reassignment->status = $approved ? 'approved' : 'rejected';
+            $reassignment->decided_by = $actor->id;
+            $reassignment->decided_at = now();
+            $reassignment->save();
+
+            if ($approved) {
+                $request->owner_user_id = $reassignment->to_user_id;
+                $request->save();
+            }
+
+            $this->recordAuditEvent(
+                $actor,
+                $department,
+                $approved ? 'request.reassignment.approved' : 'request.reassignment.rejected',
+                $request,
+                ['owner_user_id' => $previousOwnerId],
+                [
+                    'owner_user_id' => $request->owner_user_id,
+                    'reassignment_id' => $reassignment->getKey(),
+                    'requested_by' => $reassignment->requested_by,
+                    'target_user_id' => $reassignment->to_user_id,
+                    'status' => $reassignment->status,
+                    'decided_by' => $actor->id,
+                ],
+                $reassignment->reason,
+            );
+
+            return $request;
+        });
+    }
+
+    public function reassignDirectly(User $actor, Department $department, int $requestId, int $targetUserId, string $reason): Model
+    {
+        if (! $actor->canManageDepartment($department)) {
+            throw new AuthorizationException('إعادة التعيين المباشرة متاحة لمدير القسم فقط.');
+        }
+        $reason = trim($reason);
+
+        $validated = Validator::make(['target_user_id' => $targetUserId, 'reason' => $reason], [
+            'target_user_id' => ['required', 'integer', 'exists:users,id'],
+            'reason' => ['required', 'string', 'max:10000'],
+        ])->validate();
+        $target = User::query()->findOrFail($validated['target_user_id']);
+        if (! $target->canWorkInDepartment($department)) {
+            throw ValidationException::withMessages(['target_user_id' => 'الموظف المختار ليس عضوًا في هذا القسم.']);
+        }
+        if ($target->is_company_manager) {
+            throw ValidationException::withMessages(['target_user_id' => 'إعادة التعيين إلى مدير تحتاج إجراءً خاصًا غير متاح حاليًا.']);
+        }
+        if ((int) $target->id === (int) $actor->id) {
+            throw ValidationException::withMessages(['target_user_id' => 'لا يمكن تعيين المدير لنفسه من هذا الإجراء.']);
+        }
+
+        $classes = $this->classesFor($department);
+        $reassignmentClass = $this->reassignmentClassFor($department);
+
+        return DB::transaction(function () use ($classes, $reassignmentClass, $requestId, $target, $actor, $department, $validated): Model {
+            $request = $classes['request']::query()->lockForUpdate()->findOrFail($requestId);
+            if ($request->status === RequestStatus::Closed) {
+                throw ValidationException::withMessages(['request' => 'لا يمكن إعادة تعيين طلب مغلق.']);
+            }
+            if ((int) $request->owner_user_id === (int) $target->id) {
+                throw ValidationException::withMessages(['target_user_id' => 'الموظف المختار مسؤول الطلب بالفعل.']);
+            }
+            if ($reassignmentClass::query()->where('request_id', $requestId)->where('status', 'pending')->exists()) {
+                throw ValidationException::withMessages(['request' => 'احسم طلب إعادة التعيين المعلق قبل إعادة التعيين المباشرة.']);
+            }
+
+            $previousOwnerId = (int) $request->owner_user_id;
+            $followUpAt = $request->next_follow_up_at?->toIso8601String();
+            $request->owner_user_id = $target->id;
+            $request->save();
+            $this->recordAuditEvent($actor, $department, 'request.reassignment.direct', $request, [
+                'owner_user_id' => $previousOwnerId,
+                'next_follow_up_at' => $followUpAt,
+            ], [
+                'owner_user_id' => $target->id,
+                'next_follow_up_at' => $followUpAt,
+            ], $validated['reason']);
+
+            return $request;
+        });
+    }
+
     /** @param array<string, mixed> $data */
     public function updateDetails(User $actor, Department $department, int $requestId, array $data): Model
     {
@@ -502,6 +682,10 @@ class RequestService
         if ($request->status === RequestStatus::Closed) {
             throw ValidationException::withMessages(['status' => 'الطلب مغلق بالفعل.']);
         }
+        $reassignmentClass = $this->reassignmentClassFor($department);
+        if ($reassignmentClass::query()->where('request_id', $requestId)->where('status', 'pending')->exists()) {
+            throw ValidationException::withMessages(['status' => 'احسم طلب إعادة التعيين المعلق قبل إغلاق الطلب.']);
+        }
 
         return DB::transaction(function () use ($request, $validated, $department, $actor): Model {
             $from = $request->status;
@@ -574,6 +758,37 @@ class RequestService
             'to_status' => $to->value,
             'changed_by' => $actor->id,
             'notes' => $notes,
+            'created_at' => now(),
+        ]);
+    }
+
+    private function reassignmentClassFor(Department $department): string
+    {
+        return match ($department) {
+            Department::Rental => RentalRequestReassignment::class,
+            Department::Resale => ResaleRequestReassignment::class,
+        };
+    }
+
+    /** @param array<string, mixed>|null $before @param array<string, mixed> $after */
+    private function recordAuditEvent(
+        User $actor,
+        Department $department,
+        string $eventKey,
+        Model $request,
+        ?array $before,
+        array $after,
+        ?string $reason,
+    ): void {
+        AuditEvent::query()->create([
+            'actor_user_id' => $actor->id,
+            'department' => $department->value,
+            'event_key' => $eventKey,
+            'subject_type' => $request::class,
+            'subject_id' => $request->getKey(),
+            'before_values' => $before,
+            'after_values' => $after,
+            'reason' => $reason,
             'created_at' => now(),
         ]);
     }

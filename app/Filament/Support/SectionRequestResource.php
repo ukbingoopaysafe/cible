@@ -8,6 +8,8 @@ use App\Enums\RequestStatus;
 use App\Models\User;
 use App\Models\RentalCustomer;
 use App\Models\ResaleCustomer;
+use App\Models\RentalRequestReassignment;
+use App\Models\ResaleRequestReassignment;
 use App\Services\RequestService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
@@ -55,7 +57,8 @@ abstract class SectionRequestResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason']);
+        return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason'])
+            ->withCount(['reassignments as pending_reassignment_count' => fn (Builder $relationQuery) => $relationQuery->where('status', 'pending')]);
     }
 
     public static function canViewAny(): bool
@@ -95,6 +98,10 @@ abstract class SectionRequestResource extends Resource
                 TextColumn::make('broker.name')->label('الوسيط')->placeholder('—')->searchable(),
                 TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? ''),
                 TextColumn::make('owner.name')->label('المسؤول')->searchable(),
+                TextColumn::make('pending_reassignment_count')->label('طلب تغيير المسؤول')
+                    ->formatStateUsing(fn ($state): string => (int) $state > 0 ? 'بانتظار المدير' : '—')
+                    ->badge()
+                    ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray'),
                 TextColumn::make('stage')->label('المرحلة')->badge()->formatStateUsing(fn ($state): string => RequestFormSchema::stageOptions(static::department())[$state instanceof \BackedEnum ? $state->value : $state] ?? (string) $state),
                 TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state): string => match ($state instanceof RequestStatus ? $state : RequestStatus::from($state)) {
                     RequestStatus::Active => 'نشط',
@@ -116,6 +123,10 @@ abstract class SectionRequestResource extends Resource
                 EditAction::make()->label('تعديل التفاصيل'),
                 self::linkCustomerAction(),
                 self::setFollowUpAction(),
+                self::requestReassignmentAction(),
+                self::directReassignmentAction(),
+                self::approveReassignmentAction(),
+                self::rejectReassignmentAction(),
                 self::changeStageAction(),
                 self::pauseAction(),
                 self::resumeAction(),
@@ -198,6 +209,156 @@ abstract class SectionRequestResource extends Resource
                 );
             })
             ->successNotificationTitle('تم تحديث موعد المتابعة');
+    }
+
+    private static function requestReassignmentAction(): Action
+    {
+        return Action::make('requestReassignment')
+            ->label('طلب تغيير المسؤول')
+            ->icon('heroicon-o-user-plus')
+            ->schema([
+                Select::make('target_user_id')->label('المسؤول المقترح')
+                    ->options(fn (Model $record): array => self::reassignmentStaffOptions($record))
+                    ->searchable()->required(),
+                Textarea::make('reason')->label('سبب طلب التغيير')->rows(3)->required()->maxLength(10000),
+            ])
+            ->visible(function (Model $record): bool {
+                $actor = auth()->user();
+
+                return $actor instanceof User
+                    && $actor->canWorkInDepartment(static::department())
+                    && ! $actor->canManageDepartment(static::department())
+                    && $record->status !== RequestStatus::Closed
+                    && (int) ($record->pending_reassignment_count ?? 0) === 0;
+            })
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->requestReassignment(
+                    $actor,
+                    static::department(),
+                    (int) $record->getKey(),
+                    (int) $data['target_user_id'],
+                    $data['reason'],
+                );
+            })
+            ->successNotificationTitle('أُرسل طلب إعادة التعيين للمدير');
+    }
+
+    private static function directReassignmentAction(): Action
+    {
+        return Action::make('directReassignment')
+            ->label('إعادة تعيين المسؤول')
+            ->icon('heroicon-o-arrow-path-rounded-square')
+            ->schema([
+                Select::make('target_user_id')->label('المسؤول الجديد')
+                    ->options(fn (Model $record): array => self::reassignmentStaffOptions($record))
+                    ->searchable()->required(),
+                Textarea::make('reason')->label('سبب إعادة التعيين')->rows(3)->required()->maxLength(10000),
+            ])
+            ->visible(function (Model $record): bool {
+                $actor = auth()->user();
+
+                return $actor instanceof User
+                    && $actor->canManageDepartment(static::department())
+                    && $record->status !== RequestStatus::Closed
+                    && (int) ($record->pending_reassignment_count ?? 0) === 0;
+            })
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->reassignDirectly(
+                    $actor,
+                    static::department(),
+                    (int) $record->getKey(),
+                    (int) $data['target_user_id'],
+                    $data['reason'],
+                );
+            })
+            ->successNotificationTitle('تمت إعادة تعيين مسؤول الطلب');
+    }
+
+    private static function approveReassignmentAction(): Action
+    {
+        return Action::make('approveReassignment')
+            ->label('الموافقة على تغيير المسؤول')
+            ->color('success')
+            ->requiresConfirmation()
+            ->modalDescription(fn (Model $record): string => self::pendingReassignmentDescription((int) $record->getKey()))
+            ->visible(function (Model $record): bool {
+                $actor = auth()->user();
+
+                return $actor instanceof User
+                    && $actor->canManageDepartment(static::department())
+                    && self::hasPendingReassignment($record);
+            })
+            ->action(function (Model $record): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->decideReassignment($actor, static::department(), (int) $record->getKey(), true);
+            })
+            ->successNotificationTitle('تمت الموافقة على إعادة التعيين');
+    }
+
+    private static function rejectReassignmentAction(): Action
+    {
+        return Action::make('rejectReassignment')
+            ->label('رفض طلب تغيير المسؤول')
+            ->color('danger')
+            ->requiresConfirmation()
+            ->modalDescription(fn (Model $record): string => self::pendingReassignmentDescription((int) $record->getKey()))
+            ->visible(function (Model $record): bool {
+                $actor = auth()->user();
+
+                return $actor instanceof User
+                    && $actor->canManageDepartment(static::department())
+                    && self::hasPendingReassignment($record);
+            })
+            ->action(function (Model $record): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->decideReassignment($actor, static::department(), (int) $record->getKey(), false);
+            })
+            ->successNotificationTitle('تم رفض طلب إعادة التعيين');
+    }
+
+    /** @return array<int, string> */
+    private static function reassignmentStaffOptions(Model $record): array
+    {
+        $actor = auth()->user();
+
+        return User::query()
+            ->where('is_company_manager', false)
+            ->whereKeyNot((int) $record->owner_user_id)
+            ->when($actor instanceof User, fn ($query) => $query->whereKeyNot((int) $actor->id))
+            ->whereHas('departmentMemberships', fn ($query) => $query->where('department', static::department()->value))
+            ->orderBy('name')
+            ->pluck('name', 'id')
+            ->all();
+    }
+
+    private static function pendingReassignment(int $requestId): Model|null
+    {
+        $class = static::department() === Department::Rental
+            ? RentalRequestReassignment::class
+            : ResaleRequestReassignment::class;
+
+        return $class::query()->with('requester', 'target')->where('request_id', $requestId)
+            ->where('status', 'pending')->latest('id')->first();
+    }
+
+    private static function hasPendingReassignment(Model $record): bool
+    {
+        return (int) ($record->pending_reassignment_count ?? 0) > 0;
+    }
+
+    private static function pendingReassignmentDescription(int $requestId): string
+    {
+        $pending = self::pendingReassignment($requestId);
+
+        return $pending
+            ? "من: {$pending->requester?->name} — إلى: {$pending->target?->name}\nالسبب: {$pending->reason}"
+            : 'لا يوجد طلب إعادة تعيين معلق.';
     }
 
     private static function pauseAction(): Action

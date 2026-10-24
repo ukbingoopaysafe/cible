@@ -12,6 +12,7 @@ use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RentalRequest extends Model
 {
@@ -67,5 +68,10 @@ class RentalRequest extends Model
     public function owner(): BelongsTo
     {
         return $this->belongsTo(User::class, 'owner_user_id');
+    }
+
+    public function reassignments(): HasMany
+    {
+        return $this->hasMany(RentalRequestReassignment::class, 'request_id');
     }
 }
