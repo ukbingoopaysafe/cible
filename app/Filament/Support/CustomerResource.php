@@ -3,6 +3,8 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Filament\Resources\RentalRequests\RentalRequestResource;
+use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
 use App\Models\User;
 use App\Services\CustomerService;
 use Filament\Actions\Action;
@@ -71,6 +73,17 @@ abstract class CustomerResource extends Resource
                     ->url(fn (Model $record): string => static::whatsAppUrl($record->phone_e164))
                     ->openUrlInNewTab()
                     ->visible(fn (Model $record): bool => static::hasValidWhatsAppPhone($record->phone_e164)),
+                Action::make('viewCustomerRequests')
+                    ->label('طلبات العميل')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->modalHeading(fn (Model $record): string => "طلبات العميل: {$record->name}")
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('إغلاق')
+                    ->modalContent(fn (Model $record) => view('filament.modals.customer-requests', [
+                        'requests' => $record->requests()->with(['area', 'owner'])->latest()->get(),
+                        'requestResource' => static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class,
+                        'stageOptions' => RequestFormSchema::stageOptions(static::department()),
+                    ])),
                 Action::make('editCustomer')
                     ->label('تعديل بيانات العميل')
                     ->icon('heroicon-o-pencil-square')
