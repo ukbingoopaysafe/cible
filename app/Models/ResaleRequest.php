@@ -77,4 +77,14 @@ class ResaleRequest extends Model
     {
         return $this->hasOne(ResaleDeal::class, 'request_id');
     }
+
+    public function recommendations(): HasMany
+    {
+        return $this->hasMany(ResaleRecommendation::class, 'request_id');
+    }
+
+    public function viewings(): HasMany
+    {
+        return $this->hasMany(ResaleViewing::class, 'request_id');
+    }
 }

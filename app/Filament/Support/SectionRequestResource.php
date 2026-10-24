@@ -71,6 +71,7 @@ abstract class SectionRequestResource extends Resource
 
         return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason', 'deal.commissions'])
             ->withCount('activities')
+            ->withCount(['recommendations', 'viewings'])
             ->withCount(['reassignments as pending_reassignment_count' => fn (Builder $relationQuery) => $relationQuery->where('status', 'pending')]);
     }
 
@@ -131,6 +132,8 @@ abstract class SectionRequestResource extends Resource
                 }),
                 TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
                 TextColumn::make('activities_count')->label('سجل التواصل')->sortable(),
+                TextColumn::make('recommendations_count')->label('الترشيحات')->sortable(),
+                TextColumn::make('viewings_count')->label('المعاينات')->sortable(),
                 TextColumn::make('deal.agreed_total_value')->label('الصفقة')->money(fn (Model $record): string => $record->deal?->currency ?? 'EGP')->placeholder('—'),
             ])
             ->filters([
@@ -208,6 +211,12 @@ abstract class SectionRequestResource extends Resource
                 self::closeAction(),
                 self::createDealAction(),
                 self::viewDealAction(),
+                self::createRecommendationAction(),
+                self::changeRecommendationStatusAction(),
+                self::recordFieldInspectionAction(),
+                self::scheduleViewingAction(),
+                self::recordViewingResultAction(),
+                self::viewPropertyHistoryAction(),
             ])
             ->defaultSort('next_follow_up_at');
     }
@@ -240,6 +249,125 @@ abstract class SectionRequestResource extends Resource
                 );
             })
             ->successNotificationTitle('تم ربط العميل بالطلب');
+    }
+
+    private static function createRecommendationAction(): Action
+    {
+        return Action::make('createRecommendation')
+            ->label('إضافة ترشيح')
+            ->icon('heroicon-o-home-modern')
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
+            ->schema([
+                TextInput::make('unit_code')->label('كود الوحدة الداخلي')->maxLength(100),
+                TextInput::make('listing_code')->label('كود Listing الرقمي')->numeric()->maxLength(30),
+                TextInput::make('unit_type')->label('نوع الوحدة')->maxLength(80),
+                TextInput::make('unit_area')->label('المساحة بالمتر')->numeric()->minValue(0.01),
+                Textarea::make('location_description')->label('وصف الموقع')->rows(2)->maxLength(10000),
+                TextInput::make('asking_price')->label('السعر المعروض')->numeric()->minValue(0),
+                Select::make('currency')->label('العملة')->options(['EGP' => 'جنيه مصري', 'USD' => 'دولار أمريكي'])->default('EGP')->required(),
+                Textarea::make('notes')->label('ملاءمة الوحدة وملاحظات الترشيح')->rows(3)->maxLength(10000),
+            ])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(\App\Services\RecommendationService::class)->createRecommendation($actor, static::department(), (int) $record->getKey(), $data);
+            })
+            ->successNotificationTitle('تمت إضافة الترشيح');
+    }
+
+    private static function changeRecommendationStatusAction(): Action
+    {
+        return Action::make('changeRecommendationStatus')
+            ->label('تحديث حالة ترشيح')
+            ->icon('heroicon-o-arrow-path')
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->recommendations()->exists())
+            ->schema([
+                Select::make('recommendation_id')->label('الوحدة المرشحة')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable()->required(),
+                Select::make('status')->label('الحالة')->options(['proposed' => 'مقترحة', 'shared' => 'أُرسلت للعميل', 'selected' => 'اختارها العميل', 'rejected' => 'رفضها العميل', 'withdrawn' => 'سُحبت'])->required(),
+            ])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                $recommendationClass = static::department() === Department::Rental ? \App\Models\RentalRecommendation::class : \App\Models\ResaleRecommendation::class;
+                abort_unless($recommendationClass::query()->whereKey($data['recommendation_id'])->where('request_id', $record->getKey())->exists(), 404);
+                app(\App\Services\RecommendationService::class)->updateRecommendationStatus($actor, static::department(), (int) $data['recommendation_id'], $data['status']);
+            })
+            ->successNotificationTitle('تم تحديث حالة الترشيح');
+    }
+
+    private static function recordFieldInspectionAction(): Action
+    {
+        return Action::make('recordFieldInspection')
+            ->label('تسجيل فحص ميداني')
+            ->icon('heroicon-o-clipboard-document-check')
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->recommendations()->exists())
+            ->schema([
+                Select::make('recommendation_id')->label('الوحدة')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable()->required(),
+                TextInput::make('field_representative_name')->label('اسم المندوب الميداني')->maxLength(160)->required(),
+                DateTimePicker::make('inspected_at')->label('وقت الفحص')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
+                Select::make('photo_match')->label('مدى مطابقة الوحدة للصور')->options(['matches' => 'مطابقة', 'partly_matches' => 'مطابقة جزئيًا', 'does_not_match' => 'غير مطابقة'])->required(),
+                Textarea::make('observed_defects')->label('العيوب الملحوظة')->rows(3)->maxLength(10000),
+                Textarea::make('notes')->label('ملاحظات الفحص')->rows(2)->maxLength(10000),
+            ])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                $recommendationClass = static::department() === Department::Rental ? \App\Models\RentalRecommendation::class : \App\Models\ResaleRecommendation::class;
+                abort_unless($recommendationClass::query()->whereKey($data['recommendation_id'])->where('request_id', $record->getKey())->exists(), 404);
+                app(\App\Services\RecommendationService::class)->recordInspection($actor, static::department(), (int) $data['recommendation_id'], $data);
+            })
+            ->successNotificationTitle('تم تسجيل الفحص الميداني');
+    }
+
+    private static function scheduleViewingAction(): Action
+    {
+        return Action::make('scheduleViewing')
+            ->label('تحديد معاينة')
+            ->icon('heroicon-o-calendar-days')
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
+            ->schema([
+                Select::make('recommendation_id')->label('الوحدة المرشحة (اختياري)')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable(),
+                DateTimePicker::make('scheduled_at')->label('موعد المعاينة')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
+                TextInput::make('field_representative_name')->label('اسم المندوب الميداني')->maxLength(160),
+            ])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(\App\Services\RecommendationService::class)->scheduleViewing($actor, static::department(), (int) $record->getKey(), $data);
+            })
+            ->successNotificationTitle('تم تحديد موعد المعاينة');
+    }
+
+    private static function recordViewingResultAction(): Action
+    {
+        return Action::make('recordViewingResult')
+            ->label('تسجيل نتيجة معاينة')
+            ->icon('heroicon-o-chat-bubble-left-right')
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->exists())
+            ->schema([
+                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => $item->scheduled_at->format('d/m/Y H:i').' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
+                Select::make('result')->label('النتيجة')->options(['interested' => 'مهتم', 'not_interested' => 'غير مهتم', 'second_viewing' => 'يرغب بمعاينة أخرى', 'negotiating' => 'بدأ التفاوض', 'cancelled' => 'أُلغيت'])->required(),
+                Textarea::make('customer_feedback')->label('رأي العميل')->rows(3)->maxLength(10000),
+                Textarea::make('rejection_reason')->label('سبب عدم الاهتمام')->rows(2)->maxLength(10000),
+            ])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                $viewingClass = static::department() === Department::Rental ? \App\Models\RentalViewing::class : \App\Models\ResaleViewing::class;
+                abort_unless($viewingClass::query()->whereKey($data['viewing_id'])->where('request_id', $record->getKey())->exists(), 404);
+                app(\App\Services\RecommendationService::class)->recordViewingResult($actor, static::department(), (int) $data['viewing_id'], $data);
+            })
+            ->successNotificationTitle('تم تسجيل نتيجة المعاينة');
+    }
+
+    private static function viewPropertyHistoryAction(): Action
+    {
+        return Action::make('viewPropertyHistory')
+            ->label('سجل الترشيحات والمعاينات')
+            ->icon('heroicon-o-clipboard-document-list')
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('إغلاق')
+            ->modalContent(fn (Model $record) => view('filament.modals.request-property-history', ['record' => $record]));
     }
 
     private static function changeStageAction(): Action

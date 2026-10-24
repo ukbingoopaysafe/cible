@@ -84,4 +84,14 @@ class RentalRequest extends Model
     {
         return $this->hasOne(RentalDeal::class, 'request_id');
     }
+
+    public function recommendations(): HasMany
+    {
+        return $this->hasMany(RentalRecommendation::class, 'request_id');
+    }
+
+    public function viewings(): HasMany
+    {
+        return $this->hasMany(RentalViewing::class, 'request_id');
+    }
 }
