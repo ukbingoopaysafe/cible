@@ -74,4 +74,9 @@ class RentalRequest extends Model
     {
         return $this->hasMany(RentalRequestReassignment::class, 'request_id');
     }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(RentalActivity::class, 'rental_request_id');
+    }
 }

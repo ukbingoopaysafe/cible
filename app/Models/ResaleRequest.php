@@ -67,4 +67,9 @@ class ResaleRequest extends Model
     {
         return $this->hasMany(ResaleRequestReassignment::class, 'request_id');
     }
+
+    public function activities(): HasMany
+    {
+        return $this->hasMany(ResaleActivity::class, 'resale_request_id');
+    }
 }

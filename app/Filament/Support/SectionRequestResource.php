@@ -3,6 +3,7 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Enums\ContactActivityChannel;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Models\ResaleCustomer;
 use App\Models\RentalRequestReassignment;
 use App\Models\ResaleRequestReassignment;
 use App\Services\RequestService;
+use App\Services\ContactActivityService;
 use Filament\Actions\Action;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
@@ -58,6 +60,7 @@ abstract class SectionRequestResource extends Resource
         }
 
         return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason'])
+            ->withCount('activities')
             ->withCount(['reassignments as pending_reassignment_count' => fn (Builder $relationQuery) => $relationQuery->where('status', 'pending')]);
     }
 
@@ -109,6 +112,7 @@ abstract class SectionRequestResource extends Resource
                     RequestStatus::Closed => 'مغلق',
                 }),
                 TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
+                TextColumn::make('activities_count')->label('سجل التواصل')->sortable(),
             ])
             ->filters([
                 SelectFilter::make('status')->label('الحالة')->options([
@@ -152,6 +156,8 @@ abstract class SectionRequestResource extends Resource
             ->recordActions([
                 ViewAction::make()->label('عرض الطلب'),
                 EditAction::make()->label('تعديل التفاصيل'),
+                self::recordContactAction(),
+                self::contactHistoryAction(),
                 self::linkCustomerAction(),
                 self::setFollowUpAction(),
                 self::requestReassignmentAction(),
@@ -240,6 +246,71 @@ abstract class SectionRequestResource extends Resource
                 );
             })
             ->successNotificationTitle('تم تحديث موعد المتابعة');
+    }
+
+    private static function recordContactAction(): Action
+    {
+        return Action::make('recordContact')
+            ->label('تسجيل تواصل')
+            ->icon('heroicon-o-chat-bubble-left-ellipsis')
+            ->visible(fn (Model $record): bool => $record->status !== RequestStatus::Closed)
+            ->schema([
+                Select::make('channel')
+                    ->label('وسيلة التواصل')
+                    ->options(collect(ContactActivityChannel::cases())->mapWithKeys(
+                        fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()],
+                    )->all())
+                    ->required(),
+                DateTimePicker::make('occurred_at')
+                    ->label('وقت التواصل')
+                    ->default(now())
+                    ->native(false)
+                    ->seconds(false)
+                    ->maxDate(now())
+                    ->required(),
+                Textarea::make('result')
+                    ->label('نتيجة التواصل')
+                    ->rows(3)
+                    ->maxLength(10000)
+                    ->required(),
+                Textarea::make('notes')
+                    ->label('ملاحظات إضافية')
+                    ->rows(3)
+                    ->maxLength(10000),
+                Textarea::make('next_action')
+                    ->label('الإجراء التالي (اختياري)')
+                    ->helperText('هذا الوصف لا يغير موعد المتابعة القادم؛ حدّث الموعد من إجراء المتابعة عند الحاجة.')
+                    ->rows(2)
+                    ->maxLength(10000),
+            ])
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(ContactActivityService::class)->record(
+                    $actor,
+                    static::department(),
+                    (int) $record->getKey(),
+                    $data,
+                );
+            })
+            ->successNotificationTitle('تم تسجيل التواصل');
+    }
+
+    private static function contactHistoryAction(): Action
+    {
+        return Action::make('contactHistory')
+            ->label('عرض سجل التواصل')
+            ->icon('heroicon-o-clock')
+            ->modalHeading('سجل التواصل')
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('إغلاق')
+            ->modalContent(fn (Model $record) => view('filament.modals.contact-activity-history', [
+                'activities' => app(ContactActivityService::class)->history(
+                    auth()->user(),
+                    static::department(),
+                    (int) $record->getKey(),
+                ),
+            ]));
     }
 
     private static function requestReassignmentAction(): Action
