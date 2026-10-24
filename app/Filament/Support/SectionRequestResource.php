@@ -121,6 +121,17 @@ abstract class SectionRequestResource extends Resource
                     RequestStatus::Paused->value => 'متوقف مؤقتًا',
                     RequestStatus::Closed->value => 'مغلق',
                 ]),
+                SelectFilter::make('customer_link')
+                    ->label('ارتباط العميل')
+                    ->options([
+                        'linked' => 'مرتبط بعميل',
+                        'unlinked' => 'بانتظار ربط العميل',
+                    ])
+                    ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
+                        'linked' => $query->whereNotNull('customer_id'),
+                        'unlinked' => $query->whereNull('customer_id'),
+                        default => $query,
+                    }),
                 SelectFilter::make('stage')->label('المرحلة')->options(RequestFormSchema::stageOptions(static::department())),
                 SelectFilter::make('follow_up_window')
                     ->label('موعد المتابعة')
