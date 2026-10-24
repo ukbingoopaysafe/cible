@@ -98,6 +98,7 @@ abstract class SectionRequestResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('customer.name')->label('العميل')->placeholder('غير معروف')->searchable(),
+                TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable(),
                 TextColumn::make('broker.name')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->placeholder('—')->searchable(),
                 TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? ''),
                 TextColumn::make('owner.name')->label('المسؤول')->searchable(),
