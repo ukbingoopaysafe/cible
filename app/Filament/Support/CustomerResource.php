@@ -84,6 +84,10 @@ abstract class CustomerResource extends Resource
                         'requestResource' => static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class,
                         'stageOptions' => RequestFormSchema::stageOptions(static::department()),
                     ])),
+                Action::make('createCustomerRequest')
+                    ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب مشتري')
+                    ->icon('heroicon-o-plus-circle')
+                    ->url(fn (Model $record): string => (static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class)::getUrl('create', ['customer_id' => $record->getKey()])),
                 Action::make('editCustomer')
                     ->label('تعديل بيانات العميل')
                     ->icon('heroicon-o-pencil-square')
