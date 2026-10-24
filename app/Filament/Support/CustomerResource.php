@@ -13,12 +13,17 @@ use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Writer\XLSX\Writer;
 
 /** @extends Resource<Model> */
 abstract class CustomerResource extends Resource
@@ -63,6 +68,8 @@ abstract class CustomerResource extends Resource
     {
         return $table
             ->headerActions([
+                self::importCustomersAction(),
+                self::downloadImportTemplateAction(),
                 ExportAction::make()
                     ->label('تصدير Excel')
                     ->exporter(static::department() === Department::Rental ? RentalCustomerExporter::class : ResaleCustomerExporter::class)
@@ -124,6 +131,74 @@ abstract class CustomerResource extends Resource
                     })
                     ->successNotificationTitle('تم تحديث بيانات العميل'),
             ]);
+    }
+
+    private static function importCustomersAction(): Action
+    {
+        return Action::make('importCustomers')
+            ->label('استيراد عملاء من Excel')
+            ->icon('heroicon-o-arrow-up-tray')
+            ->schema([
+                FileUpload::make('file')
+                    ->label('ملف Excel بصيغة XLSX')
+                    ->required()
+                    ->storeFiles(false)
+                    ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
+                    ->rules(['extensions:xlsx', 'max:10240'])
+                    ->helperText('الحد الأقصى 10 ميجابايت و5,000 صف. الأعمدة يجب أن تطابق القالب حرفيًا.'),
+            ])
+            ->action(function (array $data) {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User && $data['file'] instanceof TemporaryUploadedFile, 403);
+                $path = $data['file']->getRealPath();
+                abort_unless(is_string($path), 422, 'تعذر الوصول إلى الملف المرفوع.');
+
+                $result = app(\App\Services\CustomerSpreadsheetImportService::class)
+                    ->import($actor, static::department(), $path);
+
+                Notification::make()
+                    ->title('اكتمل استيراد العملاء')
+                    ->body('تم استيراد '.$result['successful'].' صف، وتعذر استيراد '.count($result['failed']).' صف.')
+                    ->color($result['failed'] === [] ? 'success' : 'warning')
+                    ->send();
+
+                if ($result['failed'] === []) {
+                    return;
+                }
+
+                $stream = fopen('php://temp', 'r+');
+                fwrite($stream, "\xEF\xBB\xBF");
+                fputcsv($stream, ['رقم الصف', ...['اسم العميل', 'رقم الهاتف', 'رمز الدولة', 'الجنسية'], 'سبب الخطأ'], ';', '"', '\\');
+                foreach ($result['failed'] as $failure) {
+                    $safeValues = array_map(static fn (string $value): string => preg_match('/^[\x00-\x20]*[=+\-@]/u', $value) === 1 ? "'{$value}" : $value, $failure['data']);
+                    $safeError = preg_match('/^[\x00-\x20]*[=+\-@]/u', $failure['error']) === 1 ? "'{$failure['error']}" : $failure['error'];
+                    fputcsv($stream, [$failure['row'], ...$safeValues, $safeError], ';', '"', '\\');
+                }
+                rewind($stream);
+                $csv = stream_get_contents($stream);
+                fclose($stream);
+
+                return response()->streamDownload(static function () use ($csv): void {
+                    echo $csv;
+                }, 'customer-import-failures.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
+            });
+    }
+
+    private static function downloadImportTemplateAction(): Action
+    {
+        return Action::make('downloadImportTemplate')
+            ->label('تنزيل قالب الاستيراد')
+            ->icon('heroicon-o-document-arrow-down')
+            ->action(function () {
+                $path = tempnam(sys_get_temp_dir(), 'cible-import-template-');
+                abort_unless(is_string($path), 500);
+                $writer = new Writer;
+                $writer->openToFile($path);
+                $writer->addRow(Row::fromValues(['اسم العميل', 'رقم الهاتف', 'رمز الدولة', 'الجنسية']));
+                $writer->close();
+
+                return response()->download($path, 'customer-import-template.xlsx')->deleteFileAfterSend();
+            });
     }
 
     public static function createCustomerAction(): Action
