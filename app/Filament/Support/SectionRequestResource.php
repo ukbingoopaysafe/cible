@@ -6,6 +6,8 @@ use App\Enums\Department;
 use App\Enums\ContactActivityChannel;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
+use App\Exports\RentalRequestExporter;
+use App\Exports\ResaleRequestExporter;
 use App\Models\User;
 use App\Models\RentalCustomer;
 use App\Models\ResaleCustomer;
@@ -14,6 +16,8 @@ use App\Models\ResaleRequestReassignment;
 use App\Services\RequestService;
 use App\Services\ContactActivityService;
 use Filament\Actions\Action;
+use Filament\Actions\ExportAction;
+use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DateTimePicker;
@@ -96,6 +100,13 @@ abstract class SectionRequestResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->label('تصدير Excel')
+                    ->exporter(static::department() === Department::Rental ? RentalRequestExporter::class : ResaleRequestExporter::class)
+                    ->formats([ExportFormat::Xlsx])
+                    ->columnMapping(false),
+            ])
             ->columns([
                 TextColumn::make('customer.name')->label('العميل')->placeholder('غير معروف')->searchable(),
                 TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable(),

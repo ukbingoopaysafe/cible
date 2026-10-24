@@ -3,11 +3,15 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Exports\RentalCustomerExporter;
+use App\Exports\ResaleCustomerExporter;
 use App\Filament\Resources\RentalRequests\RentalRequestResource;
 use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
 use App\Models\User;
 use App\Services\CustomerService;
 use Filament\Actions\Action;
+use Filament\Actions\ExportAction;
+use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
@@ -58,6 +62,13 @@ abstract class CustomerResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->headerActions([
+                ExportAction::make()
+                    ->label('تصدير Excel')
+                    ->exporter(static::department() === Department::Rental ? RentalCustomerExporter::class : ResaleCustomerExporter::class)
+                    ->formats([ExportFormat::Xlsx])
+                    ->columnMapping(false),
+            ])
             ->columns([
                 TextColumn::make('name')->label('اسم العميل')->searchable()->sortable(),
                 TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable(),
