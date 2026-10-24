@@ -85,7 +85,11 @@ class RecommendationService
 
         return DB::transaction(function () use ($actor, $department, $recommendation, $validated): Model {
             $inspection = $this->inspectionClass($department)::query()->create([...$validated, 'recommendation_id' => $recommendation->id, 'recorded_by' => $actor->id]);
-            $this->audit($actor, $department, 'field_inspection.recorded', $inspection, ['recommendation_id' => $recommendation->id]);
+            $this->audit($actor, $department, 'field_inspection.recorded', $inspection, [
+                'recommendation_id' => $recommendation->id,
+                'photo_match' => $inspection->photo_match,
+                'has_observed_defects' => filled($inspection->observed_defects),
+            ]);
             return $inspection;
         });
     }
@@ -128,9 +132,14 @@ class RecommendationService
             'customer_feedback' => ['nullable', 'string', 'max:10000'],
             'rejection_reason' => ['nullable', 'required_if:result,not_interested', 'string', 'max:10000'],
         ])->validate();
-        $before = $viewing->only(['result', 'customer_feedback', 'rejection_reason']);
+        $before = ['result' => $viewing->result];
         $viewing->update($validated);
-        $this->audit($actor, $department, 'viewing.result_recorded', $viewing, ['before' => $before, 'after' => $validated]);
+        $this->audit($actor, $department, 'viewing.result_recorded', $viewing, [
+            'from' => $before['result'],
+            'to' => $validated['result'],
+            'has_customer_feedback' => filled($validated['customer_feedback'] ?? null),
+            'has_rejection_reason' => filled($validated['rejection_reason'] ?? null),
+        ]);
         return $viewing;
     }
 

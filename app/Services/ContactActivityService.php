@@ -10,6 +10,7 @@ use App\Models\RentalActivity;
 use App\Models\RentalRequest;
 use App\Models\ResaleActivity;
 use App\Models\ResaleRequest;
+use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Collection;
@@ -48,17 +49,32 @@ class ContactActivityService
             throw ValidationException::withMessages(['request' => 'تعذر تحديد جهة الاتصال الحالية للطلب.']);
         }
 
-        return DB::transaction(fn (): Model => $request->activities()->create([
-            'actor_user_id' => $actor->getKey(),
-            'contact_party' => $contactParty,
-            'broker_id_snapshot' => $contactParty === ContactParty::Broker ? $request->broker_id : null,
-            'contact_name_snapshot' => $contact->name,
-            'channel' => $validated['channel'],
-            'occurred_at' => $validated['occurred_at'],
-            'result' => trim($validated['result']),
-            'notes' => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
-            'next_action' => filled($validated['next_action'] ?? null) ? trim($validated['next_action']) : null,
-        ]));
+        return DB::transaction(function () use ($actor, $department, $request, $contactParty, $contact, $validated): Model {
+            $activity = $request->activities()->create([
+                'actor_user_id' => $actor->getKey(),
+                'contact_party' => $contactParty,
+                'broker_id_snapshot' => $contactParty === ContactParty::Broker ? $request->broker_id : null,
+                'contact_name_snapshot' => $contact->name,
+                'channel' => $validated['channel'],
+                'occurred_at' => $validated['occurred_at'],
+                'result' => trim($validated['result']),
+                'notes' => filled($validated['notes'] ?? null) ? trim($validated['notes']) : null,
+                'next_action' => filled($validated['next_action'] ?? null) ? trim($validated['next_action']) : null,
+            ]);
+            AuditEvent::query()->create([
+                'actor_user_id' => $actor->id,
+                'department' => $department->value,
+                'event_key' => 'contact.activity_recorded',
+                'subject_type' => $request::class,
+                'subject_id' => $request->getKey(),
+                'before_values' => null,
+                'after_values' => ['activity_id' => $activity->getKey(), 'channel' => $validated['channel'], 'occurred_at' => $validated['occurred_at']],
+                'reason' => null,
+                'created_at' => now(),
+            ]);
+
+            return $activity;
+        });
     }
 
     /** @return Collection<int, RentalActivity|ResaleActivity> */

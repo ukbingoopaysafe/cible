@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\Department;
+use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Support\Facades\DB;
@@ -30,7 +31,7 @@ class StaffManagementService
             'password' => ['required', 'string', 'min:12'],
         ])->validate();
 
-        return DB::transaction(function () use ($validated, $departments): User {
+        return DB::transaction(function () use ($actor, $validated, $departments): User {
             $user = User::query()->create([
                 'name' => trim($validated['name']),
                 'email' => mb_strtolower(trim($validated['email'])),
@@ -39,6 +40,11 @@ class StaffManagementService
             ]);
             foreach ($departments as $department) {
                 $user->departmentMemberships()->create(['department' => $department]);
+                $this->recordAudit($actor, $department, 'staff.employee_created', $user, null, [
+                    'name' => $user->name,
+                    'department_access' => true,
+                    'email_set' => true,
+                ]);
             }
 
             return $user;
@@ -57,7 +63,12 @@ class StaffManagementService
             'password' => ['nullable', 'string', 'min:12'],
         ])->validate();
 
-        return DB::transaction(function () use ($user, $validated, $departments, $managed): User {
+        $beforeName = $user->name;
+        $beforeEmail = $user->email;
+        $beforeDepartments = $user->departmentMemberships->pluck('department')->all();
+        $passwordChanged = filled($validated['password'] ?? null);
+
+        return DB::transaction(function () use ($actor, $user, $validated, $departments, $managed, $beforeName, $beforeEmail, $beforeDepartments, $passwordChanged): User {
             $user->name = trim($validated['name']);
             $user->email = mb_strtolower(trim($validated['email']));
             if (filled($validated['password'] ?? null)) {
@@ -78,8 +89,44 @@ class StaffManagementService
                 throw ValidationException::withMessages(['departments' => 'يجب أن يظل الموظف تابعًا لقسم واحد على الأقل.']);
             }
 
+            foreach ($managed as $department) {
+                $hasBefore = in_array($department->value, $beforeDepartments, true);
+                $hasAfter = $user->departmentMemberships()->where('department', $department->value)->exists();
+                $before = [
+                    'name' => $beforeName,
+                    'department_access' => $hasBefore,
+                    'email_changed' => false,
+                    'password_changed' => false,
+                ];
+                $after = [
+                    'name' => $user->name,
+                    'department_access' => $hasAfter,
+                    'email_changed' => $beforeEmail !== $user->email,
+                    'password_changed' => $passwordChanged,
+                ];
+                if ($before !== $after) {
+                    $this->recordAudit($actor, $department, 'staff.employee_updated', $user, $before, $after);
+                }
+            }
+
             return $user->refresh();
         });
+    }
+
+    /** @param array<string, mixed>|null $before @param array<string, mixed> $after */
+    private function recordAudit(User $actor, Department $department, string $event, User $subject, ?array $before, array $after): void
+    {
+        AuditEvent::query()->create([
+            'actor_user_id' => $actor->id,
+            'department' => $department->value,
+            'event_key' => $event,
+            'subject_type' => $subject::class,
+            'subject_id' => $subject->id,
+            'before_values' => $before,
+            'after_values' => $after,
+            'reason' => null,
+            'created_at' => now(),
+        ]);
     }
 
     /** @return list<Department> */

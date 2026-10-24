@@ -352,8 +352,8 @@ class RequestService
                 'event_key' => 'request.details_updated',
                 'subject_type' => $request::class,
                 'subject_id' => $request->getKey(),
-                'before_values' => $before,
-                'after_values' => $after,
+                'before_values' => $this->auditSnapshot($before),
+                'after_values' => $this->auditSnapshot($after),
                 'reason' => null,
                 'created_at' => now(),
             ]);
@@ -503,6 +503,13 @@ class RequestService
         return DB::transaction(function () use ($request, $department, $actor): Model {
             $request->save();
             $this->recordStageChange($department, $request, null, 'intake', $actor);
+            $this->recordAuditEvent($actor, $department, 'request.created', $request, null, [
+                'status' => RequestStatus::Active->value,
+                'stage' => $request->stage->value,
+                'customer_id' => $request->customer_id,
+                'broker_id' => $request->broker_id,
+                'owner_user_id' => $request->owner_user_id,
+            ], null);
 
             return $request;
         });
@@ -576,8 +583,16 @@ class RequestService
             throw ValidationException::withMessages(['next_follow_up_at' => 'يُحدد موعد المتابعة للطلب النشط فقط.']);
         }
 
-        $request->next_follow_up_at = $validated['next_follow_up_at'];
-        $request->save();
+        $before = $request->next_follow_up_at?->toDateTimeString();
+        DB::transaction(function () use ($request, $validated, $before, $department, $actor): void {
+            $request->next_follow_up_at = $validated['next_follow_up_at'];
+            $request->save();
+            $this->recordAuditEvent($actor, $department, 'request.follow_up_changed', $request,
+                ['next_follow_up_at' => $before],
+                ['next_follow_up_at' => $request->next_follow_up_at?->toDateTimeString()],
+                null,
+            );
+        });
 
         return $request;
     }
@@ -755,6 +770,8 @@ class RequestService
             'notes' => $notes,
             'created_at' => now(),
         ]);
+        $this->recordAuditEvent($actor, $department, 'request.stage_changed', $request,
+            ['stage' => $from], ['stage' => $to], null);
     }
 
     private function recordStatusChange(Department $department, Model $request, RequestStatus $from, RequestStatus $to, User $actor, ?string $notes = null): void
@@ -767,6 +784,11 @@ class RequestService
             'notes' => $notes,
             'created_at' => now(),
         ]);
+        $this->recordAuditEvent($actor, $department, 'request.status_changed', $request,
+            ['status' => $from->value],
+            ['status' => $to->value, ...($to === RequestStatus::Closed ? ['outcome' => $request->outcome?->value] : [])],
+            null,
+        );
     }
 
     private function reassignmentClassFor(Department $department): string
@@ -798,5 +820,21 @@ class RequestService
             'reason' => $reason,
             'created_at' => now(),
         ]);
+    }
+
+    /** @param array<string, mixed>|null $values @return array<string, mixed>|null */
+    private function auditSnapshot(?array $values): ?array
+    {
+        if ($values === null) {
+            return null;
+        }
+
+        foreach (['notes', 'other_requirements', 'outcome_reason_text', 'outcome_notes', 'lead_source_other', 'unit_type_other', 'finishing_other'] as $field) {
+            if (array_key_exists($field, $values) && filled($values[$field])) {
+                $values[$field] = '[تغير النص؛ المحتوى محفوظ في سجل الطلب]';
+            }
+        }
+
+        return $values;
     }
 }

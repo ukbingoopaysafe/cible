@@ -39,7 +39,7 @@ class AftercareService
         );
 
         if ($profile->wasRecentlyCreated) {
-            $this->recordAudit($actor, $department, 'aftercare.started', $profile, ['customer_id' => $deal->customer_id]);
+            $this->recordAudit($actor, $department, 'aftercare.started', $profile, ['customer_id' => $deal->customer_id, 'owner_user_id' => $profile->owner_user_id]);
         }
 
         return $profile;
@@ -62,7 +62,7 @@ class AftercareService
             ['owner_user_id' => $actor->id],
         );
         if ($profile->wasRecentlyCreated) {
-            $this->recordAudit($actor, $department, 'aftercare.started', $profile, ['customer_id' => $customer->id]);
+            $this->recordAudit($actor, $department, 'aftercare.started', $profile, ['customer_id' => $customer->id, 'owner_user_id' => $profile->owner_user_id]);
         }
 
         return $profile;

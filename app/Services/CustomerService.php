@@ -5,10 +5,12 @@ namespace App\Services;
 use App\Enums\Department;
 use App\Models\RentalCustomer;
 use App\Models\ResaleCustomer;
+use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
@@ -67,7 +69,12 @@ class CustomerService
         $customer->nationality = $attributes['nationality'] ?? null;
 
         try {
-            $customer->save();
+            return DB::transaction(function () use ($customer, $actor, $department): Model {
+                $customer->save();
+                $this->recordAudit($actor, $department, 'customer.created', $customer, null, $this->customerAuditValues($customer));
+
+                return $customer;
+            });
         } catch (QueryException $exception) {
             if ($customerClass::query()->where('phone_e164', $phone['phone_e164'])->exists()) {
                 throw ValidationException::withMessages([
@@ -77,8 +84,6 @@ class CustomerService
 
             throw $exception;
         }
-
-        return $customer;
     }
 
     /**
@@ -95,6 +100,7 @@ class CustomerService
             Department::Resale => ResaleCustomer::class,
         };
         $customer = $customerClass::query()->findOrFail($customerId);
+        $before = $this->customerAuditValues($customer);
         $attributes = Validator::make($attributes, [
             'name' => ['required', 'string', 'max:255'],
             'phone' => ['required', 'string', 'max:40'],
@@ -128,7 +134,22 @@ class CustomerService
         $customer->nationality = $attributes['nationality'] ?? null;
 
         try {
-            $customer->save();
+            return DB::transaction(function () use ($customer, $before, $actor, $department): Model {
+                $customer->save();
+                $after = $this->customerAuditValues($customer);
+                $changedBefore = $changedAfter = [];
+                foreach ($after as $key => $value) {
+                    if ((string) ($before[$key] ?? '') !== (string) ($value ?? '')) {
+                        $changedBefore[$key] = $before[$key] ?? null;
+                        $changedAfter[$key] = $value;
+                    }
+                }
+                if ($changedAfter !== []) {
+                    $this->recordAudit($actor, $department, 'customer.updated', $customer, $changedBefore, $changedAfter);
+                }
+
+                return $customer;
+            });
         } catch (QueryException $exception) {
             if ($customerClass::query()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
                 throw ValidationException::withMessages([
@@ -138,8 +159,33 @@ class CustomerService
 
             throw $exception;
         }
+    }
 
-        return $customer;
+    /** @return array<string, mixed> */
+    private function customerAuditValues(Model $customer): array
+    {
+        return [
+            'name' => $customer->name,
+            'phone_e164' => $customer->phone_e164,
+            'phone_country' => $customer->phone_country,
+            'nationality' => $customer->nationality,
+        ];
+    }
+
+    /** @param array<string, mixed>|null $before @param array<string, mixed> $after */
+    private function recordAudit(User $actor, Department $department, string $event, Model $customer, ?array $before, array $after): void
+    {
+        AuditEvent::query()->create([
+            'actor_user_id' => $actor->id,
+            'department' => $department->value,
+            'event_key' => $event,
+            'subject_type' => $customer::class,
+            'subject_id' => $customer->getKey(),
+            'before_values' => $before,
+            'after_values' => $after,
+            'reason' => null,
+            'created_at' => now(),
+        ]);
     }
 
     /** @param class-string<Model> $customerClass */
