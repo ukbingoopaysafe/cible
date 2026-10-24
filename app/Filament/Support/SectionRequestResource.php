@@ -1,0 +1,244 @@
+<?php
+
+namespace App\Filament\Support;
+
+use App\Enums\Department;
+use App\Enums\RequestOutcome;
+use App\Enums\RequestStatus;
+use App\Models\User;
+use App\Models\RentalCustomer;
+use App\Models\ResaleCustomer;
+use App\Services\RequestService;
+use Filament\Actions\Action;
+use Filament\Actions\ViewAction;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Toggle;
+use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
+use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Tables\Table;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
+
+/** @extends Resource<Model> */
+abstract class SectionRequestResource extends Resource
+{
+    abstract public static function department(): Department;
+
+    public static function form(Schema $schema): Schema
+    {
+        return RequestFormSchema::configure($schema, static::department());
+    }
+
+    public static function infolist(Schema $schema): Schema
+    {
+        return RequestFormSchema::details($schema, static::department());
+    }
+
+    public static function getEloquentQuery(): Builder
+    {
+        $query = parent::getEloquentQuery();
+        $actor = auth()->user();
+
+        if (! $actor instanceof User || ! $actor->canWorkInDepartment(static::department())) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason']);
+    }
+
+    public static function canViewAny(): bool
+    {
+        return auth()->user()?->canWorkInDepartment(static::department()) ?? false;
+    }
+
+    public static function canCreate(): bool
+    {
+        return static::canViewAny();
+    }
+
+    public static function canView(Model $record): bool
+    {
+        $modelClass = static::getModel();
+
+        return static::canViewAny() && $record instanceof $modelClass;
+    }
+
+    public static function canEdit(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function canDelete(Model $record): bool
+    {
+        return false;
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                TextColumn::make('customer.name')->label('العميل')->placeholder('غير معروف')->searchable(),
+                TextColumn::make('broker.name')->label('الوسيط')->placeholder('—')->searchable(),
+                TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? ''),
+                TextColumn::make('owner.name')->label('المسؤول')->searchable(),
+                TextColumn::make('stage')->label('المرحلة')->badge()->formatStateUsing(fn ($state): string => RequestFormSchema::stageOptions(static::department())[$state instanceof \BackedEnum ? $state->value : $state] ?? (string) $state),
+                TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state): string => match ($state instanceof RequestStatus ? $state : RequestStatus::from($state)) {
+                    RequestStatus::Active => 'نشط',
+                    RequestStatus::Paused => 'متوقف مؤقتًا',
+                    RequestStatus::Closed => 'مغلق',
+                }),
+                TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
+            ])
+            ->filters([
+                SelectFilter::make('status')->label('الحالة')->options([
+                    RequestStatus::Active->value => 'نشط',
+                    RequestStatus::Paused->value => 'متوقف مؤقتًا',
+                    RequestStatus::Closed->value => 'مغلق',
+                ]),
+                SelectFilter::make('stage')->label('المرحلة')->options(RequestFormSchema::stageOptions(static::department())),
+            ])
+            ->recordActions([
+                ViewAction::make()->label('عرض الطلب'),
+                self::linkCustomerAction(),
+                self::changeStageAction(),
+                self::pauseAction(),
+                self::resumeAction(),
+                self::closeAction(),
+            ])
+            ->defaultSort('next_follow_up_at');
+    }
+
+    private static function linkCustomerAction(): Action
+    {
+        $customerClass = static::department() === Department::Rental ? RentalCustomer::class : ResaleCustomer::class;
+
+        return Action::make('linkCustomer')
+            ->label('ربط عميل')
+            ->icon('heroicon-o-user-plus')
+            ->schema([
+                Select::make('customer_id')
+                    ->label('العميل')
+                    ->options(fn (): array => $customerClass::query()->orderBy('name')->pluck('name', 'id')->all())
+                    ->searchable()
+                    ->required(),
+                Toggle::make('make_contact')->label('اجعل العميل جهة الاتصال الحالية'),
+            ])
+            ->visible(fn (Model $record): bool => blank($record->customer_id))
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->linkCustomer(
+                    $actor,
+                    static::department(),
+                    (int) $record->getKey(),
+                    (int) $data['customer_id'],
+                    (bool) ($data['make_contact'] ?? false),
+                );
+            })
+            ->successNotificationTitle('تم ربط العميل بالطلب');
+    }
+
+    private static function changeStageAction(): Action
+    {
+        return Action::make('changeStage')
+            ->label('تغيير المرحلة')
+            ->icon('heroicon-o-arrow-path')
+            ->schema([
+                Select::make('stage')->label('المرحلة الجديدة')->options(RequestFormSchema::stageOptions(static::department()))->required(),
+                Textarea::make('notes')->label('ملاحظة (اختيارية)')->rows(2),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->changeStage($actor, static::department(), (int) $record->getKey(), $data['stage'], $data['notes'] ?? null);
+            })
+            ->successNotificationTitle('تم تحديث مرحلة الطلب');
+    }
+
+    private static function pauseAction(): Action
+    {
+        return Action::make('pause')
+            ->label('إيقاف مؤقت')
+            ->icon('heroicon-o-pause-circle')
+            ->requiresConfirmation()
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
+            ->action(function (Model $record): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->pause($actor, static::department(), (int) $record->getKey());
+            })
+            ->successNotificationTitle('تم إيقاف الطلب مؤقتًا');
+    }
+
+    private static function resumeAction(): Action
+    {
+        return Action::make('resume')
+            ->label('استئناف')
+            ->icon('heroicon-o-play-circle')
+            ->schema([
+                DateTimePicker::make('next_follow_up_at')->label('موعد المتابعة القادمة')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
+                Textarea::make('notes')->label('ملاحظة (اختيارية)')->rows(2),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Paused)
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->resume($actor, static::department(), (int) $record->getKey(), $data['next_follow_up_at'], $data['notes'] ?? null);
+            })
+            ->successNotificationTitle('تم استئناف الطلب');
+    }
+
+    private static function closeAction(): Action
+    {
+        return Action::make('close')
+            ->label('إغلاق الطلب')
+            ->icon('heroicon-o-check-circle')
+            ->color('gray')
+            ->schema([
+                Radio::make('outcome')
+                    ->label('نتيجة الطلب')
+                    ->options([
+                        RequestOutcome::Successful->value => 'ناجح',
+                        RequestOutcome::Unsuccessful->value => 'غير ناجح',
+                    ])
+                    ->live()
+                    ->required(),
+                Textarea::make('outcome_reason_text')
+                    ->label('سبب الإغلاق')
+                    ->rows(3)
+                    ->dehydrated(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
+                    ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
+                    ->required(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
+                Select::make('outcome_reason_id')
+                    ->label('تصنيف مساعد (اختياري)')
+                    ->options(fn (): array => self::closeReasonOptions())
+                    ->dehydrated(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
+                    ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
+                Textarea::make('outcome_notes')->label('ملاحظات إضافية (اختيارية)')->rows(2),
+            ])
+            ->visible(fn (Model $record): bool => $record->status !== RequestStatus::Closed)
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->close($actor, static::department(), (int) $record->getKey(), $data);
+            })
+            ->successNotificationTitle('تم إغلاق الطلب');
+    }
+
+    /** @return array<int, string> */
+    private static function closeReasonOptions(): array
+    {
+        $class = static::department() === Department::Rental
+            ? \App\Models\RentalRequestCloseReason::class
+            : \App\Models\ResaleRequestCloseReason::class;
+
+        return $class::query()->where('is_active', true)->orderBy('sort_order')->pluck('name', 'id')->all();
+    }
+}
