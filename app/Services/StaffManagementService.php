@@ -36,10 +36,11 @@ class StaffManagementService
                 'name' => trim($validated['name']),
                 'email' => mb_strtolower(trim($validated['email'])),
                 'password' => $validated['password'],
-                'is_company_manager' => false,
-                'can_add_rental_areas' => in_array(Department::Rental, $departments, true)
-                    && (bool) ($validated['can_add_rental_areas'] ?? false),
             ]);
+            $user->can_add_rental_areas = in_array(Department::Rental, $departments, true)
+                && (bool) ($validated['can_add_rental_areas'] ?? false);
+            $user->save();
+
             foreach ($departments as $department) {
                 $user->departmentMemberships()->create(['department' => $department]);
                 $this->recordAudit($actor, $department, 'staff.employee_created', $user, null, [

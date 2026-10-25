@@ -40,6 +40,7 @@ class CustomerSpreadsheetImportService
             }
 
             $rows = $sheets->current()->getRowIterator();
+            $rows->rewind();
             if (! $rows->valid()) {
                 throw ValidationException::withMessages(['file' => 'الملف فارغ.']);
             }
