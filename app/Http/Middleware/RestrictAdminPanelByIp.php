@@ -19,7 +19,7 @@ class RestrictAdminPanelByIp
 
         $clientIp = $request->ip();
 
-        if ($clientIp !== null && IpUtils::check($clientIp, $allowedIps)) {
+        if ($clientIp !== null && IpUtils::checkIp($clientIp, $allowedIps)) {
             return $next($request);
         }
 
