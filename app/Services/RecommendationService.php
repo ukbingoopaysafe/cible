@@ -132,15 +132,18 @@ class RecommendationService
             'customer_feedback' => ['nullable', 'string', 'max:10000'],
             'rejection_reason' => ['nullable', 'required_if:result,not_interested', 'string', 'max:10000'],
         ])->validate();
-        $before = ['result' => $viewing->result];
-        $viewing->update($validated);
-        $this->audit($actor, $department, 'viewing.result_recorded', $viewing, [
-            'from' => $before['result'],
-            'to' => $validated['result'],
-            'has_customer_feedback' => filled($validated['customer_feedback'] ?? null),
-            'has_rejection_reason' => filled($validated['rejection_reason'] ?? null),
-        ]);
-        return $viewing;
+        return DB::transaction(function () use ($actor, $department, $viewing, $validated): Model {
+            $before = ['result' => $viewing->result];
+            $viewing->update($validated);
+            $this->audit($actor, $department, 'viewing.result_recorded', $viewing, [
+                'from' => $before['result'],
+                'to' => $validated['result'],
+                'has_customer_feedback' => filled($validated['customer_feedback'] ?? null),
+                'has_rejection_reason' => filled($validated['rejection_reason'] ?? null),
+            ]);
+
+            return $viewing;
+        });
     }
 
     private function authorize(User $actor, Department $department): void
