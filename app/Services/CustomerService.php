@@ -48,7 +48,7 @@ class CustomerService
             Department::Resale => ResaleCustomer::class,
         };
 
-        if ($customerClass::query()->where('phone_e164', $phone['phone_e164'])->exists()) {
+        if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->exists()) {
             throw ValidationException::withMessages([
                 'phone' => 'رقم الهاتف مسجل بالفعل في هذا القسم. راجع سجل العميل القائم.',
             ]);
@@ -76,7 +76,7 @@ class CustomerService
                 return $customer;
             });
         } catch (QueryException $exception) {
-            if ($customerClass::query()->where('phone_e164', $phone['phone_e164'])->exists()) {
+            if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->exists()) {
                 throw ValidationException::withMessages([
                     'phone' => 'رقم الهاتف مسجل بالفعل في هذا القسم. راجع سجل العميل القائم.',
                 ]);
@@ -113,7 +113,7 @@ class CustomerService
         }
 
         $phone = $this->phoneNormalizer->normalize($attributes['phone'], $attributes['phone_country'] ?? null);
-        if ($customerClass::query()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
+        if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
             throw ValidationException::withMessages([
                 'phone' => 'رقم الهاتف مسجل بالفعل لعميل آخر في هذا القسم. راجع سجل العميل القائم.',
             ]);
@@ -151,7 +151,7 @@ class CustomerService
                 return $customer;
             });
         } catch (QueryException $exception) {
-            if ($customerClass::query()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
+            if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
                 throw ValidationException::withMessages([
                     'phone' => 'رقم الهاتف مسجل بالفعل لعميل آخر في هذا القسم. راجع سجل العميل القائم.',
                 ]);
@@ -159,6 +159,57 @@ class CustomerService
 
             throw $exception;
         }
+    }
+
+    public function archive(User $actor, Department $department, int $customerId): void
+    {
+        if (! $actor->canManageDepartment($department)) {
+            throw new AuthorizationException('أرشفة العملاء متاحة لمدير الشركة داخل القسم فقط.');
+        }
+
+        $customerClass = $department === Department::Rental ? RentalCustomer::class : ResaleCustomer::class;
+
+        DB::transaction(function () use ($actor, $department, $customerClass, $customerId): void {
+            $customer = $customerClass::withTrashed()->lockForUpdate()->findOrFail($customerId);
+            if ($customer->trashed()) {
+                return;
+            }
+
+            if ($customer->requests()->where('status', '!=', 'closed')->exists()) {
+                throw ValidationException::withMessages([
+                    'customer' => 'أغلق طلبات العميل أو أعد تعيينها قبل أرشفة العميل.',
+                ]);
+            }
+
+            $before = $this->customerAuditValues($customer);
+            $customer->delete();
+            $this->recordAudit($actor, $department, 'customer.archived', $customer, $before, [
+                'archived' => true,
+            ]);
+        });
+    }
+
+    public function restore(User $actor, Department $department, int $customerId): void
+    {
+        if (! $actor->canManageDepartment($department)) {
+            throw new AuthorizationException('استعادة العملاء متاحة لمدير الشركة داخل القسم فقط.');
+        }
+
+        $customerClass = $department === Department::Rental ? RentalCustomer::class : ResaleCustomer::class;
+
+        DB::transaction(function () use ($actor, $department, $customerClass, $customerId): void {
+            $customer = $customerClass::withTrashed()->lockForUpdate()->findOrFail($customerId);
+            if (! $customer->trashed()) {
+                return;
+            }
+
+            $customer->restore();
+            $this->recordAudit($actor, $department, 'customer.restored', $customer, [
+                'archived' => true,
+            ], [
+                'archived' => false,
+            ]);
+        });
     }
 
     /** @return array<string, mixed> */

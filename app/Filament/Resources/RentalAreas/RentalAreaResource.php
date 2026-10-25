@@ -7,13 +7,16 @@ use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
 use App\Models\RentalArea;
 use App\Models\User;
 use App\Services\RentalAreaService;
+use App\Services\AreaArchiveService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -72,6 +75,38 @@ class RentalAreaResource extends Resource
             TextColumn::make('governorate')->label('المحافظة')->sortable(),
             TextColumn::make('name')->label('المنطقة')->searchable()->sortable(),
             TextColumn::make('created_at')->label('تاريخ الإضافة')->dateTime('d/m/Y H:i')->sortable(),
+            TextColumn::make('deleted_at')->label('الحالة')->badge()
+                ->formatStateUsing(fn ($state): string => filled($state) ? 'مؤرشفة' : 'نشطة'),
+        ])->filters([
+            TrashedFilter::make()
+                ->label('الأرشيف')
+                ->visible(fn (): bool => auth()->user()?->is_company_manager ?? false),
+        ])->recordActions([
+            Action::make('archiveArea')
+                ->label('أرشفة المنطقة')
+                ->icon('heroicon-o-archive-box')
+                ->color('warning')
+                ->requiresConfirmation()
+                ->modalDescription('ستبقى طلبات هذه المنطقة التاريخية محفوظة، ولن تظهر المنطقة في الطلبات الجديدة. يمكن للمدير استعادتها لاحقًا.')
+                ->visible(fn (Model $record): bool => ! $record->trashed()
+                    && (auth()->user()?->is_company_manager ?? false))
+                ->action(function (Model $record): void {
+                    $actor = auth()->user();
+                    abort_unless($actor instanceof User, 403);
+                    app(AreaArchiveService::class)->archive($actor, Department::Rental, (int) $record->getKey());
+                    Notification::make()->title('تمت أرشفة المنطقة')->success()->send();
+                }),
+            Action::make('restoreArea')
+                ->label('استعادة المنطقة')
+                ->icon('heroicon-o-arrow-uturn-left')
+                ->visible(fn (Model $record): bool => $record->trashed()
+                    && (auth()->user()?->is_company_manager ?? false))
+                ->action(function (Model $record): void {
+                    $actor = auth()->user();
+                    abort_unless($actor instanceof User, 403);
+                    app(AreaArchiveService::class)->restore($actor, Department::Rental, (int) $record->getKey());
+                    Notification::make()->title('تمت استعادة المنطقة')->success()->send();
+                }),
         ]);
     }
 

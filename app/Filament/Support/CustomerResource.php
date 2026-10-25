@@ -23,6 +23,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -90,6 +91,13 @@ abstract class CustomerResource extends Resource
                 TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—'),
                 TextColumn::make('aftercare.next_follow_up_at')->label('متابعة ما بعد الصفقة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable(),
+                TextColumn::make('deleted_at')->label('الحالة')->badge()
+                    ->formatStateUsing(fn ($state): string => filled($state) ? 'مؤرشف' : 'نشط'),
+            ])
+            ->filters([
+                TrashedFilter::make()
+                    ->label('الأرشيف')
+                    ->visible(fn (): bool => auth()->user()?->is_company_manager ?? false),
             ])
             ->recordActions([
                 Action::make('openWhatsApp')
@@ -98,7 +106,7 @@ abstract class CustomerResource extends Resource
                     ->color('success')
                     ->url(fn (Model $record): string => static::whatsAppUrl($record->phone_e164))
                     ->openUrlInNewTab()
-                    ->visible(fn (Model $record): bool => static::hasValidWhatsAppPhone($record->phone_e164)),
+                    ->visible(fn (Model $record): bool => ! $record->trashed() && static::hasValidWhatsAppPhone($record->phone_e164)),
                 Action::make('viewCustomerRequests')
                     ->label('طلبات العميل')
                     ->icon('heroicon-o-clipboard-document-list')
@@ -110,9 +118,35 @@ abstract class CustomerResource extends Resource
                         'requestResource' => static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class,
                         'stageOptions' => RequestFormSchema::stageOptions(static::department()),
                     ])),
+                Action::make('archiveCustomer')
+                    ->label('أرشفة العميل')
+                    ->icon('heroicon-o-archive-box')
+                    ->color('warning')
+                    ->requiresConfirmation()
+                    ->modalDescription('سيختفي العميل من القوائم والاختيارات الجديدة، مع إبقاء بياناته وطلباته وسجل التدقيق. يمكن للمدير استعادته لاحقًا.')
+                    ->visible(fn (Model $record): bool => ! $record->trashed()
+                        && (auth()->user()?->canManageDepartment(static::department()) ?? false))
+                    ->action(function (Model $record): void {
+                        $actor = auth()->user();
+                        abort_unless($actor instanceof User, 403);
+                        app(CustomerService::class)->archive($actor, static::department(), (int) $record->getKey());
+                        Notification::make()->title('تمت أرشفة العميل')->success()->send();
+                    }),
+                Action::make('restoreCustomer')
+                    ->label('استعادة العميل')
+                    ->icon('heroicon-o-arrow-uturn-left')
+                    ->visible(fn (Model $record): bool => $record->trashed()
+                        && (auth()->user()?->canManageDepartment(static::department()) ?? false))
+                    ->action(function (Model $record): void {
+                        $actor = auth()->user();
+                        abort_unless($actor instanceof User, 403);
+                        app(CustomerService::class)->restore($actor, static::department(), (int) $record->getKey());
+                        Notification::make()->title('تمت استعادة العميل')->success()->send();
+                    }),
                 Action::make('createCustomerRequest')
                     ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب مشتري')
                     ->icon('heroicon-o-plus-circle')
+                    ->visible(fn (Model $record): bool => ! $record->trashed())
                     ->url(fn (Model $record): string => (static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class)::getUrl('create', ['customer_id' => $record->getKey()])),
                 Action::make('startAftercare')
                     ->label('بدء ما بعد الصفقة')
@@ -123,6 +157,9 @@ abstract class CustomerResource extends Resource
                         app(AftercareService::class)->startForCustomer($actor, static::department(), (int) $record->getKey());
                     })
                     ->visible(function (Model $record): bool {
+                        if ($record->trashed()) {
+                            return false;
+                        }
                         $dealClass = static::department() === Department::Rental ? \App\Models\RentalDeal::class : \App\Models\ResaleDeal::class;
 
                         return $record->aftercare === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
@@ -147,7 +184,7 @@ abstract class CustomerResource extends Resource
                         abort_unless($actor instanceof User, 403);
                         app(AftercareService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
                     })
-                    ->visible(fn (Model $record): bool => $record->aftercare !== null)
+                    ->visible(fn (Model $record): bool => ! $record->trashed() && $record->aftercare !== null)
                     ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
                 Action::make('aftercareHistory')
                     ->label('سجل ما بعد الصفقة')
@@ -163,6 +200,7 @@ abstract class CustomerResource extends Resource
                     ->label('تعديل بيانات العميل')
                     ->icon('heroicon-o-pencil-square')
                     ->schema(static::formFields())
+                    ->visible(fn (Model $record): bool => ! $record->trashed())
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
                         'phone' => $record->phone_e164,

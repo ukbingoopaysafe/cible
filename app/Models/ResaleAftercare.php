@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ResaleAftercare extends Model
 {
+    protected $table = 'resale_aftercare';
+
     protected $guarded = ['id'];
     protected function casts(): array { return ['next_follow_up_at' => 'datetime']; }
     public function customer(): BelongsTo { return $this->belongsTo(ResaleCustomer::class); }

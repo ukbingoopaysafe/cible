@@ -42,7 +42,7 @@ class RentalRequest extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(RentalCustomer::class);
+        return $this->belongsTo(RentalCustomer::class)->withTrashed();
     }
 
     public function broker(): BelongsTo
@@ -52,7 +52,7 @@ class RentalRequest extends Model
 
     public function area(): BelongsTo
     {
-        return $this->belongsTo(RentalArea::class, 'area_id');
+        return $this->belongsTo(RentalArea::class, 'area_id')->withTrashed();
     }
 
     public function leadSource(): BelongsTo

@@ -35,7 +35,7 @@ class ResaleRequest extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(ResaleCustomer::class);
+        return $this->belongsTo(ResaleCustomer::class)->withTrashed();
     }
 
     public function broker(): BelongsTo
@@ -45,7 +45,7 @@ class ResaleRequest extends Model
 
     public function area(): BelongsTo
     {
-        return $this->belongsTo(ResaleArea::class, 'area_id');
+        return $this->belongsTo(ResaleArea::class, 'area_id')->withTrashed();
     }
 
     public function leadSource(): BelongsTo

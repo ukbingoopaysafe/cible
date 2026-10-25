@@ -13,6 +13,7 @@ use App\Enums\ResaleRequestStage;
 use App\Enums\RequestUnitType;
 use App\Models\RentalBroker;
 use App\Models\RentalCustomer;
+use App\Models\RentalArea;
 use App\Models\AuditEvent;
 use App\Models\RentalRequest;
 use App\Models\RentalLeadSource;
@@ -20,6 +21,7 @@ use App\Models\RentalRequestCloseReason;
 use App\Models\RentalRequestReassignment;
 use App\Models\ResaleBroker;
 use App\Models\ResaleCustomer;
+use App\Models\ResaleArea;
 use App\Models\ResaleRequest;
 use App\Models\ResaleLeadSource;
 use App\Models\ResaleRequestCloseReason;
@@ -283,8 +285,16 @@ class RequestService
             if ($contactParty === ContactParty::Broker->value && ! $brokerId) {
                 $validator->errors()->add('contact_party', 'يجب ربط الوسيط قبل اختياره كجهة اتصال.');
             }
-            if ($customerId && ! $classes['customer']::query()->whereKey($customerId)->exists()) {
+            $currentCustomerIsArchived = $customerId
+                && (int) $request->customer_id === (int) $customerId
+                && $classes['customer']::withTrashed()->whereKey($customerId)->whereNotNull('deleted_at')->exists();
+            if ($customerId && ! $classes['customer']::query()->whereKey($customerId)->exists() && ! $currentCustomerIsArchived) {
                 $validator->errors()->add('customer_id', 'العميل غير موجود في هذا القسم.');
+            }
+            $currentAreaIsArchived = (int) $request->area_id === (int) ($data['area_id'] ?? 0)
+                && $classes['area']::withTrashed()->whereKey($data['area_id'])->whereNotNull('deleted_at')->exists();
+            if (! $classes['area']::query()->whereKey($data['area_id'])->exists() && ! $currentAreaIsArchived) {
+                $validator->errors()->add('area_id', 'المنطقة غير متاحة للطلبات الجديدة.');
             }
             if ($brokerId && ! $classes['broker']::query()->whereKey($brokerId)->exists()) {
                 $validator->errors()->add('broker_id', 'الوسيط غير موجود في هذا القسم.');
@@ -447,6 +457,9 @@ class RequestService
             // These classes are department-specific; validating against them prevents cross-section links.
             if ($customerId && ! $classes['customer']::query()->whereKey($customerId)->exists()) {
                 $validator->errors()->add('customer_id', 'العميل غير موجود في هذا القسم.');
+            }
+            if (! $classes['area']::query()->whereKey($data['area_id'])->exists()) {
+                $validator->errors()->add('area_id', 'المنطقة غير متاحة للطلبات الجديدة.');
             }
             if ($brokerId && ! $classes['broker']::query()->whereKey($brokerId)->exists()) {
                 $validator->errors()->add('broker_id', 'الوسيط غير موجود في هذا القسم.');
@@ -746,6 +759,7 @@ class RequestService
                 'customer' => RentalCustomer::class,
                 'broker' => RentalBroker::class,
                 'area_table' => 'rental_areas',
+                'area' => RentalArea::class,
                 'lead_source' => RentalLeadSource::class,
                 'close_reason' => RentalRequestCloseReason::class,
             ],
@@ -754,6 +768,7 @@ class RequestService
                 'customer' => ResaleCustomer::class,
                 'broker' => ResaleBroker::class,
                 'area_table' => 'resale_areas',
+                'area' => ResaleArea::class,
                 'lead_source' => ResaleLeadSource::class,
                 'close_reason' => ResaleRequestCloseReason::class,
             ],

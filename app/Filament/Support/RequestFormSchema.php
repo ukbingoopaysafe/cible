@@ -39,7 +39,13 @@ final class RequestFormSchema
             Department::Resale => [ResaleCustomer::class, ResaleBroker::class, ResaleArea::class, ResaleLeadSource::class],
         };
 
-        $areaOptions = fn (): array => $areaClass::query()
+        $areaOptions = fn (Get $get): array => $areaClass::query()
+            ->when(
+                $editing && filled($get('area_id')),
+                fn ($query) => $query->withTrashed()->where(function ($query) use ($get): void {
+                    $query->whereNull('deleted_at')->orWhereKey($get('area_id'));
+                }),
+            )
             ->orderBy('governorate')
             ->orderBy('name')
             ->get(['id', 'governorate', 'name'])
@@ -56,7 +62,14 @@ final class RequestFormSchema
                 ->schema([
                     Select::make('customer_id')
                         ->label('العميل')
-                        ->options(fn (): array => $customerClass::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->options(fn (Get $get): array => $customerClass::query()
+                            ->when(
+                                $editing && filled($get('customer_id')),
+                                fn ($query) => $query->withTrashed()->where(function ($query) use ($get): void {
+                                    $query->whereNull('deleted_at')->orWhereKey($get('customer_id'));
+                                }),
+                            )
+                            ->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
                         ->placeholder('اختر عميلًا إن كان معروفًا')
                         ->createOptionForm([

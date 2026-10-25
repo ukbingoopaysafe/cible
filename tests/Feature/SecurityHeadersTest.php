@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Enums\Department;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -18,5 +20,22 @@ class SecurityHeadersTest extends TestCase
             ->assertHeader('X-Frame-Options', 'SAMEORIGIN')
             ->assertHeader('Referrer-Policy', 'strict-origin-when-cross-origin')
             ->assertHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    }
+
+    public function test_manager_can_open_both_department_customer_pages(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+
+        $this->actingAs($manager)->get('/admin/rental-customers')->assertOk();
+        $this->actingAs($manager)->get('/admin/resale-customers')->assertOk();
+    }
+
+    public function test_employee_can_open_only_the_department_pages_the_panel_exposes(): void
+    {
+        $employee = User::factory()->create(['is_company_manager' => false]);
+        $employee->departmentMemberships()->create(['department' => Department::Rental]);
+
+        $this->actingAs($employee)->get('/admin/rental-customers')->assertOk();
+        $this->actingAs($employee)->get('/admin/resale-customers')->assertForbidden();
     }
 }
