@@ -202,6 +202,9 @@ return [
             \Spatie\Backup\Notifications\Notifications\BackupHasFailedNotification::class => $backupAlertChannels,
             \Spatie\Backup\Notifications\Notifications\UnhealthyBackupWasFoundNotification::class => $backupAlertChannels,
             \Spatie\Backup\Notifications\Notifications\CleanupHasFailedNotification::class => $backupAlertChannels,
+            \Spatie\Backup\Notifications\Notifications\BackupWasSuccessfulNotification::class => $backupAlertChannels,
+            \Spatie\Backup\Notifications\Notifications\HealthyBackupWasFoundNotification::class => $backupAlertChannels,
+            \Spatie\Backup\Notifications\Notifications\CleanupWasSuccessfulNotification::class => $backupAlertChannels,
         ],
 
         /*
