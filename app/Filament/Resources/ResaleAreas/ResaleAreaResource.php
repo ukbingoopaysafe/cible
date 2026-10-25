@@ -7,8 +7,10 @@ use App\Filament\Resources\ResaleAreas\Pages\ListResaleAreas;
 use App\Models\ResaleArea;
 use App\Models\User;
 use App\Services\AreaArchiveService;
+use App\Services\ResaleAreaService;
 use Filament\Actions\Action;
-use Filament\Notifications\Notification;
+use Filament\Forms\Components\Select;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
@@ -41,7 +43,7 @@ class ResaleAreaResource extends Resource
 
     public static function canCreate(): bool
     {
-        return false;
+        return static::canViewAny();
     }
 
     public static function canEdit(Model $record): bool
@@ -96,5 +98,24 @@ class ResaleAreaResource extends Resource
                         Notification::make()->title('تمت استعادة المنطقة')->success()->send();
                     }),
             ]);
+    }
+
+    public static function createAreaAction(): Action
+    {
+        return Action::make('createArea')
+            ->label('إضافة منطقة')
+            ->schema([
+                Select::make('governorate')
+                    ->label('المحافظة')
+                    ->options(['القاهرة' => 'القاهرة', 'الجيزة' => 'الجيزة'])
+                    ->required(),
+                TextInput::make('name')->label('اسم المنطقة')->required()->maxLength(100),
+            ])
+            ->action(function (array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(ResaleAreaService::class)->create($actor, $data);
+            })
+            ->successNotificationTitle('تمت إضافة المنطقة');
     }
 }
