@@ -17,7 +17,7 @@ $backupIsConfigured = static fn (): bool => app()->environment('production')
     && (bool) config('filesystems.disks.backup_offsite.key')
     && (bool) config('filesystems.disks.backup_offsite.secret');
 
-Schedule::command('backup:run')
+Schedule::command('backup:run --only-db')
     ->dailyAt('04:15')
     ->timezone(config('app.timezone', 'Africa/Cairo'))
     ->withoutOverlapping()
