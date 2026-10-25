@@ -202,6 +202,7 @@ abstract class SectionRequestResource extends Resource
                 self::linkCustomerAction(),
                 self::setFollowUpAction(),
                 self::requestReassignmentAction(),
+                self::cancelReassignmentAction(),
                 self::directReassignmentAction(),
                 self::approveReassignmentAction(),
                 self::rejectReassignmentAction(),
@@ -546,6 +547,32 @@ abstract class SectionRequestResource extends Resource
                 );
             })
             ->successNotificationTitle('تمت إعادة تعيين مسؤول الطلب');
+    }
+
+    private static function cancelReassignmentAction(): Action
+    {
+        return Action::make('cancelReassignment')
+            ->label('إلغاء طلب تغيير المسؤول')
+            ->icon('heroicon-o-x-circle')
+            ->color('gray')
+            ->requiresConfirmation()
+            ->modalDescription('سيُلغى الطلب المعلق ويظل المسؤول الحالي كما هو.')
+            ->visible(function (Model $record): bool {
+                $actor = auth()->user();
+                $pending = self::pendingReassignment((int) $record->getKey());
+
+                return $actor instanceof User
+                    && $actor->canWorkInDepartment(static::department())
+                    && ! $actor->canManageDepartment(static::department())
+                    && $pending !== null
+                    && (int) $pending->requested_by === (int) $actor->id;
+            })
+            ->action(function (Model $record): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                app(RequestService::class)->cancelReassignment($actor, static::department(), (int) $record->getKey());
+            })
+            ->successNotificationTitle('تم إلغاء طلب إعادة التعيين');
     }
 
     private static function approveReassignmentAction(): Action

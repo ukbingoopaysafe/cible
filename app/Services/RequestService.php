@@ -161,6 +161,45 @@ class RequestService
         });
     }
 
+    public function cancelReassignment(User $actor, Department $department, int $requestId): Model
+    {
+        $this->authorizeDepartment($actor, $department);
+        $classes = $this->classesFor($department);
+        $reassignmentClass = $this->reassignmentClassFor($department);
+
+        return DB::transaction(function () use ($classes, $reassignmentClass, $requestId, $actor, $department): Model {
+            $request = $classes['request']::query()->lockForUpdate()->findOrFail($requestId);
+            $reassignment = $reassignmentClass::query()
+                ->where('request_id', $requestId)
+                ->where('status', 'pending')
+                ->lockForUpdate()
+                ->latest('id')
+                ->firstOrFail();
+
+            if ((int) $reassignment->requested_by !== (int) $actor->id) {
+                throw new AuthorizationException('إلغاء طلب إعادة التعيين متاح لمقدم الطلب فقط.');
+            }
+
+            $reassignment->status = 'cancelled';
+            $reassignment->decided_at = now();
+            $reassignment->save();
+
+            $this->recordAuditEvent($actor, $department, 'request.reassignment.cancelled', $request,
+                ['owner_user_id' => $request->owner_user_id],
+                [
+                    'owner_user_id' => $request->owner_user_id,
+                    'reassignment_id' => $reassignment->getKey(),
+                    'requested_by' => $reassignment->requested_by,
+                    'target_user_id' => $reassignment->to_user_id,
+                    'status' => 'cancelled',
+                ],
+                $reassignment->reason,
+            );
+
+            return $reassignment;
+        });
+    }
+
     public function reassignDirectly(User $actor, Department $department, int $requestId, int $targetUserId, string $reason): Model
     {
         if (! $actor->canManageDepartment($department)) {
