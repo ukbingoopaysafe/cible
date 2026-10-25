@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Http\Middleware\SetSecurityHeaders;
+use App\Http\Middleware\RestrictAdminPanelByIp;
 use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Http\Middleware\EnsureCompanyManagerMfa;
 use Filament\Auth\MultiFactor\App\AppAuthentication;
@@ -54,6 +55,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->middleware([
                 SetSecurityHeaders::class,
+                RestrictAdminPanelByIp::class,
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
                 StartSession::class,
