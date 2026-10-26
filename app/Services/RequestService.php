@@ -268,8 +268,34 @@ class RequestService
         $editable = $department === Department::Rental
             ? [...$editable, 'bedrooms', 'occupants', 'household', 'rental_term', 'rental_term_count', 'finishing', 'finishing_other', 'floor_preference', 'elevator_required']
             : [...$editable, 'area_min', 'area_max'];
-        $data = array_intersect_key($data, array_flip($editable));
-        $data = array_merge(array_fill_keys($editable, null), $data);
+        $submitted = array_intersect_key($data, array_flip($editable));
+        $data = array_replace(
+            array_intersect_key($request->getAttributes(), array_flip($editable)),
+            $submitted,
+        );
+
+        // Clear dependent descriptions only when their selector changes away from “Other”.
+        if (array_key_exists('unit_type', $submitted)
+            && $data['unit_type'] !== RequestUnitType::Other->value
+            && ! array_key_exists('unit_type_other', $submitted)) {
+            $data['unit_type_other'] = null;
+        }
+        if ($department === Department::Rental
+            && array_key_exists('finishing', $submitted)
+            && $data['finishing'] !== FinishingLevel::Other->value
+            && ! array_key_exists('finishing_other', $submitted)) {
+            $data['finishing_other'] = null;
+        }
+        if (array_key_exists('lead_source_id', $submitted)
+            && (int) $data['lead_source_id'] !== (int) $request->lead_source_id
+            && ! array_key_exists('lead_source_other', $submitted)) {
+            $source = $data['lead_source_id']
+                ? $classes['lead_source']::query()->find($data['lead_source_id'])
+                : null;
+            if (! $source?->is_other) {
+                $data['lead_source_other'] = null;
+            }
+        }
 
         $rules = [
             'customer_id' => ['nullable', 'integer', Rule::exists($classes['customer']::query()->getModel()->getTable(), 'id')],

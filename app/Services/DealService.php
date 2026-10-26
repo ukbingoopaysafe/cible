@@ -49,7 +49,7 @@ class DealService
             'commissions.*.payer' => ['required', 'string', 'max:160'],
             'commissions.*.recipient' => ['required', 'string', 'max:160'],
             'commissions.*.calculation_type' => ['required', Rule::in(['amount', 'percentage'])],
-            'commissions.*.agreed_value' => ['required', 'numeric', 'gt:0', 'max:9999999999999.99'],
+            'commissions.*.agreed_value' => ['nullable', 'numeric', 'gt:0', 'max:9999999999999.99'],
             'commissions.*.conditions' => ['nullable', 'string', 'max:5000'],
         ])->after(function ($validator) use ($department, $data): void {
             if ($department === Department::Rental) {
@@ -58,14 +58,6 @@ class DealService
                     $validator->errors()->add('payment_schedule', $expectedSchedule === 'daily'
                         ? 'يجب أن تكون دورية الدفع يومية للإيجار اليومي.'
                         : 'يجب أن تكون دورية الدفع شهرية للإيجار الشهري أو نصف السنوي أو السنوي.');
-                }
-            }
-            foreach (is_array($data['commissions'] ?? null) ? $data['commissions'] : [] as $index => $commission) {
-                if (! is_array($commission)) {
-                    continue;
-                }
-                if (($commission['calculation_type'] ?? null) === 'percentage' && (float) ($commission['agreed_value'] ?? 0) > 100) {
-                    $validator->errors()->add("commissions.{$index}.agreed_value", 'لا يمكن أن تتجاوز نسبة العمولة 100%.');
                 }
             }
         })->validate();

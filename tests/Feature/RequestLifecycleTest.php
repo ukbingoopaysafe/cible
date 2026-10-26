@@ -6,6 +6,7 @@ use App\Enums\Department;
 use App\Enums\RequestStatus;
 use App\Models\RentalArea;
 use App\Models\ResaleArea;
+use App\Models\RentalLeadSource;
 use App\Models\User;
 use App\Services\CustomerService;
 use App\Services\DealService;
@@ -121,14 +122,27 @@ class RequestLifecycleTest extends TestCase
                 'payer' => 'الشركة',
                 'recipient' => 'الوسيط',
                 'calculation_type' => 'percentage',
-                'agreed_value' => 2.5,
+            ], [
+                'payer' => 'الوسيط',
+                'recipient' => 'الشركة',
+                'calculation_type' => 'percentage',
+                'agreed_value' => 120,
             ]],
         ]);
 
         $this->assertSame($customer->id, $deal->customer_id);
         $this->assertSame('half_yearly', $deal->rental_term);
         $this->assertSame('monthly', $deal->payment_schedule);
-        $this->assertDatabaseCount('rental_deal_commissions', 1);
+        $this->assertDatabaseCount('rental_deal_commissions', 2);
+        $this->assertDatabaseHas('rental_deal_commissions', [
+            'deal_id' => $deal->id,
+            'agreed_value' => null,
+        ]);
+        $this->assertDatabaseHas('rental_deal_commissions', [
+            'deal_id' => $deal->id,
+            'calculation_type' => 'percentage',
+            'agreed_value' => 120,
+        ]);
         $this->assertDatabaseHas('rental_aftercare', [
             'customer_id' => $customer->id,
             'owner_user_id' => $manager->id,
@@ -160,6 +174,46 @@ class RequestLifecycleTest extends TestCase
         } catch (ValidationException) {
             $this->assertDatabaseCount('rental_deals', 1);
         }
+    }
+
+    public function test_partial_request_edit_preserves_hidden_other_descriptions_and_clears_them_when_selection_changes(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $customer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل تعديل جزئي',
+            'phone' => '01012345678',
+            'phone_country' => 'EG',
+        ]);
+        $otherSource = RentalLeadSource::query()->where('is_other', true)->firstOrFail();
+        $normalSource = RentalLeadSource::query()->where('is_other', false)->firstOrFail();
+        $request = app(RequestService::class)->create($manager, Department::Rental, [
+            'customer_id' => $customer->id,
+            'area_id' => RentalArea::query()->firstOrFail()->id,
+            'lead_source_id' => $otherSource->id,
+            'lead_source_other' => 'إحالة خاصة',
+            'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+            'unit_type' => 'other',
+            'unit_type_other' => 'وحدة بحديقة داخلية',
+            'finishing' => 'other',
+            'finishing_other' => 'تشطيب خاص',
+        ]);
+        $service = app(RequestService::class);
+
+        $service->updateDetails($manager, Department::Rental, $request->id, ['notes' => 'تعديل ملاحظة فقط']);
+        $request->refresh();
+        $this->assertSame('إحالة خاصة', $request->lead_source_other);
+        $this->assertSame('وحدة بحديقة داخلية', $request->unit_type_other);
+        $this->assertSame('تشطيب خاص', $request->finishing_other);
+
+        $service->updateDetails($manager, Department::Rental, $request->id, [
+            'unit_type' => 'apartment',
+            'finishing' => 'unfinished',
+            'lead_source_id' => $normalSource->id,
+        ]);
+        $request->refresh();
+        $this->assertNull($request->unit_type_other);
+        $this->assertNull($request->finishing_other);
+        $this->assertNull($request->lead_source_other);
     }
 
     public function test_successful_resale_deal_starts_independent_aftercare(): void

@@ -760,7 +760,7 @@ abstract class SectionRequestResource extends Resource
                     TextInput::make('payer')->label('الملتزم بالدفع')->required()->maxLength(160),
                     TextInput::make('recipient')->label('المستفيد')->required()->maxLength(160),
                     Select::make('calculation_type')->label('طريقة الاتفاق')->options(['amount' => 'قيمة ثابتة', 'percentage' => 'نسبة مئوية'])->required(),
-                    TextInput::make('agreed_value')->label('القيمة أو النسبة')->numeric()->minValue(0.01)->required(),
+                    TextInput::make('agreed_value')->label('القيمة أو النسبة')->numeric()->minValue(0.01),
                     Textarea::make('conditions')->label('شروط الاتفاق (اختيارية)')->rows(2),
                 ])->columns(2)->defaultItems(0)->maxItems(20),
                 Textarea::make('notes')->label('ملاحظات الصفقة (اختيارية)')->rows(3),

@@ -9,8 +9,9 @@ use App\Models\RentalViewing;
 use App\Models\User;
 use App\Services\RecommendationService;
 use Illuminate\Database\QueryException;
+use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ViewingAuditAtomicityTest extends TestCase
@@ -36,7 +37,17 @@ class ViewingAuditAtomicityTest extends TestCase
             'recorded_by' => $employee->getKey(),
         ]);
 
-        Schema::drop('audit_events');
+        DB::listen(function (QueryExecuted $query): void {
+            if (str_contains(strtolower($query->sql), 'audit_events')
+                && str_starts_with(strtolower(ltrim($query->sql)), 'insert')) {
+                throw new QueryException(
+                    $query->connectionName,
+                    $query->sql,
+                    $query->bindings,
+                    new \RuntimeException('Simulated audit insert failure.'),
+                );
+            }
+        });
 
         try {
             app(RecommendationService::class)->recordViewingResult($employee, Department::Rental, (int) $viewing->getKey(), [
