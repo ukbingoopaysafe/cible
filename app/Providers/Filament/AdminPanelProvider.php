@@ -2,11 +2,11 @@
 
 namespace App\Providers\Filament;
 
-use App\Http\Middleware\SetSecurityHeaders;
-use App\Http\Middleware\RestrictAdminPanelByIp;
+use App\Auth\SafeAppAuthentication;
 use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Http\Middleware\EnsureCompanyManagerMfa;
-use Filament\Auth\MultiFactor\App\AppAuthentication;
+use App\Http\Middleware\RestrictAdminPanelByIp;
+use App\Http\Middleware\SetSecurityHeaders;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -35,7 +35,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandName('Cible Real Estate CRM')
             ->login()
             ->multiFactorAuthentication(
-                providers: [AppAuthentication::make()->recoverable()],
+                providers: [SafeAppAuthentication::make()->recoverable()],
                 isRequired: true,
             )
             ->multiFactorAuthenticationRequiredMiddlewareName(EnsureCompanyManagerMfa::class)
