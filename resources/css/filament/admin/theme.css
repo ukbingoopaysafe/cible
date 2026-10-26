@@ -197,3 +197,10 @@ input:focus, select:focus, textarea:focus {
     border-color: #c4a369 !important;
     --tw-ring-color: #c4a369 !important;
 }
+
+/* Hide Footer */
+.fi-footer,
+footer.fi-footer {
+    display: none !important;
+}
+

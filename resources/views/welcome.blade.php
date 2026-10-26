@@ -192,17 +192,5 @@
             </div>
         </div>
     </main>
-
-    <!-- Corporate Footer -->
-    <footer class="relative z-10 w-full border-t border-white/10 bg-[#0A1C1B]/95 py-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400 font-['Jost']">
-            <div>
-                © {{ now()->year }} <span class="font-bold text-[#C4A369]">Cible Real Estate</span> • سيبل العقارية. جميع الحقوق محفوظة.
-            </div>
-            <div class="flex items-center gap-6 font-['beIN'] text-slate-400">
-                <span>نظام داخلي مصرح به لموظفي الشركة فقط</span>
-            </div>
-        </div>
-    </footer>
 </body>
 </html>
