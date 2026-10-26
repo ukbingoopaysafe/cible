@@ -248,4 +248,80 @@ class RequestLifecycleTest extends TestCase
         $this->assertDatabaseCount('resale_deals', 1);
         $this->assertDatabaseCount('rental_deals', 0);
     }
+
+    public function test_customer_ledgers_deals_and_aftercare_remain_independent_between_departments(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $customers = app(CustomerService::class);
+        $requests = app(RequestService::class);
+        $deals = app(DealService::class);
+
+        $rentalCustomer = $customers->create($manager, Department::Rental, [
+            'name' => 'عميل الإيجار المستقل',
+            'phone' => '01012345679',
+            'phone_country' => 'EG',
+        ]);
+        $resaleCustomer = $customers->create($manager, Department::Resale, [
+            'name' => 'عميل إعادة البيع المستقل',
+            'phone' => '01012345679',
+            'phone_country' => 'EG',
+        ]);
+
+        $rentalRequest = $requests->create($manager, Department::Rental, [
+            'customer_id' => $rentalCustomer->id,
+            'area_id' => RentalArea::query()->firstOrFail()->id,
+            'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+        ]);
+        $resaleRequest = $requests->create($manager, Department::Resale, [
+            'customer_id' => $resaleCustomer->id,
+            'area_id' => ResaleArea::query()->firstOrFail()->id,
+            'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+        ]);
+        $requests->close($manager, Department::Rental, $rentalRequest->id, ['outcome' => 'successful']);
+        $requests->close($manager, Department::Resale, $resaleRequest->id, ['outcome' => 'successful']);
+
+        $rentalDeal = $deals->createFromRequest($manager, Department::Rental, $rentalRequest->id, [
+            'deal_date' => now()->toDateString(),
+            'agreed_total_value' => 15000,
+            'currency' => 'EGP',
+            'rental_term' => 'monthly',
+            'rental_term_count' => 1,
+            'payment_schedule' => 'monthly',
+        ]);
+        $deals->createFromRequest($manager, Department::Resale, $resaleRequest->id, [
+            'deal_date' => now()->toDateString(),
+            'agreed_total_value' => 2500000,
+            'currency' => 'EGP',
+            'seller_name' => 'بائع مستقل',
+        ]);
+
+        app(AftercareService::class)->recordActivity($manager, Department::Rental, $rentalCustomer->id, [
+            'deal_id' => $rentalDeal->id,
+            'channel' => 'phone',
+            'occurred_at' => now()->subMinute()->toDateTimeString(),
+            'result' => 'متابعة إيجار مستقلة',
+        ]);
+
+        $secondRentalRequest = $requests->create($manager, Department::Rental, [
+            'customer_id' => $rentalCustomer->id,
+            'area_id' => RentalArea::query()->firstOrFail()->id,
+            'next_follow_up_at' => now()->addDays(2)->toDateTimeString(),
+        ]);
+        $requests->close($manager, Department::Rental, $secondRentalRequest->id, ['outcome' => 'successful']);
+        $deals->createFromRequest($manager, Department::Rental, $secondRentalRequest->id, [
+            'deal_date' => now()->toDateString(),
+            'agreed_total_value' => 18000,
+            'currency' => 'EGP',
+            'rental_term' => 'monthly',
+            'rental_term_count' => 1,
+            'payment_schedule' => 'monthly',
+        ]);
+
+        $this->assertDatabaseCount('rental_customers', 1);
+        $this->assertDatabaseCount('resale_customers', 1);
+        $this->assertDatabaseCount('rental_deals', 2);
+        $this->assertDatabaseCount('resale_deals', 1);
+        $this->assertDatabaseCount('rental_aftercare_activities', 1);
+        $this->assertDatabaseCount('resale_aftercare_activities', 0);
+    }
 }
