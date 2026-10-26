@@ -13,6 +13,8 @@ use App\Filament\Resources\RentalLeadSources\Pages\ListRentalLeadSources;
 use App\Filament\Resources\RentalRequests\Pages\CreateRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\EditRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
+use App\Filament\Resources\ResaleAreas\Pages\ListResaleAreas;
+use App\Filament\Resources\ResaleCloseReasons\Pages\ListResaleCloseReasons;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
 use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\Staff\Pages\ListStaff;
@@ -24,6 +26,8 @@ use App\Models\RentalRecommendation;
 use App\Models\RentalRequest;
 use App\Models\RentalViewing;
 use App\Models\ResaleArea;
+use App\Models\ResaleRequest;
+use App\Models\ResaleRequestCloseReason;
 use App\Models\User;
 use App\Services\BrokerService;
 use App\Services\CustomerService;
@@ -693,6 +697,88 @@ class FilamentUiAccessTest extends TestCase
             'id' => $request->id,
             'status' => 'active',
         ]);
+    }
+
+    public function test_manager_can_manage_resale_reference_lists_through_list_actions(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        Livewire::actingAs($manager)
+            ->test(ListResaleAreas::class)
+            ->callAction(TestAction::make('createArea'), [
+                'governorate' => 'الجيزة',
+                'name' => 'منطقة إعادة بيع من الواجهة',
+            ])
+            ->assertHasNoActionErrors();
+
+        $area = ResaleArea::query()->where('name', 'منطقة إعادة بيع من الواجهة')->sole();
+        $customer = app(CustomerService::class)->create($manager, Department::Resale, [
+            'name' => 'مشتري منطقة إعادة بيع',
+            'phone' => '01012345564',
+            'phone_country' => 'EG',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(CreateResaleRequest::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'area_id' => $area->id,
+                'owner_user_id' => $manager->id,
+                'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        Livewire::actingAs($manager)
+            ->test(ListResaleCloseReasons::class)
+            ->callAction(TestAction::make('addCloseReason'), ['name' => 'تصنيف إعادة بيع من الواجهة'])
+            ->assertHasNoActionErrors();
+
+        $reason = ResaleRequestCloseReason::query()->where('name', 'تصنيف إعادة بيع من الواجهة')->sole();
+        $page = Livewire::actingAs($manager)->test(ListResaleCloseReasons::class);
+
+        $page->callAction(TestAction::make('rename')->table($reason), ['name' => 'تصنيف إعادة بيع معدل'])
+            ->assertHasNoTableActionErrors();
+
+        $reason->refresh();
+        $page->callAction(TestAction::make('deactivate')->table($reason))
+            ->assertHasNoTableActionErrors();
+        $this->assertFalse((bool) $reason->fresh()->is_active);
+
+        $page->callAction(TestAction::make('activate')->table($reason))
+            ->assertHasNoTableActionErrors();
+        $this->assertTrue((bool) $reason->fresh()->is_active);
+
+        $page->callAction(TestAction::make('deleteReason')->table($reason))
+            ->assertHasNoTableActionErrors();
+        $this->assertDatabaseMissing('resale_request_close_reasons', ['id' => $reason->id]);
+
+        $page->callAction(TestAction::make('addCloseReason'), ['name' => 'تصنيف مرتبط بطلب'])
+            ->assertHasNoActionErrors();
+        $usedReason = ResaleRequestCloseReason::query()->where('name', 'تصنيف مرتبط بطلب')->sole();
+        $resaleRequest = ResaleRequest::query()->sole();
+
+        Livewire::actingAs($manager)
+            ->test(ListResaleRequests::class)
+            ->callAction(TestAction::make('close')->table($resaleRequest), [
+                'outcome' => 'unsuccessful',
+                'outcome_reason_id' => $usedReason->id,
+                'outcome_reason_text' => 'سبب إغلاق مرتبط بالطلب',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $page->assertActionHidden(TestAction::make('deleteReason')->table($usedReason));
+
+        $employee = User::factory()->create(['is_company_manager' => false]);
+        $employee->departmentMemberships()->create(['department' => Department::Resale]);
+
+        $this->actingAs($employee)
+            ->get('/admin/resale-areas')
+            ->assertForbidden();
+        $this->actingAs($employee)
+            ->get('/admin/resale-close-reasons')
+            ->assertForbidden();
     }
 
     private function createRentalRequest(User $actor): object
