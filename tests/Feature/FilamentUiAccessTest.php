@@ -16,6 +16,7 @@ use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
 use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\Staff\Pages\ListStaff;
+use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Models\RentalAftercare;
 use App\Models\RentalArea;
 use App\Models\RentalCustomer;
@@ -621,6 +622,33 @@ class FilamentUiAccessTest extends TestCase
             'customer_id' => $request->customer_id,
             'owner_user_id' => $manager->id,
         ]);
+    }
+
+    public function test_operational_dashboard_limits_employee_metrics_to_assigned_department(): void
+    {
+        $employee = User::factory()->create(['is_company_manager' => false]);
+        $employee->departmentMemberships()->create(['department' => Department::Rental]);
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $this->createRentalRequest($employee);
+        $this->createResaleRequest($manager);
+
+        Livewire::actingAs($employee)
+            ->test(OperationalRequestsOverview::class)
+            ->assertSee('الإيجار • طلبات نشطة')
+            ->assertDontSee('إعادة البيع • طلبات نشطة');
+
+        $employee->departmentMemberships()->create(['department' => Department::Resale]);
+
+        Livewire::actingAs($employee)
+            ->test(OperationalRequestsOverview::class)
+            ->assertSee('الإيجار • طلبات نشطة')
+            ->assertSee('إعادة البيع • طلبات نشطة');
+
+        Livewire::actingAs($manager)
+            ->test(OperationalRequestsOverview::class)
+            ->assertSee('الإيجار • طلبات نشطة')
+            ->assertSee('إعادة البيع • طلبات نشطة');
     }
 
     private function createRentalRequest(User $actor): object
