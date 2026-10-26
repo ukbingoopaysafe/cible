@@ -12,7 +12,9 @@ use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
 use App\Models\RentalAftercare;
 use App\Models\RentalArea;
+use App\Models\RentalRecommendation;
 use App\Models\RentalRequest;
+use App\Models\RentalViewing;
 use App\Models\ResaleArea;
 use App\Models\User;
 use App\Services\CustomerService;
@@ -323,6 +325,94 @@ class FilamentUiAccessTest extends TestCase
             'aftercare_id' => RentalAftercare::query()->where('customer_id', $customer->id)->sole()->id,
             'channel' => 'whatsapp',
             'result' => 'تم الاطمئنان على العميل',
+        ]);
+    }
+
+    public function test_manager_can_complete_the_recommendation_and_viewing_workflow_through_request_actions(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $request = $this->createRentalRequest($manager);
+        $page = Livewire::actingAs($manager)->test(ListRentalRequests::class);
+
+        $page->callAction(TestAction::make('createRecommendation')->table($request), [
+            'unit_code' => 'UNIT-UI-101',
+            'unit_type' => 'شقة',
+            'unit_area' => 120,
+            'location_description' => 'التجمع الخامس',
+            'asking_price' => 25000,
+            'currency' => 'EGP',
+        ])->assertHasNoTableActionErrors();
+
+        $recommendation = RentalRecommendation::query()->sole();
+        $page->callAction(TestAction::make('changeRecommendationStatus')->table($request), [
+            'recommendation_id' => $recommendation->id,
+            'status' => 'shared',
+        ])->assertHasNoTableActionErrors();
+
+        $page->callAction(TestAction::make('recordFieldInspection')->table($request), [
+            'recommendation_id' => $recommendation->id,
+            'field_representative_name' => 'مندوب الفحص',
+            'inspected_at' => now()->subMinute()->toDateTimeString(),
+            'photo_match' => 'matches',
+            'observed_defects' => 'لا توجد عيوب ظاهرة',
+        ])->assertHasNoTableActionErrors();
+
+        $page->callAction(TestAction::make('scheduleViewing')->table($request), [
+            'recommendation_id' => $recommendation->id,
+            'scheduled_at' => now()->addDays(2)->toDateTimeString(),
+            'field_representative_name' => 'مندوب المعاينة',
+        ])->assertHasNoTableActionErrors();
+
+        $viewing = RentalViewing::query()->sole();
+        $page->callAction(TestAction::make('recordViewingResult')->table($request), [
+            'viewing_id' => $viewing->id,
+            'result' => 'interested',
+            'customer_feedback' => 'الوحدة مناسبة للعميل',
+        ])->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_recommendations', [
+            'id' => $recommendation->id,
+            'status' => 'shared',
+        ]);
+        $this->assertDatabaseHas('rental_viewings', [
+            'id' => $viewing->id,
+            'result' => 'interested',
+        ]);
+    }
+
+    public function test_employee_can_request_and_manager_can_approve_reassignment_through_request_actions(): void
+    {
+        $employee = User::factory()->create(['is_company_manager' => false]);
+        $employee->departmentMemberships()->create(['department' => Department::Rental]);
+        $target = User::factory()->create(['is_company_manager' => false]);
+        $target->departmentMemberships()->create(['department' => Department::Rental]);
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $request = $this->createRentalRequest($employee);
+
+        Livewire::actingAs($employee)
+            ->test(ListRentalRequests::class)
+            ->callAction(TestAction::make('requestReassignment')->table($request), [
+                'target_user_id' => $target->id,
+                'reason' => 'العميل يفضل متابعة الموظف الآخر',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalRequests::class)
+            ->callAction(TestAction::make('approveReassignment')->table($request))
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_requests', [
+            'id' => $request->id,
+            'owner_user_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('rental_request_reassignments', [
+            'request_id' => $request->id,
+            'requested_by' => $employee->id,
+            'to_user_id' => $target->id,
+            'status' => 'approved',
         ]);
     }
 
