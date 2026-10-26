@@ -111,6 +111,7 @@ class RequestLifecycleTest extends TestCase
         }
 
         $requestService->close($manager, Department::Rental, $request->id, ['outcome' => 'successful']);
+        $this->assertDatabaseCount('rental_deals', 0);
         $deal = app(DealService::class)->createFromRequest($manager, Department::Rental, $request->id, [
             'deal_date' => now()->toDateString(),
             'agreed_total_value' => 120000,
