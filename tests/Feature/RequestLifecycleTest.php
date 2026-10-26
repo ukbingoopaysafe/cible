@@ -148,16 +148,18 @@ class RequestLifecycleTest extends TestCase
             'owner_user_id' => $manager->id,
         ]);
 
+        $nextAftercareFollowUp = now()->addWeek()->toDateTimeString();
+
         app(AftercareService::class)->recordActivity($manager, Department::Rental, $customer->id, [
             'deal_id' => $deal->id,
             'channel' => 'whatsapp',
             'occurred_at' => now()->subMinute()->toDateTimeString(),
             'result' => 'تم الاطمئنان على العميل',
-            'next_follow_up_at' => now()->addWeek()->toDateTimeString(),
+            'next_follow_up_at' => $nextAftercareFollowUp,
         ]);
         $this->assertDatabaseHas('rental_aftercare', [
             'customer_id' => $customer->id,
-            'next_follow_up_at' => now()->addWeek()->toDateTimeString(),
+            'next_follow_up_at' => $nextAftercareFollowUp,
         ]);
         $this->assertDatabaseCount('rental_aftercare_activities', 1);
 
