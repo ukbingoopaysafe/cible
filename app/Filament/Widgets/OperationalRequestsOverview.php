@@ -4,10 +4,10 @@ namespace App\Filament\Widgets;
 
 use App\Enums\Department;
 use App\Enums\RequestStatus;
-use App\Models\RentalRequest;
 use App\Models\RentalAftercare;
-use App\Models\ResaleRequest;
+use App\Models\RentalRequest;
 use App\Models\ResaleAftercare;
+use App\Models\ResaleRequest;
 use App\Models\User;
 use Filament\Widgets\StatsOverviewWidget;
 use Filament\Widgets\StatsOverviewWidget\Stat;
@@ -17,6 +17,14 @@ class OperationalRequestsOverview extends StatsOverviewWidget
     protected static ?int $sort = -2;
 
     protected int|string|array $columnSpan = 'full';
+
+    protected int|array|null $columns = [
+        'default' => 1,
+        'sm' => 2,
+        'md' => 2,
+        'lg' => 3,
+        'xl' => 4,
+    ];
 
     public static function canView(): bool
     {

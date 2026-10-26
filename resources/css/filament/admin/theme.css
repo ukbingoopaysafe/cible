@@ -1,0 +1,199 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@font-face {
+    font-family: 'beIN';
+    src: url('/fonts/beIN-Normal.ttf') format('truetype');
+    font-weight: 100 900;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Jost';
+    src: url('/fonts/Jost-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Jost';
+    src: url('/fonts/Jost-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Jost';
+    src: url('/fonts/Jost-SemiBold.ttf') format('truetype');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Jost';
+    src: url('/fonts/Jost-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+@theme {
+    --font-sans: 'beIN', 'Jost', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-heading: 'beIN', sans-serif;
+    --font-latin: 'Jost', sans-serif;
+
+    --color-cible-gold: #c4a369;
+    --color-cible-gold-hover: #b08f56;
+    --color-cible-green: #183f3c;
+    --color-cible-red: #aa2121;
+}
+
+:root {
+    --brand-primary: #c4a369;
+    --brand-structural: #183f3c;
+    --brand-danger: #aa2121;
+    --fi-font-family: 'beIN', 'Jost', sans-serif;
+}
+
+/* Base RTL & Typography Polish */
+[dir="rtl"] {
+    font-family: 'beIN', 'Jost', system-ui, sans-serif;
+    letter-spacing: normal;
+}
+
+/* Ensure required field asterisks render as clean typographic asterisks */
+sup,
+.fi-fo-field-wrp-label sup,
+.fi-fo-field-wrp-label span.text-danger-600 {
+    font-family: 'Jost', system-ui, sans-serif !important;
+    font-size: 0.9em !important;
+    line-height: 1 !important;
+}
+
+/* Numbers, phone numbers, currencies, and codes isolation */
+.fi-ta-text-item,
+.fi-in-text-item,
+[data-font-numeric],
+.font-mono,
+input[type="number"],
+input[type="tel"] {
+    font-feature-settings: 'tnum' on, 'lnum' on;
+    font-family: 'Jost', 'beIN', sans-serif;
+}
+
+.fi-ta-text-item-ltr,
+[dir="ltr"] {
+    unicode-bidi: isolate;
+}
+
+/* Filament Brand Bar / Topbar Refinement */
+.fi-topbar {
+    border-bottom: 1px solid rgba(24, 63, 60, 0.08) !important;
+    backdrop-filter: blur(8px);
+}
+
+/* Filament Sidebar Polish */
+.fi-sidebar {
+    border-inline-end: 1px solid rgba(24, 63, 60, 0.08) !important;
+}
+
+.fi-sidebar-item-active > a,
+.fi-sidebar-item-active > button {
+    background: linear-gradient(90deg, rgba(196, 163, 105, 0.12) 0%, rgba(24, 63, 60, 0.05) 100%) !important;
+    border-inline-start: 3px solid #c4a369 !important;
+    color: #183f3c !important;
+    font-weight: 700 !important;
+}
+
+.dark .fi-sidebar-item-active > a,
+.dark .fi-sidebar-item-active > button {
+    background: rgba(196, 163, 105, 0.15) !important;
+    border-inline-start: 3px solid #c4a369 !important;
+    color: #c4a369 !important;
+}
+
+/* Stats Overview Cards Polish */
+.fi-wi-stats-overview-stat {
+    border-radius: 0.75rem !important;
+    border: 1px solid rgba(24, 63, 60, 0.07) !important;
+    background: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.fi-wi-stats-overview-stat:hover {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04) !important;
+    transform: translateY(-1px);
+    border-color: rgba(196, 163, 105, 0.3) !important;
+}
+
+.fi-wi-stats-overview-stat::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    inset-inline-start: 0;
+    inset-inline-end: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #c4a369 0%, #183f3c 100%);
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.fi-wi-stats-overview-stat:hover::before {
+    opacity: 1;
+}
+
+/* Tables refinement */
+.fi-ta-ctn {
+    border-radius: 0.75rem !important;
+    border: 1px solid rgba(24, 63, 60, 0.07) !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+    overflow: hidden;
+}
+
+.fi-ta-header-cell {
+    font-weight: 700 !important;
+    font-size: 0.8125rem !important;
+    color: #183f3c !important;
+    background: #f8fafc !important;
+    text-transform: none !important;
+}
+
+/* Sections and Forms */
+.fi-section {
+    border-radius: 0.75rem !important;
+    border: 1px solid rgba(24, 63, 60, 0.07) !important;
+}
+
+.fi-section-header-heading {
+    font-family: 'beIN', sans-serif !important;
+    font-weight: 700 !important;
+    color: #183f3c !important;
+}
+
+/* Primary Buttons */
+.fi-btn-color-primary {
+    background-color: #c4a369 !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+    transition: all 0.15s ease-in-out !important;
+}
+
+.fi-btn-color-primary:hover {
+    background-color: #b08f56 !important;
+    box-shadow: 0 2px 4px rgba(196, 163, 105, 0.25) !important;
+}
+
+/* Focus States */
+input:focus, select:focus, textarea:focus {
+    border-color: #c4a369 !important;
+    --tw-ring-color: #c4a369 !important;
+}
