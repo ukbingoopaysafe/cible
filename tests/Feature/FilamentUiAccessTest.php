@@ -17,11 +17,13 @@ use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
 use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Models\RentalAftercare;
 use App\Models\RentalArea;
+use App\Models\RentalCustomer;
 use App\Models\RentalRecommendation;
 use App\Models\RentalRequest;
 use App\Models\RentalViewing;
 use App\Models\ResaleArea;
 use App\Models\User;
+use App\Services\BrokerService;
 use App\Services\CustomerService;
 use App\Services\DealService;
 use App\Services\RequestService;
@@ -497,6 +499,96 @@ class FilamentUiAccessTest extends TestCase
             ->assertHasNoActionErrors();
 
         $this->assertDatabaseHas('rental_request_close_reasons', ['name' => 'تصنيف اختبار الواجهة']);
+    }
+
+    public function test_manager_can_archive_and_restore_a_customer_and_area_through_list_actions(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $customer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل الأرشفة من الواجهة',
+            'phone' => '01012345559',
+            'phone_country' => 'EG',
+        ]);
+        $area = RentalArea::query()->firstOrFail();
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalCustomers::class)
+            ->callAction(TestAction::make('archiveCustomer')->table($customer))
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSoftDeleted('rental_customers', ['id' => $customer->id]);
+
+        $archivedCustomer = RentalCustomer::withTrashed()->findOrFail($customer->id);
+        Livewire::actingAs($manager)
+            ->test(ListRentalCustomers::class)
+            ->filterTable('trashed', false)
+            ->callAction(TestAction::make('restoreCustomer')->table($archivedCustomer))
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_customers', ['id' => $customer->id, 'deleted_at' => null]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalAreas::class)
+            ->callAction(TestAction::make('archiveArea')->table($area))
+            ->assertHasNoTableActionErrors();
+
+        $this->assertSoftDeleted('rental_areas', ['id' => $area->id]);
+
+        $archivedArea = RentalArea::withTrashed()->findOrFail($area->id);
+        Livewire::actingAs($manager)
+            ->test(ListRentalAreas::class)
+            ->filterTable('trashed', false)
+            ->callAction(TestAction::make('restoreArea')->table($archivedArea))
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_areas', ['id' => $area->id, 'deleted_at' => null]);
+    }
+
+    public function test_manager_can_create_a_broker_request_then_link_the_customer_through_the_request_action(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $broker = app(BrokerService::class)->create($manager, Department::Rental, [
+            'name' => 'وسيط طلب الواجهة',
+            'phone' => '01012345560',
+            'phone_country' => 'EG',
+        ]);
+        $customer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل ربط الواجهة',
+            'phone' => '01012345561',
+            'phone_country' => 'EG',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(CreateRentalRequest::class)
+            ->fillForm([
+                'broker_id' => $broker->id,
+                'area_id' => RentalArea::query()->firstOrFail()->id,
+                'owner_user_id' => $manager->id,
+                'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+            ])
+            ->call('create')
+            ->assertHasNoFormErrors();
+
+        $request = RentalRequest::query()->sole();
+        $this->assertNull($request->customer_id);
+        $this->assertSame($broker->id, $request->broker_id);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalRequests::class)
+            ->callAction(TestAction::make('linkCustomer')->table($request), [
+                'customer_id' => $customer->id,
+                'make_contact' => true,
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_requests', [
+            'id' => $request->id,
+            'customer_id' => $customer->id,
+            'broker_id' => $broker->id,
+            'contact_party' => 'customer',
+        ]);
     }
 
     private function createRentalRequest(User $actor): object
