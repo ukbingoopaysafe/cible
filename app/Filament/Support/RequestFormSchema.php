@@ -6,8 +6,8 @@ use App\Enums\ContactParty;
 use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
-use App\Enums\RequestUnitType;
 use App\Enums\RentalTerm;
+use App\Enums\RequestUnitType;
 use App\Models\RentalArea;
 use App\Models\RentalBroker;
 use App\Models\RentalCustomer;
@@ -29,6 +29,7 @@ use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Illuminate\Database\Eloquent\Model;
 
 final class RequestFormSchema
 {
@@ -43,7 +44,7 @@ final class RequestFormSchema
             ->when(
                 $editing && filled($get('area_id')),
                 fn ($query) => $query->withTrashed()->where(function ($query) use ($get): void {
-                    $query->whereNull('deleted_at')->orWhereKey($get('area_id'));
+                    $query->whereNull('deleted_at')->orWhere($query->getModel()->getKeyName(), $get('area_id'));
                 }),
             )
             ->orderBy('governorate')
@@ -66,7 +67,7 @@ final class RequestFormSchema
                             ->when(
                                 $editing && filled($get('customer_id')),
                                 fn ($query) => $query->withTrashed()->where(function ($query) use ($get): void {
-                                    $query->whereNull('deleted_at')->orWhereKey($get('customer_id'));
+                                    $query->whereNull('deleted_at')->orWhere($query->getModel()->getKeyName(), $get('customer_id'));
                                 }),
                             )
                             ->orderBy('name')->pluck('name', 'id')->all())
@@ -135,11 +136,19 @@ final class RequestFormSchema
                         ->label('الموظف المسؤول')
                         ->options(function () use ($department): array {
                             $actor = auth()->user();
-                            $query = User::query()
-                                ->whereHas('departmentMemberships', fn ($membershipQuery) => $membershipQuery->where('department', $department->value));
+                            $query = User::query();
 
-                            if ($actor instanceof User && ! $actor->canManageDepartment($department)) {
+                            if ($actor instanceof User && $actor->canManageDepartment($department)) {
+                                $query->where(function ($query) use ($actor, $department): void {
+                                    $query->whereKey($actor->id)->orWhereHas(
+                                        'departmentMemberships',
+                                        fn ($membershipQuery) => $membershipQuery->where('department', $department->value),
+                                    );
+                                });
+                            } elseif ($actor instanceof User) {
                                 $query->whereKey($actor->id);
+                            } else {
+                                $query->whereRaw('1 = 0');
                             }
 
                             return $query->orderBy('name')->pluck('name', 'id')->all();
