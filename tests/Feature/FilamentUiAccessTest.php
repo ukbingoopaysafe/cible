@@ -651,6 +651,50 @@ class FilamentUiAccessTest extends TestCase
             ->assertSee('إعادة البيع • طلبات نشطة');
     }
 
+    public function test_request_forms_require_location_and_follow_up_and_unsuccessful_close_reason(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $customer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل تحقق الواجهة',
+            'phone' => '01012345563',
+            'phone_country' => 'EG',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(CreateRentalRequest::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'owner_user_id' => $manager->id,
+                'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['area_id' => 'required']);
+
+        Livewire::actingAs($manager)
+            ->test(CreateRentalRequest::class)
+            ->fillForm([
+                'customer_id' => $customer->id,
+                'area_id' => RentalArea::query()->firstOrFail()->id,
+                'owner_user_id' => $manager->id,
+            ])
+            ->call('create')
+            ->assertHasFormErrors(['next_follow_up_at' => 'required']);
+
+        $request = $this->createRentalRequest($manager);
+        Livewire::actingAs($manager)
+            ->test(ListRentalRequests::class)
+            ->callAction(TestAction::make('close')->table($request), [
+                'outcome' => 'unsuccessful',
+            ])
+            ->assertHasTableActionErrors(['outcome_reason_text' => 'required']);
+
+        $this->assertDatabaseHas('rental_requests', [
+            'id' => $request->id,
+            'status' => 'active',
+        ]);
+    }
+
     private function createRentalRequest(User $actor): object
     {
         $customer = app(CustomerService::class)->create($actor, Department::Rental, [
