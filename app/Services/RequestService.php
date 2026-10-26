@@ -7,23 +7,24 @@ use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
 use App\Enums\RentalRequestStage;
+use App\Enums\RentalTerm;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
-use App\Enums\ResaleRequestStage;
 use App\Enums\RequestUnitType;
+use App\Enums\ResaleRequestStage;
+use App\Models\AuditEvent;
+use App\Models\RentalArea;
 use App\Models\RentalBroker;
 use App\Models\RentalCustomer;
-use App\Models\RentalArea;
-use App\Models\AuditEvent;
-use App\Models\RentalRequest;
 use App\Models\RentalLeadSource;
+use App\Models\RentalRequest;
 use App\Models\RentalRequestCloseReason;
 use App\Models\RentalRequestReassignment;
+use App\Models\ResaleArea;
 use App\Models\ResaleBroker;
 use App\Models\ResaleCustomer;
-use App\Models\ResaleArea;
-use App\Models\ResaleRequest;
 use App\Models\ResaleLeadSource;
+use App\Models\ResaleRequest;
 use App\Models\ResaleRequestCloseReason;
 use App\Models\ResaleRequestReassignment;
 use App\Models\User;
@@ -318,7 +319,7 @@ class RequestService
                 'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
                 'household' => ['nullable', 'boolean'],
-                'rental_term' => ['nullable', Rule::enum(\App\Enums\RentalTerm::class)],
+                'rental_term' => ['nullable', Rule::enum(RentalTerm::class)],
                 'rental_term_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
                 'finishing' => ['nullable', Rule::enum(FinishingLevel::class)],
                 'finishing_other' => ['nullable', 'string', 'max:255'],
@@ -467,7 +468,7 @@ class RequestService
                 'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
                 'household' => ['nullable', 'boolean'],
-                'rental_term' => ['nullable', Rule::enum(\App\Enums\RentalTerm::class)],
+                'rental_term' => ['nullable', Rule::enum(RentalTerm::class)],
                 'rental_term_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
                 'finishing' => ['nullable', Rule::enum(FinishingLevel::class)],
                 'finishing_other' => ['nullable', 'string', 'max:255'],

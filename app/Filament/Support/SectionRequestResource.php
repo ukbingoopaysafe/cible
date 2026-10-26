@@ -2,33 +2,42 @@
 
 namespace App\Filament\Support;
 
-use App\Enums\Department;
 use App\Enums\ContactActivityChannel;
+use App\Enums\Department;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
 use App\Exports\RentalRequestExporter;
 use App\Exports\ResaleRequestExporter;
-use App\Models\User;
 use App\Models\RentalCustomer;
-use App\Models\ResaleCustomer;
+use App\Models\RentalDeal;
+use App\Models\RentalRecommendation;
+use App\Models\RentalRequestCloseReason;
 use App\Models\RentalRequestReassignment;
+use App\Models\RentalViewing;
+use App\Models\ResaleCustomer;
+use App\Models\ResaleDeal;
+use App\Models\ResaleRecommendation;
+use App\Models\ResaleRequestCloseReason;
 use App\Models\ResaleRequestReassignment;
-use App\Services\RequestService;
-use App\Services\DealService;
+use App\Models\ResaleViewing;
+use App\Models\User;
 use App\Services\ContactActivityService;
+use App\Services\DealService;
+use App\Services\RecommendationService;
+use App\Services\RequestService;
 use Filament\Actions\Action;
+use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
-use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\DatePicker;
-use Filament\Forms\Components\Repeater;
+use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
+use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
@@ -40,7 +49,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-/** @extends Resource<Model> */
+/** @extends resource<Model> */
 abstract class SectionRequestResource extends Resource
 {
     abstract public static function department(): Department;
@@ -271,7 +280,7 @@ abstract class SectionRequestResource extends Resource
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                app(\App\Services\RecommendationService::class)->createRecommendation($actor, static::department(), (int) $record->getKey(), $data);
+                app(RecommendationService::class)->createRecommendation($actor, static::department(), (int) $record->getKey(), $data);
             })
             ->successNotificationTitle('تمت إضافة الترشيح');
     }
@@ -289,9 +298,9 @@ abstract class SectionRequestResource extends Resource
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                $recommendationClass = static::department() === Department::Rental ? \App\Models\RentalRecommendation::class : \App\Models\ResaleRecommendation::class;
+                $recommendationClass = static::department() === Department::Rental ? RentalRecommendation::class : ResaleRecommendation::class;
                 abort_unless($recommendationClass::query()->whereKey($data['recommendation_id'])->where('request_id', $record->getKey())->exists(), 404);
-                app(\App\Services\RecommendationService::class)->updateRecommendationStatus($actor, static::department(), (int) $data['recommendation_id'], $data['status']);
+                app(RecommendationService::class)->updateRecommendationStatus($actor, static::department(), (int) $data['recommendation_id'], $data['status']);
             })
             ->successNotificationTitle('تم تحديث حالة الترشيح');
     }
@@ -313,9 +322,9 @@ abstract class SectionRequestResource extends Resource
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                $recommendationClass = static::department() === Department::Rental ? \App\Models\RentalRecommendation::class : \App\Models\ResaleRecommendation::class;
+                $recommendationClass = static::department() === Department::Rental ? RentalRecommendation::class : ResaleRecommendation::class;
                 abort_unless($recommendationClass::query()->whereKey($data['recommendation_id'])->where('request_id', $record->getKey())->exists(), 404);
-                app(\App\Services\RecommendationService::class)->recordInspection($actor, static::department(), (int) $data['recommendation_id'], $data);
+                app(RecommendationService::class)->recordInspection($actor, static::department(), (int) $data['recommendation_id'], $data);
             })
             ->successNotificationTitle('تم تسجيل الفحص الميداني');
     }
@@ -334,7 +343,7 @@ abstract class SectionRequestResource extends Resource
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                app(\App\Services\RecommendationService::class)->scheduleViewing($actor, static::department(), (int) $record->getKey(), $data);
+                app(RecommendationService::class)->scheduleViewing($actor, static::department(), (int) $record->getKey(), $data);
             })
             ->successNotificationTitle('تم تحديد موعد المعاينة');
     }
@@ -354,9 +363,9 @@ abstract class SectionRequestResource extends Resource
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                $viewingClass = static::department() === Department::Rental ? \App\Models\RentalViewing::class : \App\Models\ResaleViewing::class;
+                $viewingClass = static::department() === Department::Rental ? RentalViewing::class : ResaleViewing::class;
                 abort_unless($viewingClass::query()->whereKey($data['viewing_id'])->where('request_id', $record->getKey())->exists(), 404);
-                app(\App\Services\RecommendationService::class)->recordViewingResult($actor, static::department(), (int) $data['viewing_id'], $data);
+                app(RecommendationService::class)->recordViewingResult($actor, static::department(), (int) $data['viewing_id'], $data);
             })
             ->successNotificationTitle('تم تسجيل نتيجة المعاينة');
     }
@@ -634,7 +643,7 @@ abstract class SectionRequestResource extends Resource
             ->all();
     }
 
-    private static function pendingReassignment(int $requestId): Model|null
+    private static function pendingReassignment(int $requestId): ?Model
     {
         $class = static::department() === Department::Rental
             ? RentalRequestReassignment::class
@@ -767,8 +776,8 @@ abstract class SectionRequestResource extends Resource
             ])
             ->visible(function (Model $record): bool {
                 $dealClass = static::department() === Department::Rental
-                    ? \App\Models\RentalDeal::class
-                    : \App\Models\ResaleDeal::class;
+                    ? RentalDeal::class
+                    : ResaleDeal::class;
 
                 return $record->status === RequestStatus::Closed
                     && $record->outcome === RequestOutcome::Successful
@@ -816,8 +825,8 @@ abstract class SectionRequestResource extends Resource
     private static function closeReasonOptions(): array
     {
         $class = static::department() === Department::Rental
-            ? \App\Models\RentalRequestCloseReason::class
-            : \App\Models\ResaleRequestCloseReason::class;
+            ? RentalRequestCloseReason::class
+            : ResaleRequestCloseReason::class;
 
         return $class::query()->where('is_active', true)->orderBy('sort_order')->pluck('name', 'id')->all();
     }

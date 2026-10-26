@@ -4,7 +4,7 @@ Arabic-first internal CRM for rental and resale operations.
 
 ## Project status
 
-The repository contains the Laravel 12 and Filament 5 CRM for rental and resale, with separate department workflows, audit history, request follow-up, deals and aftercare, XLSX import/export, and encrypted off-site backup support. The latest verified suite passed 35 tests and 135 assertions on both SQLite in-memory and MariaDB 10.4.32 in a disposable schema. Oracle MySQL CI has been configured but not run yet. Neither production deployment nor production backup operations have been verified. See [`docs/ACCEPTANCE_TESTS.md`](docs/ACCEPTANCE_TESTS.md) and [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) for evidence and remaining gaps.
+The repository contains the Laravel 12 and Filament 5 CRM for rental and resale, with separate department workflows, audit history, request follow-up, deals and aftercare, XLSX import/export, and encrypted off-site backup support. The latest full suite passed 37 tests and 146 assertions on SQLite in-memory. The two commission migration tests also passed on MariaDB 10.4.32 in a disposable schema; this does not establish Oracle MySQL 8 compatibility. GitHub Actions was triggered for commit `072063bf1db76e608d1d0d0a54d632543e98541f`, but its job did not start because GitHub reported an account billing lock ([run details](https://github.com/ukbingoopaysafe/cible/actions/runs/40306607732)). Neither production deployment nor production backup operations have been verified. See [`docs/ACCEPTANCE_TESTS.md`](docs/ACCEPTANCE_TESTS.md) and [`docs/CURRENT_STATE.md`](docs/CURRENT_STATE.md) for evidence and remaining gaps.
 
 ## Local setup
 
