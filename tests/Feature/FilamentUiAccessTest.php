@@ -5,11 +5,16 @@ namespace Tests\Feature;
 use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\RequestUnitType;
+use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
+use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
+use App\Filament\Resources\RentalCloseReasons\Pages\ListRentalCloseReasons;
 use App\Filament\Resources\RentalCustomers\Pages\ListRentalCustomers;
+use App\Filament\Resources\RentalLeadSources\Pages\ListRentalLeadSources;
 use App\Filament\Resources\RentalRequests\Pages\CreateRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\EditRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
+use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Models\RentalAftercare;
 use App\Models\RentalArea;
 use App\Models\RentalRecommendation;
@@ -414,6 +419,84 @@ class FilamentUiAccessTest extends TestCase
             'to_user_id' => $target->id,
             'status' => 'approved',
         ]);
+    }
+
+    public function test_manager_can_create_staff_customer_and_broker_through_their_list_actions(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        Livewire::actingAs($manager)
+            ->test(ListStaff::class)
+            ->callAction(TestAction::make('createEmployee'), [
+                'name' => 'موظف واجهة',
+                'email' => 'ui-staff@example.test',
+                'password' => 'StrongPass123!',
+                'departments' => [Department::Rental->value],
+                'can_add_rental_areas' => true,
+            ])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('users', [
+            'name' => 'موظف واجهة',
+            'email' => 'ui-staff@example.test',
+            'can_add_rental_areas' => true,
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalCustomers::class)
+            ->callAction(TestAction::make('createCustomer'), [
+                'name' => 'عميل قائمة الواجهة',
+                'phone' => '01012345557',
+                'phone_country' => 'EG',
+            ])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('rental_customers', ['name' => 'عميل قائمة الواجهة']);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalBrokers::class)
+            ->callAction(TestAction::make('createBroker'), [
+                'name' => 'وسيط قائمة الواجهة',
+                'phone' => '01012345558',
+                'phone_country' => 'EG',
+            ])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('rental_brokers', ['name' => 'وسيط قائمة الواجهة']);
+    }
+
+    public function test_manager_can_manage_rental_reference_lists_through_list_actions(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalAreas::class)
+            ->callAction(TestAction::make('createArea'), [
+                'governorate' => 'القاهرة',
+                'name' => 'منطقة اختبار الواجهة',
+            ])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('rental_areas', [
+            'governorate' => 'القاهرة',
+            'name' => 'منطقة اختبار الواجهة',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalLeadSources::class)
+            ->callAction(TestAction::make('addLeadSource'), ['name' => 'مورد اختبار الواجهة'])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('rental_lead_sources', ['name' => 'مورد اختبار الواجهة']);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalCloseReasons::class)
+            ->callAction(TestAction::make('addCloseReason'), ['name' => 'تصنيف اختبار الواجهة'])
+            ->assertHasNoActionErrors();
+
+        $this->assertDatabaseHas('rental_request_close_reasons', ['name' => 'تصنيف اختبار الواجهة']);
     }
 
     private function createRentalRequest(User $actor): object

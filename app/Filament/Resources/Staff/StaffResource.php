@@ -7,12 +7,13 @@ use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Models\User;
 use App\Services\StaffManagementService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
-use Filament\Forms\Get;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -21,10 +22,15 @@ use Illuminate\Database\Eloquent\Model;
 class StaffResource extends Resource
 {
     protected static ?string $model = User::class;
+
     protected static ?string $modelLabel = 'موظف';
+
     protected static ?string $pluralModelLabel = 'إدارة الموظفين';
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-user-group';
-    protected static string | \UnitEnum | null $navigationGroup = 'إدارة الشركة';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'إدارة الشركة';
+
     protected static ?int $navigationSort = 1;
 
     public static function getEloquentQuery(): Builder
@@ -113,7 +119,7 @@ class StaffResource extends Resource
             ->successNotificationTitle('تم إنشاء حساب الموظف');
     }
 
-    /** @return array<int, \Filament\Forms\Components\Component> */
+    /** @return array<int, Component> */
     private static function formFields(bool $editing): array
     {
         $actor = auth()->user();
