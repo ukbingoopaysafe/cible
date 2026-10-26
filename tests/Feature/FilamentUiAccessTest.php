@@ -14,6 +14,7 @@ use App\Filament\Resources\RentalRequests\Pages\CreateRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\EditRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
+use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Models\RentalAftercare;
 use App\Models\RentalArea;
@@ -588,6 +589,37 @@ class FilamentUiAccessTest extends TestCase
             'customer_id' => $customer->id,
             'broker_id' => $broker->id,
             'contact_party' => 'customer',
+        ]);
+    }
+
+    public function test_manager_can_create_a_resale_deal_with_seller_details_through_the_request_action(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $request = $this->createResaleRequest($manager);
+        $page = Livewire::actingAs($manager)->test(ListResaleRequests::class);
+
+        $page->callAction(TestAction::make('close')->table($request), [
+            'outcome' => 'successful',
+        ])->assertHasNoTableActionErrors();
+
+        $page->callAction(TestAction::make('createDeal')->table($request), [
+            'deal_date' => now()->toDateString(),
+            'agreed_total_value' => 4500000,
+            'currency' => 'EGP',
+            'seller_name' => 'مالك الوحدة',
+            'seller_phone' => '01012345562',
+        ])->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('resale_deals', [
+            'request_id' => $request->id,
+            'agreed_total_value' => 4500000,
+            'seller_name' => 'مالك الوحدة',
+            'seller_phone' => '01012345562',
+        ]);
+        $this->assertDatabaseHas('resale_aftercare', [
+            'customer_id' => $request->customer_id,
+            'owner_user_id' => $manager->id,
         ]);
     }
 
