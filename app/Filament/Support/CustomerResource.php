@@ -32,6 +32,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -95,32 +96,37 @@ abstract class CustomerResource extends Resource
                     ->columnMapping(false),
             ])
             ->columns([
-                TextColumn::make('name')->label('اسم العميل')->searchable()->sortable(),
-                TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable(),
-                TextColumn::make('nationality')->label('الجنسية')->placeholder('—'),
-                TextColumn::make('requests_count')->label('عدد الطلبات')->sortable(),
-                TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—'),
-                TextColumn::make('aftercare.next_follow_up_at')->label('متابعة ما بعد الصفقة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
-                TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable(),
+                TextColumn::make('name')->label('اسم العميل')->searchable()->sortable()->toggleable(),
+                TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable()->toggleable(),
+                TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('requests_count')->label('عدد الطلبات')->sortable()->toggleable(),
+                TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('aftercare.next_follow_up_at')->label('متابعة ما بعد الصفقة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('deleted_at')->label('الحالة')->badge()
-                    ->formatStateUsing(fn ($state): string => filled($state) ? 'مؤرشف' : 'نشط'),
+                    ->formatStateUsing(fn ($state): string => filled($state) ? 'مؤرشف' : 'نشط')->toggleable(),
             ])
             ->filters([
                 TrashedFilter::make()
                     ->label('الأرشيف')
                     ->visible(fn (): bool => auth()->user()?->is_company_manager ?? false),
             ])
+            ->recordActionsPosition(RecordActionsPosition::BeforeColumns)
             ->recordActions([
                 Action::make('openWhatsApp')
                     ->label('فتح WhatsApp')
                     ->icon('heroicon-o-chat-bubble-left-right')
                     ->color('success')
+                    ->iconButton()
+                    ->tooltip('فتح WhatsApp')
                     ->url(fn (Model $record): string => static::whatsAppUrl($record->phone_e164))
                     ->openUrlInNewTab()
                     ->visible(fn (Model $record): bool => ! $record->trashed() && static::hasValidWhatsAppPhone($record->phone_e164)),
                 Action::make('viewCustomerRequests')
                     ->label('طلبات العميل')
                     ->icon('heroicon-o-clipboard-document-list')
+                    ->iconButton()
+                    ->tooltip('طلبات العميل')
                     ->modalHeading(fn (Model $record): string => "طلبات العميل: {$record->name}")
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('إغلاق')
@@ -241,8 +247,10 @@ abstract class CustomerResource extends Resource
                 ])
                     ->label('المزيد')
                     ->icon('heroicon-m-ellipsis-vertical')
+                    ->iconButton()
                     ->color('gray')
                     ->tooltip('خيارات العميل')
+                    ->dropdownMaxHeight('22rem')
                     ->dropdownTeleport(),
             ]);
     }
