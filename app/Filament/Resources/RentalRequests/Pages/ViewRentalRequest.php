@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\RentalRequests\Pages;
 
 use App\Filament\Resources\RentalRequests\RentalRequestResource;
-use Filament\Resources\Pages\ViewRecord;
+use App\Filament\Support\ViewSectionRequest;
 
-class ViewRentalRequest extends ViewRecord
+class ViewRentalRequest extends ViewSectionRequest
 {
     protected static string $resource = RentalRequestResource::class;
 }

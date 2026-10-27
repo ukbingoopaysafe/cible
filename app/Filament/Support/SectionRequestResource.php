@@ -26,6 +26,7 @@ use App\Services\DealService;
 use App\Services\RecommendationService;
 use App\Services\RequestService;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
@@ -205,33 +206,62 @@ abstract class SectionRequestResource extends Resource
             ])
             ->recordActions([
                 ViewAction::make()->label('عرض الطلب'),
-                EditAction::make()->label('تعديل التفاصيل'),
-                self::recordContactAction(),
-                self::contactHistoryAction(),
-                self::linkCustomerAction(),
-                self::setFollowUpAction(),
-                self::requestReassignmentAction(),
-                self::cancelReassignmentAction(),
-                self::directReassignmentAction(),
-                self::approveReassignmentAction(),
-                self::rejectReassignmentAction(),
-                self::changeStageAction(),
-                self::pauseAction(),
-                self::resumeAction(),
-                self::closeAction(),
-                self::createDealAction(),
-                self::viewDealAction(),
-                self::createRecommendationAction(),
-                self::changeRecommendationStatusAction(),
-                self::recordFieldInspectionAction(),
-                self::scheduleViewingAction(),
-                self::recordViewingResultAction(),
-                self::viewPropertyHistoryAction(),
+                static::recordContactAction(),
+                static::getRequestActionsGroup(),
             ])
             ->defaultSort('next_follow_up_at');
     }
 
-    private static function linkCustomerAction(): Action
+    public static function getRequestActionsGroup(): ActionGroup
+    {
+        return ActionGroup::make([
+            ActionGroup::make([
+                EditAction::make()->label('تعديل التفاصيل'),
+                static::linkCustomerAction(),
+            ])->dropdown(false),
+
+            ActionGroup::make([
+                static::contactHistoryAction(),
+                static::setFollowUpAction(),
+            ])->dropdown(false),
+
+            ActionGroup::make([
+                static::requestReassignmentAction(),
+                static::cancelReassignmentAction(),
+                static::directReassignmentAction(),
+                static::approveReassignmentAction(),
+                static::rejectReassignmentAction(),
+            ])->dropdown(false),
+
+            ActionGroup::make([
+                static::changeStageAction(),
+                static::pauseAction(),
+                static::resumeAction(),
+                static::closeAction(),
+            ])->dropdown(false),
+
+            ActionGroup::make([
+                static::createDealAction(),
+                static::viewDealAction(),
+            ])->dropdown(false),
+
+            ActionGroup::make([
+                static::createRecommendationAction(),
+                static::changeRecommendationStatusAction(),
+                static::recordFieldInspectionAction(),
+                static::scheduleViewingAction(),
+                static::recordViewingResultAction(),
+                static::viewPropertyHistoryAction(),
+            ])->dropdown(false),
+        ])
+            ->label('الإجراءات')
+            ->icon('heroicon-m-ellipsis-vertical')
+            ->color('gray')
+            ->tooltip('خيارات وإجراءات الطلب')
+            ->dropdownTeleport();
+    }
+
+    public static function linkCustomerAction(): Action
     {
         $customerClass = static::department() === Department::Rental ? RentalCustomer::class : ResaleCustomer::class;
 
@@ -257,11 +287,12 @@ abstract class SectionRequestResource extends Resource
                     (int) $data['customer_id'],
                     (bool) ($data['make_contact'] ?? false),
                 );
+                $record->refresh();
             })
             ->successNotificationTitle('تم ربط العميل بالطلب');
     }
 
-    private static function createRecommendationAction(): Action
+    public static function createRecommendationAction(): Action
     {
         return Action::make('createRecommendation')
             ->label('إضافة ترشيح')
@@ -281,11 +312,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RecommendationService::class)->createRecommendation($actor, static::department(), (int) $record->getKey(), $data);
+                $record->refresh();
             })
             ->successNotificationTitle('تمت إضافة الترشيح');
     }
 
-    private static function changeRecommendationStatusAction(): Action
+    public static function changeRecommendationStatusAction(): Action
     {
         return Action::make('changeRecommendationStatus')
             ->label('تحديث حالة ترشيح')
@@ -301,11 +333,12 @@ abstract class SectionRequestResource extends Resource
                 $recommendationClass = static::department() === Department::Rental ? RentalRecommendation::class : ResaleRecommendation::class;
                 abort_unless($recommendationClass::query()->whereKey($data['recommendation_id'])->where('request_id', $record->getKey())->exists(), 404);
                 app(RecommendationService::class)->updateRecommendationStatus($actor, static::department(), (int) $data['recommendation_id'], $data['status']);
+                $record->refresh();
             })
             ->successNotificationTitle('تم تحديث حالة الترشيح');
     }
 
-    private static function recordFieldInspectionAction(): Action
+    public static function recordFieldInspectionAction(): Action
     {
         return Action::make('recordFieldInspection')
             ->label('تسجيل فحص ميداني')
@@ -325,11 +358,12 @@ abstract class SectionRequestResource extends Resource
                 $recommendationClass = static::department() === Department::Rental ? RentalRecommendation::class : ResaleRecommendation::class;
                 abort_unless($recommendationClass::query()->whereKey($data['recommendation_id'])->where('request_id', $record->getKey())->exists(), 404);
                 app(RecommendationService::class)->recordInspection($actor, static::department(), (int) $data['recommendation_id'], $data);
+                $record->refresh();
             })
             ->successNotificationTitle('تم تسجيل الفحص الميداني');
     }
 
-    private static function scheduleViewingAction(): Action
+    public static function scheduleViewingAction(): Action
     {
         return Action::make('scheduleViewing')
             ->label('تحديد معاينة')
@@ -344,11 +378,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RecommendationService::class)->scheduleViewing($actor, static::department(), (int) $record->getKey(), $data);
+                $record->refresh();
             })
             ->successNotificationTitle('تم تحديد موعد المعاينة');
     }
 
-    private static function recordViewingResultAction(): Action
+    public static function recordViewingResultAction(): Action
     {
         return Action::make('recordViewingResult')
             ->label('تسجيل نتيجة معاينة')
@@ -366,11 +401,12 @@ abstract class SectionRequestResource extends Resource
                 $viewingClass = static::department() === Department::Rental ? RentalViewing::class : ResaleViewing::class;
                 abort_unless($viewingClass::query()->whereKey($data['viewing_id'])->where('request_id', $record->getKey())->exists(), 404);
                 app(RecommendationService::class)->recordViewingResult($actor, static::department(), (int) $data['viewing_id'], $data);
+                $record->refresh();
             })
             ->successNotificationTitle('تم تسجيل نتيجة المعاينة');
     }
 
-    private static function viewPropertyHistoryAction(): Action
+    public static function viewPropertyHistoryAction(): Action
     {
         return Action::make('viewPropertyHistory')
             ->label('سجل الترشيحات والمعاينات')
@@ -380,7 +416,7 @@ abstract class SectionRequestResource extends Resource
             ->modalContent(fn (Model $record) => view('filament.modals.request-property-history', ['record' => $record]));
     }
 
-    private static function changeStageAction(): Action
+    public static function changeStageAction(): Action
     {
         return Action::make('changeStage')
             ->label('تغيير المرحلة')
@@ -394,11 +430,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->changeStage($actor, static::department(), (int) $record->getKey(), $data['stage'], $data['notes'] ?? null);
+                $record->refresh();
             })
             ->successNotificationTitle('تم تحديث مرحلة الطلب');
     }
 
-    private static function setFollowUpAction(): Action
+    public static function setFollowUpAction(): Action
     {
         return Action::make('setFollowUp')
             ->label('تحديد المتابعة')
@@ -422,11 +459,12 @@ abstract class SectionRequestResource extends Resource
                     (int) $record->getKey(),
                     $data['next_follow_up_at'],
                 );
+                $record->refresh();
             })
             ->successNotificationTitle('تم تحديث موعد المتابعة');
     }
 
-    private static function recordContactAction(): Action
+    public static function recordContactAction(): Action
     {
         return Action::make('recordContact')
             ->label('تسجيل تواصل')
@@ -470,11 +508,12 @@ abstract class SectionRequestResource extends Resource
                     (int) $record->getKey(),
                     $data,
                 );
+                $record->refresh();
             })
             ->successNotificationTitle('تم تسجيل التواصل');
     }
 
-    private static function contactHistoryAction(): Action
+    public static function contactHistoryAction(): Action
     {
         return Action::make('contactHistory')
             ->label('عرض سجل التواصل')
@@ -491,7 +530,7 @@ abstract class SectionRequestResource extends Resource
             ]));
     }
 
-    private static function requestReassignmentAction(): Action
+    public static function requestReassignmentAction(): Action
     {
         return Action::make('requestReassignment')
             ->label('طلب تغيير المسؤول')
@@ -521,11 +560,12 @@ abstract class SectionRequestResource extends Resource
                     (int) $data['target_user_id'],
                     $data['reason'],
                 );
+                $record->refresh();
             })
             ->successNotificationTitle('أُرسل طلب إعادة التعيين للمدير');
     }
 
-    private static function directReassignmentAction(): Action
+    public static function directReassignmentAction(): Action
     {
         return Action::make('directReassignment')
             ->label('إعادة تعيين المسؤول')
@@ -554,11 +594,12 @@ abstract class SectionRequestResource extends Resource
                     (int) $data['target_user_id'],
                     $data['reason'],
                 );
+                $record->refresh();
             })
             ->successNotificationTitle('تمت إعادة تعيين مسؤول الطلب');
     }
 
-    private static function cancelReassignmentAction(): Action
+    public static function cancelReassignmentAction(): Action
     {
         return Action::make('cancelReassignment')
             ->label('إلغاء طلب تغيير المسؤول')
@@ -576,15 +617,16 @@ abstract class SectionRequestResource extends Resource
                     && $pending !== null
                     && (int) $pending->requested_by === (int) $actor->id;
             })
-            ->action(function (Model $record): void {
+            ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->cancelReassignment($actor, static::department(), (int) $record->getKey());
+                $record->refresh();
             })
             ->successNotificationTitle('تم إلغاء طلب إعادة التعيين');
     }
 
-    private static function approveReassignmentAction(): Action
+    public static function approveReassignmentAction(): Action
     {
         return Action::make('approveReassignment')
             ->label('الموافقة على تغيير المسؤول')
@@ -602,11 +644,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->decideReassignment($actor, static::department(), (int) $record->getKey(), true);
+                $record->refresh();
             })
             ->successNotificationTitle('تمت الموافقة على إعادة التعيين');
     }
 
-    private static function rejectReassignmentAction(): Action
+    public static function rejectReassignmentAction(): Action
     {
         return Action::make('rejectReassignment')
             ->label('رفض طلب تغيير المسؤول')
@@ -624,6 +667,7 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->decideReassignment($actor, static::department(), (int) $record->getKey(), false);
+                $record->refresh();
             })
             ->successNotificationTitle('تم رفض طلب إعادة التعيين');
     }
@@ -667,7 +711,7 @@ abstract class SectionRequestResource extends Resource
             : 'لا يوجد طلب إعادة تعيين معلق.';
     }
 
-    private static function pauseAction(): Action
+    public static function pauseAction(): Action
     {
         return Action::make('pause')
             ->label('إيقاف مؤقت')
@@ -678,11 +722,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->pause($actor, static::department(), (int) $record->getKey());
+                $record->refresh();
             })
             ->successNotificationTitle('تم إيقاف الطلب مؤقتًا');
     }
 
-    private static function resumeAction(): Action
+    public static function resumeAction(): Action
     {
         return Action::make('resume')
             ->label('استئناف')
@@ -696,11 +741,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->resume($actor, static::department(), (int) $record->getKey(), $data['next_follow_up_at'], $data['notes'] ?? null);
+                $record->refresh();
             })
             ->successNotificationTitle('تم استئناف الطلب');
     }
 
-    private static function closeAction(): Action
+    public static function closeAction(): Action
     {
         return Action::make('close')
             ->label('إغلاق الطلب')
@@ -733,11 +779,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(RequestService::class)->close($actor, static::department(), (int) $record->getKey(), $data);
+                $record->refresh();
             })
             ->successNotificationTitle('تم إغلاق الطلب');
     }
 
-    private static function createDealAction(): Action
+    public static function createDealAction(): Action
     {
         return Action::make('createDeal')
             ->label('إنشاء صفقة')
@@ -787,11 +834,12 @@ abstract class SectionRequestResource extends Resource
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 app(DealService::class)->createFromRequest($actor, static::department(), (int) $record->getKey(), $data);
+                $record->refresh();
             })
             ->successNotificationTitle('تم إنشاء الصفقة وربطها بالطلب');
     }
 
-    private static function viewDealAction(): Action
+    public static function viewDealAction(): Action
     {
         return Action::make('viewDeal')
             ->label('عرض الصفقة')

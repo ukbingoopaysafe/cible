@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Department;
 use App\Enums\FinishingLevel;
+use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
 use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
 use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
@@ -13,10 +14,12 @@ use App\Filament\Resources\RentalLeadSources\Pages\ListRentalLeadSources;
 use App\Filament\Resources\RentalRequests\Pages\CreateRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\EditRentalRequest;
 use App\Filament\Resources\RentalRequests\Pages\ListRentalRequests;
+use App\Filament\Resources\RentalRequests\Pages\ViewRentalRequest;
 use App\Filament\Resources\ResaleAreas\Pages\ListResaleAreas;
 use App\Filament\Resources\ResaleCloseReasons\Pages\ListResaleCloseReasons;
 use App\Filament\Resources\ResaleRequests\Pages\CreateResaleRequest;
 use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
+use App\Filament\Resources\ResaleRequests\Pages\ViewResaleRequest;
 use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Models\RentalAftercare;
@@ -810,5 +813,37 @@ class FilamentUiAccessTest extends TestCase
             'area_id' => ResaleArea::query()->firstOrFail()->id,
             'next_follow_up_at' => now()->addDay()->toDateTimeString(),
         ]);
+    }
+
+    public function test_view_pages_expose_header_actions_and_refresh_state_reactively(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        $rentalRequest = $this->createRentalRequest($manager);
+
+        Livewire::actingAs($manager)
+            ->test(ViewRentalRequest::class, ['record' => $rentalRequest->id])
+            ->assertActionVisible('pause')
+            ->assertActionHidden('resume')
+            ->callAction('pause')
+            ->assertHasNoActionErrors()
+            ->assertActionHidden('pause')
+            ->assertActionVisible('resume');
+
+        $this->assertSame(RequestStatus::Paused, $rentalRequest->fresh()->status);
+
+        $resaleRequest = $this->createResaleRequest($manager);
+
+        Livewire::actingAs($manager)
+            ->test(ViewResaleRequest::class, ['record' => $resaleRequest->id])
+            ->assertActionVisible('pause')
+            ->assertActionHidden('resume')
+            ->callAction('pause')
+            ->assertHasNoActionErrors()
+            ->assertActionHidden('pause')
+            ->assertActionVisible('resume');
+
+        $this->assertSame(RequestStatus::Paused, $resaleRequest->fresh()->status);
     }
 }

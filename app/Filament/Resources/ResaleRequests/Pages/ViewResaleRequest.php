@@ -3,9 +3,9 @@
 namespace App\Filament\Resources\ResaleRequests\Pages;
 
 use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
-use Filament\Resources\Pages\ViewRecord;
+use App\Filament\Support\ViewSectionRequest;
 
-class ViewResaleRequest extends ViewRecord
+class ViewResaleRequest extends ViewSectionRequest
 {
     protected static string $resource = ResaleRequestResource::class;
 }
