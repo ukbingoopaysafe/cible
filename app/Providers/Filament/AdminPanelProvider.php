@@ -10,6 +10,8 @@ use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
+use Filament\Navigation\MenuItem;
+use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
@@ -34,6 +36,20 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('images/brand/favicon.png'))
             ->login()
+            ->profile(isSimple: false)
+            ->userMenuItems([
+                MenuItem::make()
+                    ->label('المصادقة الثنائية (MFA)')
+                    ->url(fn (): string => filament()->getProfileUrl())
+                    ->icon('heroicon-o-shield-check'),
+            ])
+            ->navigationItems([
+                NavigationItem::make('المصادقة الثنائية (MFA)')
+                    ->url(fn (): string => filament()->getProfileUrl())
+                    ->icon('heroicon-o-shield-check')
+                    ->group('إدارة الشركة')
+                    ->sort(3),
+            ])
             ->multiFactorAuthentication(
                 providers: [SafeAppAuthentication::make()->recoverable()],
                 isRequired: false,

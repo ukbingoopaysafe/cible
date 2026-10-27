@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\StaffManagementService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
@@ -142,6 +143,21 @@ class StaffResource extends Resource
                     app(StaffManagementService::class)->updateEmployee(auth()->user(), (int) $record->getKey(), $data);
                 })
                 ->successNotificationTitle('تم تحديث بيانات المستخدم بنجاح'),
+            Action::make('setupMyMfa')
+                ->label('إعداد MFA لحسابك')
+                ->icon('heroicon-o-shield-check')
+                ->color('primary')
+                ->visible(fn (User $record): bool => (auth()->id() === $record->id) && ! $record->hasMultiFactorAuthentication())
+                ->url(fn (): string => filament()->getProfileUrl()),
+            Action::make('mfaInfo')
+                ->label('كيف يُفعّل المستخدم MFA؟')
+                ->icon('heroicon-o-question-mark-circle')
+                ->color('gray')
+                ->visible(fn (User $record): bool => ! $record->hasMultiFactorAuthentication() && (auth()->id() !== $record->id))
+                ->modalHeading('تفعيل المصادقة الثنائية (MFA)')
+                ->modalDescription(fn (User $record): string => "المصادقة الثنائية (MFA عبر تطبيق TOTP) اختيارية. لتفعيلها على حساب {$record->name}، يقوم صاحب الحساب بتسجيل الدخول إلى لوحة الإدارة، ثم فتح صفحة «المصادقة الثنائية (MFA)» من القائمة الجانبية أو من قائمته الشخصية، ومسح رمز الـ QR بتطبيق المصادقة على هاتفه (مثل Google Authenticator أو Microsoft Authenticator).")
+                ->modalSubmitAction(false)
+                ->modalCancelActionLabel('إغلاق'),
             Action::make('disableMfa')
                 ->label('تعطيل MFA')
                 ->icon('heroicon-o-shield-exclamation')
@@ -217,6 +233,18 @@ class StaffResource extends Resource
                 ->label('السماح بإضافة مناطق')
                 ->default(false)
                 ->visible(fn (Get $get): bool => ! (bool) $get('is_company_manager')),
+            Placeholder::make('mfa_status_info')
+                ->label('المصادقة الثنائية (MFA)')
+                ->content(function (?User $record): string {
+                    if (! $record) {
+                        return 'المصادقة الثنائية اختيارية وتعتمد على تطبيق الهاتف (TOTP). يمكن للمستخدم إعدادها ومسح رمز QR عبر صفحته الشخصية فور إنشاء حسابه.';
+                    }
+                    if ($record->hasMultiFactorAuthentication()) {
+                        return 'مفعّلة عبر تطبيق رموز الأمان (TOTP). يمكن للمدير تعطيلها من جدول المستخدمين عند الحاجة.';
+                    }
+
+                    return 'غير مفعّلة حاليًا. يقوم صاحب الحساب بتفعيلها مباشرة عبر قائمة «المصادقة الثنائية (MFA)» في القائمة الجانبية بمسح رمز QR من هاتفه.';
+                }),
         ];
     }
 }

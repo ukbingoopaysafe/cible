@@ -55,4 +55,13 @@ class MfaWorkflowTest extends TestCase
         $this->assertFalse($appAuthentication->verifyRecoveryCode($recoveryCode, $manager));
         $this->assertSame([], $manager->fresh()->getAppAuthenticationRecoveryCodes());
     }
+
+    public function test_user_can_open_profile_page_with_mfa_controls(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $this->actingAs($manager);
+
+        $response = $this->get('/admin/profile');
+        $response->assertOk();
+    }
 }
