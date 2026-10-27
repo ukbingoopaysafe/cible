@@ -155,7 +155,7 @@ class StaffResource extends Resource
                 ->color('gray')
                 ->visible(fn (User $record): bool => ! $record->hasMultiFactorAuthentication() && (auth()->id() !== $record->id))
                 ->modalHeading('تفعيل المصادقة الثنائية (MFA)')
-                ->modalDescription(fn (User $record): string => "المصادقة الثنائية (MFA عبر تطبيق TOTP) اختيارية. لتفعيلها على حساب {$record->name}، يقوم صاحب الحساب بتسجيل الدخول إلى لوحة الإدارة، ثم فتح صفحة «المصادقة الثنائية (MFA)» من القائمة الجانبية أو من قائمته الشخصية، ومسح رمز الـ QR بتطبيق المصادقة على هاتفه (مثل Google Authenticator أو Microsoft Authenticator).")
+                ->modalDescription(fn (User $record): string => "المصادقة الثنائية (MFA عبر تطبيق TOTP) اختيارية. لتفعيلها على حساب {$record->name}، يقوم صاحب الحساب بتسجيل الدخول إلى لوحة الإدارة، ثم فتح صفحة «الملف الشخصي» من القائمة الجانبية أو من قائمته الشخصية، ومسح رمز الـ QR بتطبيق المصادقة على هاتفه (مثل Google Authenticator أو Microsoft Authenticator).")
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('إغلاق'),
             Action::make('disableMfa')
@@ -243,7 +243,7 @@ class StaffResource extends Resource
                         return 'مفعّلة عبر تطبيق رموز الأمان (TOTP). يمكن للمدير تعطيلها من جدول المستخدمين عند الحاجة.';
                     }
 
-                    return 'غير مفعّلة حاليًا. يقوم صاحب الحساب بتفعيلها مباشرة عبر قائمة «المصادقة الثنائية (MFA)» في القائمة الجانبية بمسح رمز QR من هاتفه.';
+                    return 'غير مفعّلة حاليًا. يقوم صاحب الحساب بتفعيلها مباشرة عبر قائمة «الملف الشخصي» في القائمة الجانبية بمسح رمز QR من هاتفه.';
                 }),
         ];
     }

@@ -39,16 +39,18 @@ class AdminPanelProvider extends PanelProvider
             ->profile(isSimple: false)
             ->userMenuItems([
                 MenuItem::make()
-                    ->label('المصادقة الثنائية (MFA)')
+                    ->label('الملف الشخصي')
                     ->url(fn (): string => filament()->getProfileUrl())
-                    ->icon('heroicon-o-shield-check'),
+                    ->icon('heroicon-o-user-circle'),
             ])
             ->navigationItems([
-                NavigationItem::make('المصادقة الثنائية (MFA)')
+                NavigationItem::make('الملف الشخصي')
+                    ->label('الملف الشخصي')
                     ->url(fn (): string => filament()->getProfileUrl())
-                    ->icon('heroicon-o-shield-check')
+                    ->icon('heroicon-o-user-circle')
                     ->group('إدارة الشركة')
-                    ->sort(3),
+                    ->sort(3)
+                    ->isActiveWhen(fn (): bool => request()->routeIs('filament.admin.auth.profile')),
             ])
             ->multiFactorAuthentication(
                 providers: [SafeAppAuthentication::make()->recoverable()],
