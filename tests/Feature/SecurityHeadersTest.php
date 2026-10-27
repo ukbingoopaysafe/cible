@@ -31,13 +31,13 @@ class SecurityHeadersTest extends TestCase
         $this->actingAs($manager)->get('/admin/resale-customers')->assertOk();
     }
 
-    public function test_company_manager_without_mfa_is_redirected_to_setup(): void
+    public function test_company_manager_without_mfa_can_access_panel_when_mfa_is_optional(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
 
         $this->actingAs($manager)
             ->get('/admin/rental-customers')
-            ->assertRedirect(route('filament.admin.auth.multi-factor-authentication.set-up-required'));
+            ->assertOk();
     }
 
     public function test_employee_can_open_only_the_department_pages_the_panel_exposes(): void

@@ -4,7 +4,6 @@ namespace App\Providers\Filament;
 
 use App\Auth\SafeAppAuthentication;
 use App\Filament\Widgets\OperationalRequestsOverview;
-use App\Http\Middleware\EnsureCompanyManagerMfa;
 use App\Http\Middleware\RestrictAdminPanelByIp;
 use App\Http\Middleware\SetSecurityHeaders;
 use Filament\Http\Middleware\Authenticate;
@@ -37,9 +36,8 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->multiFactorAuthentication(
                 providers: [SafeAppAuthentication::make()->recoverable()],
-                isRequired: true,
+                isRequired: false,
             )
-            ->multiFactorAuthenticationRequiredMiddlewareName(EnsureCompanyManagerMfa::class)
             ->colors([
                 'primary' => [
                     50 => '#fbf8f1',
