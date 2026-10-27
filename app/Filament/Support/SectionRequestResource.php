@@ -278,6 +278,7 @@ abstract class SectionRequestResource extends Resource
             ->iconButton()
             ->color('gray')
             ->tooltip('خيارات وإجراءات الطلب')
+            ->dropdownMaxHeight('22rem')
             ->dropdownTeleport();
     }
 
