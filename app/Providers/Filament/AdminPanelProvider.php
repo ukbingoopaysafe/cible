@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Auth\SafeAppAuthentication;
+use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Http\Middleware\RestrictAdminPanelByIp;
 use App\Http\Middleware\SetSecurityHeaders;
@@ -36,7 +37,7 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('images/brand/favicon.png'))
             ->login()
-            ->profile(isSimple: false)
+            ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
                 MenuItem::make()
                     ->label('الملف الشخصي')

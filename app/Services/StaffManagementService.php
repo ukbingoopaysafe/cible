@@ -30,6 +30,7 @@ class StaffManagementService
         $validated = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'avatar_url' => ['sometimes', 'nullable', 'string', 'max:255'],
             'password' => ['required', 'string', 'min:12'],
             'is_company_manager' => ['sometimes', 'boolean'],
             'can_add_rental_areas' => ['sometimes', 'boolean'],
@@ -39,6 +40,7 @@ class StaffManagementService
             $user = User::query()->create([
                 'name' => trim($validated['name']),
                 'email' => mb_strtolower(trim($validated['email'])),
+                'avatar_url' => $validated['avatar_url'] ?? null,
                 'password' => $validated['password'],
             ]);
             $user->is_company_manager = $isManager;
@@ -91,6 +93,7 @@ class StaffManagementService
         $validated = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
+            'avatar_url' => ['sometimes', 'nullable', 'string', 'max:255'],
             'password' => ['nullable', 'string', 'min:12'],
             'is_company_manager' => ['sometimes', 'boolean'],
             'can_add_rental_areas' => ['sometimes', 'boolean'],
@@ -112,6 +115,10 @@ class StaffManagementService
             $user->is_company_manager = $isManager;
             $user->can_add_rental_areas = ! $isManager
                 && (bool) ($validated['can_add_rental_areas'] ?? false);
+
+            if (array_key_exists('avatar_url', $validated)) {
+                $user->avatar_url = $validated['avatar_url'];
+            }
 
             if (filled($validated['password'] ?? null)) {
                 $user->password = $validated['password'];

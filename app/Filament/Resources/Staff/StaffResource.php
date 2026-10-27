@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\StaffManagementService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Component;
+use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
@@ -15,6 +16,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
@@ -70,6 +72,11 @@ class StaffResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
+            ImageColumn::make('avatar_url')
+                ->label('الصورة')
+                ->circular()
+                ->disk('public')
+                ->defaultImageUrl(fn (User $record): string => 'https://ui-avatars.com/api/?name='.urlencode($record->name).'&color=896939&background=f5eedc'),
             TextColumn::make('name')
                 ->label('الاسم')
                 ->searchable()
@@ -132,6 +139,7 @@ class StaffResource extends Resource
                     return [
                         'name' => $record->name,
                         'email' => $record->email,
+                        'avatar_url' => $record->avatar_url,
                         'is_company_manager' => $record->is_company_manager ? 1 : 0,
                         'departments' => $record->departmentMemberships()
                             ->whereIn('department', array_map(fn (Department $d): string => $d->value, $managed))
@@ -195,6 +203,16 @@ class StaffResource extends Resource
         $isSelf = $editing && $record && $actor && $actor->is($record);
 
         return [
+            FileUpload::make('avatar_url')
+                ->label('الصورة الشخصية')
+                ->avatar()
+                ->image()
+                ->disk('public')
+                ->directory('avatars')
+                ->visibility('public')
+                ->maxSize(2048)
+                ->imageEditor()
+                ->circleCropper(),
             TextInput::make('name')
                 ->label('الاسم')
                 ->required()
