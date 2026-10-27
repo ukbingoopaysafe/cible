@@ -3,20 +3,28 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Models\RentalActivity;
+use App\Models\ResaleActivity;
 use App\Models\User;
 use App\Services\BrokerService;
+use App\Services\CustomerPhoneNormalizer;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\TextInput;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
+use Propaganistas\LaravelPhone\PhoneNumber;
 
-/** @extends Resource<Model> */
+/** @extends resource<Model> */
 abstract class BrokerResource extends Resource
 {
     abstract public static function department(): Department;
@@ -78,17 +86,22 @@ abstract class BrokerResource extends Resource
                         'phone' => $record->phone_e164,
                         'phone_country' => $record->phone_country,
                     ])
-                    ->action(function (Model $record, array $data): void {
+                    ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
                         $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                         unset($data['reviewed_similar_names']);
-                        app(BrokerService::class)->update(
-                            $actor,
-                            static::department(),
-                            (int) $record->getKey(),
-                            $data,
-                            $reviewed,
+
+                        FilamentValidationHandler::run(
+                            fn () => app(BrokerService::class)->update(
+                                $actor,
+                                static::department(),
+                                (int) $record->getKey(),
+                                $data,
+                                $reviewed,
+                            ),
+                            $schema,
+                            'تعذر تحديث بيانات الوسيط'
                         );
                     })
                     ->successNotificationTitle('تم تحديث بيانات الوسيط'),
@@ -113,7 +126,7 @@ abstract class BrokerResource extends Resource
     private static function activityCount(Model $broker): int
     {
         $requestIds = $broker->requests()->pluck($broker->requests()->getRelated()->getQualifiedKeyName());
-        $activityClass = static::department() === Department::Rental ? \App\Models\RentalActivity::class : \App\Models\ResaleActivity::class;
+        $activityClass = static::department() === Department::Rental ? RentalActivity::class : ResaleActivity::class;
         $foreignKey = static::department() === Department::Rental ? 'rental_request_id' : 'resale_request_id';
 
         return $activityClass::query()->where(function ($query) use ($broker, $requestIds, $foreignKey): void {
@@ -130,22 +143,44 @@ abstract class BrokerResource extends Resource
         return Action::make('createBroker')
             ->label('إضافة وسيط')
             ->schema(static::formFields(editing: false))
-            ->action(function (array $data): void {
+            ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                 unset($data['reviewed_similar_names']);
-                app(BrokerService::class)->create($actor, static::department(), $data, $reviewed);
+
+                FilamentValidationHandler::run(
+                    fn () => app(BrokerService::class)->create($actor, static::department(), $data, $reviewed),
+                    $schema,
+                    'تعذر إضافة الوسيط'
+                );
             })
             ->successNotificationTitle('تمت إضافة الوسيط');
     }
 
-    /** @return array<int, \Filament\Forms\Components\Component> */
+    /** @return array<int, Component> */
     private static function formFields(bool $editing): array
     {
         return [
             TextInput::make('name')->label('اسم الوسيط')->required()->maxLength(255),
-            TextInput::make('phone')->label('رقم الهاتف')->tel()->maxLength(40)->helperText('يُوحّد النظام الرقم ويتحقق من عدم استخدامه لوسيط آخر في القسم.'),
+            TextInput::make('phone')
+                ->label('رقم الهاتف')
+                ->tel()
+                ->maxLength(40)
+                ->helperText('يُوحّد النظام الرقم ويتحقق من عدم استخدامه لوسيط آخر في القسم.')
+                ->rules([
+                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
+                        if (blank($value)) {
+                            return;
+                        }
+                        $country = $get('phone_country') ?: 'EG';
+                        try {
+                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
+                        } catch (ValidationException $e) {
+                            $fail(collect($e->errors())->flatten()->first());
+                        }
+                    },
+                ]),
             TextInput::make('phone_country')
                 ->label('رمز الدولة')
                 ->default('EG')
@@ -153,7 +188,14 @@ abstract class BrokerResource extends Resource
                 ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
                 ->visible(fn (Get $get): bool => filled($get('phone')))
                 ->required(fn (Get $get): bool => filled($get('phone')))
-                ->dehydrated(fn (Get $get): bool => filled($get('phone'))),
+                ->dehydrated(fn (Get $get): bool => filled($get('phone')))
+                ->rules([
+                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
+                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
+                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
+                        }
+                    },
+                ]),
             Checkbox::make('reviewed_similar_names')
                 ->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا وسيط مختلف.')
                 ->helperText($editing ? 'يظهر التنبيه عند حفظ اسم قد يتشابه مع وسيط آخر.' : 'يظهر التنبيه عند إضافة اسم قد يتشابه مع وسيط آخر.'),

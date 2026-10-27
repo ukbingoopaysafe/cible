@@ -2,19 +2,25 @@
 
 namespace App\Filament\Support;
 
-use App\Enums\Department;
 use App\Enums\ContactActivityChannel;
+use App\Enums\Department;
 use App\Exports\RentalCustomerExporter;
 use App\Exports\ResaleCustomerExporter;
 use App\Filament\Resources\RentalRequests\RentalRequestResource;
 use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
+use App\Models\RentalDeal;
+use App\Models\ResaleDeal;
 use App\Models\User;
-use App\Services\CustomerService;
 use App\Services\AftercareService;
+use App\Services\CustomerPhoneNormalizer;
+use App\Services\CustomerService;
+use App\Services\CustomerSpreadsheetImportService;
+use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\Checkbox;
+use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
 use Filament\Forms\Components\Select;
@@ -22,16 +28,20 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer;
+use Propaganistas\LaravelPhone\PhoneNumber;
 
-/** @extends Resource<Model> */
+/** @extends resource<Model> */
 abstract class CustomerResource extends Resource
 {
     abstract public static function department(): Department;
@@ -160,7 +170,7 @@ abstract class CustomerResource extends Resource
                         if ($record->trashed()) {
                             return false;
                         }
-                        $dealClass = static::department() === Department::Rental ? \App\Models\RentalDeal::class : \App\Models\ResaleDeal::class;
+                        $dealClass = static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class;
 
                         return $record->aftercare === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
                     })
@@ -169,7 +179,7 @@ abstract class CustomerResource extends Resource
                     ->label('تسجيل تواصل ما بعد الصفقة')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->schema([
-                        Select::make('deal_id')->label('الصفقة المرتبطة (اختياري)')->options(fn (Model $record): array => (static::department() === Department::Rental ? \App\Models\RentalDeal::class : \App\Models\ResaleDeal::class)::query()
+                        Select::make('deal_id')->label('الصفقة المرتبطة (اختياري)')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
                             ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
                             ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
                         Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
@@ -207,17 +217,22 @@ abstract class CustomerResource extends Resource
                         'phone_country' => $record->phone_country,
                         'nationality' => $record->nationality,
                     ])
-                    ->action(function (Model $record, array $data): void {
+                    ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
                         $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                         unset($data['reviewed_similar_names']);
-                        app(CustomerService::class)->update(
-                            $actor,
-                            static::department(),
-                            (int) $record->getKey(),
-                            $data,
-                            $reviewed,
+
+                        FilamentValidationHandler::run(
+                            fn () => app(CustomerService::class)->update(
+                                $actor,
+                                static::department(),
+                                (int) $record->getKey(),
+                                $data,
+                                $reviewed,
+                            ),
+                            $schema,
+                            'تعذر تحديث بيانات العميل'
                         );
                     })
                     ->successNotificationTitle('تم تحديث بيانات العميل'),
@@ -244,7 +259,7 @@ abstract class CustomerResource extends Resource
                 $path = $data['file']->getRealPath();
                 abort_unless(is_string($path), 422, 'تعذر الوصول إلى الملف المرفوع.');
 
-                $result = app(\App\Services\CustomerSpreadsheetImportService::class)
+                $result = app(CustomerSpreadsheetImportService::class)
                     ->import($actor, static::department(), $path);
 
                 Notification::make()
@@ -297,24 +312,57 @@ abstract class CustomerResource extends Resource
         return Action::make('createCustomer')
             ->label('إضافة عميل')
             ->schema(static::formFields())
-            ->action(function (array $data): void {
+            ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
                 $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                 unset($data['reviewed_similar_names']);
-                app(CustomerService::class)->create($actor, static::department(), $data, $reviewed);
+
+                FilamentValidationHandler::run(
+                    fn () => app(CustomerService::class)->create($actor, static::department(), $data, $reviewed),
+                    $schema,
+                    'تعذر إضافة العميل'
+                );
             })
             ->successNotificationTitle('تمت إضافة العميل');
     }
 
-    /** @return array<int, \Filament\Forms\Components\Component> */
+    /** @return array<int, Component> */
     private static function formFields(): array
     {
         return [
             TextInput::make('name')->label('الاسم')->required()->maxLength(255),
-            TextInput::make('phone')->label('رقم الهاتف')->tel()->required()->maxLength(40),
-            TextInput::make('phone_country')->label('رمز الدولة')->default('EG')->required()->length(2)
-                ->helperText('رمز الدولة الدولي، مثل EG لمصر.'),
+            TextInput::make('phone')
+                ->label('رقم الهاتف')
+                ->tel()
+                ->required()
+                ->maxLength(40)
+                ->rules([
+                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
+                        if (blank($value)) {
+                            return;
+                        }
+                        $country = $get('phone_country') ?: 'EG';
+                        try {
+                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
+                        } catch (ValidationException $e) {
+                            $fail(collect($e->errors())->flatten()->first());
+                        }
+                    },
+                ]),
+            TextInput::make('phone_country')
+                ->label('رمز الدولة')
+                ->default('EG')
+                ->required()
+                ->length(2)
+                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
+                ->rules([
+                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
+                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
+                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
+                        }
+                    },
+                ]),
             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
             Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا عميل مختلف.'),
         ];

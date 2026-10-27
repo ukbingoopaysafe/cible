@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Areas;
 
 use App\Filament\Resources\Areas\Pages\ListAreas;
+use App\Filament\Support\FilamentValidationHandler;
 use App\Models\Area;
 use App\Models\User;
 use App\Services\AreaArchiveService;
@@ -13,6 +14,7 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Filters\TrashedFilter;
@@ -150,10 +152,15 @@ class AreaResource extends Resource
                     ->required()
                     ->maxLength(100),
             ])
-            ->action(function (array $data): void {
+            ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                app(AreaService::class)->create($actor, $data);
+
+                FilamentValidationHandler::run(
+                    fn () => app(AreaService::class)->create($actor, $data),
+                    $schema,
+                    'تعذر إضافة المنطقة'
+                );
             })
             ->successNotificationTitle('تمت إضافة المنطقة بنجاح');
     }

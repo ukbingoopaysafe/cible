@@ -20,7 +20,9 @@ use App\Models\ResaleLeadSource;
 use App\Models\User;
 use App\Services\AreaService;
 use App\Services\BrokerService;
+use App\Services\CustomerPhoneNormalizer;
 use App\Services\CustomerService;
+use Closure;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -32,6 +34,8 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Validation\ValidationException;
+use Propaganistas\LaravelPhone\PhoneNumber;
 
 final class RequestFormSchema
 {
@@ -78,18 +82,50 @@ final class RequestFormSchema
                         ->placeholder('اختر عميلًا إن كان معروفًا')
                         ->createOptionForm([
                             TextInput::make('name')->label('الاسم')->required()->maxLength(255),
-                            TextInput::make('phone')->label('رقم الهاتف')->required()->maxLength(40),
-                            TextInput::make('phone_country')->label('رمز الدولة')->default('EG')->required()->length(2)->helperText('رمز الدولة الدولي، مثل EG لمصر.'),
+                            TextInput::make('phone')
+                                ->label('رقم الهاتف')
+                                ->required()
+                                ->maxLength(40)
+                                ->rules([
+                                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
+                                        if (blank($value)) {
+                                            return;
+                                        }
+                                        $country = $get('phone_country') ?: 'EG';
+                                        try {
+                                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
+                                        } catch (ValidationException $e) {
+                                            $fail(collect($e->errors())->flatten()->first());
+                                        }
+                                    },
+                                ]),
+                            TextInput::make('phone_country')
+                                ->label('رمز الدولة')
+                                ->default('EG')
+                                ->required()
+                                ->length(2)
+                                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
+                                ->rules([
+                                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
+                                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
+                                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
+                                        }
+                                    },
+                                ]),
                             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
                             Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا عميل مختلف.'),
                         ])
-                        ->createOptionUsing(function (array $data) use ($department): int {
+                        ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
                             $actor = auth()->user();
                             abort_unless($actor instanceof User, 403);
                             $reviewedSimilarNames = (bool) ($data['reviewed_similar_names'] ?? false);
                             unset($data['reviewed_similar_names']);
 
-                            return (int) app(CustomerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey();
+                            return FilamentValidationHandler::run(
+                                fn (): int => (int) app(CustomerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey(),
+                                $schema,
+                                'تعذر إضافة العميل'
+                            );
                         })
                         ->live(),
                     Select::make('broker_id')
@@ -99,17 +135,47 @@ final class RequestFormSchema
                         ->placeholder('اختر وسيطًا إن وجد')
                         ->createOptionForm([
                             TextInput::make('name')->label('الاسم')->required()->maxLength(255),
-                            TextInput::make('phone')->label('رقم الهاتف')->maxLength(40),
-                            TextInput::make('phone_country')->label('رمز الدولة')->default('EG')->length(2)->helperText('رمز الدولة الدولي، مثل EG لمصر.'),
+                            TextInput::make('phone')
+                                ->label('رقم الهاتف')
+                                ->maxLength(40)
+                                ->rules([
+                                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
+                                        if (blank($value)) {
+                                            return;
+                                        }
+                                        $country = $get('phone_country') ?: 'EG';
+                                        try {
+                                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
+                                        } catch (ValidationException $e) {
+                                            $fail(collect($e->errors())->flatten()->first());
+                                        }
+                                    },
+                                ]),
+                            TextInput::make('phone_country')
+                                ->label('رمز الدولة')
+                                ->default('EG')
+                                ->length(2)
+                                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
+                                ->rules([
+                                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
+                                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
+                                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
+                                        }
+                                    },
+                                ]),
                             Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا وسيط مختلف.'),
                         ])
-                        ->createOptionUsing(function (array $data) use ($department): int {
+                        ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
                             $actor = auth()->user();
                             abort_unless($actor instanceof User, 403);
                             $reviewedSimilarNames = (bool) ($data['reviewed_similar_names'] ?? false);
                             unset($data['reviewed_similar_names']);
 
-                            return (int) app(BrokerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey();
+                            return FilamentValidationHandler::run(
+                                fn (): int => (int) app(BrokerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey(),
+                                $schema,
+                                'تعذر إضافة الوسيط'
+                            );
                         })
                         ->live(),
                     Select::make('contact_party')
@@ -133,11 +199,15 @@ final class RequestFormSchema
                                 ->required()
                                 ->maxLength(100),
                         ])
-                        ->createOptionUsing(function (array $data): int {
+                        ->createOptionUsing(function (array $data, Schema $schema): int {
                             $actor = auth()->user();
                             abort_unless($actor instanceof User, 403);
 
-                            return (int) app(AreaService::class)->create($actor, $data)->getKey();
+                            return FilamentValidationHandler::run(
+                                fn (): int => (int) app(AreaService::class)->create($actor, $data)->getKey(),
+                                $schema,
+                                'تعذر إضافة المنطقة'
+                            );
                         })
                         ->createOptionAction(fn ($action) => $action->visible(
                             fn (): bool => auth()->user()?->is_company_manager || (bool) auth()->user()?->canAddRentalAreas()

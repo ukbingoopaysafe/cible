@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Staff;
 
 use App\Enums\Department;
 use App\Filament\Resources\Staff\Pages\ListStaff;
+use App\Filament\Support\FilamentValidationHandler;
 use App\Models\User;
 use App\Services\StaffManagementService;
 use Filament\Actions\Action;
@@ -16,6 +17,7 @@ use Filament\Forms\Components\Toggle;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Schema;
 use Filament\Tables\Columns\ImageColumn;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -147,8 +149,12 @@ class StaffResource extends Resource
                         'can_add_rental_areas' => $record->can_add_rental_areas,
                     ];
                 })
-                ->action(function (User $record, array $data): void {
-                    app(StaffManagementService::class)->updateEmployee(auth()->user(), (int) $record->getKey(), $data);
+                ->action(function (User $record, array $data, Schema $schema): void {
+                    FilamentValidationHandler::run(
+                        fn () => app(StaffManagementService::class)->updateEmployee(auth()->user(), (int) $record->getKey(), $data),
+                        $schema,
+                        'تعذر تحديث بيانات المستخدم'
+                    );
                 })
                 ->successNotificationTitle('تم تحديث بيانات المستخدم بنجاح'),
             Action::make('setupMyMfa')
@@ -188,7 +194,13 @@ class StaffResource extends Resource
             ->label('إضافة مستخدم')
             ->icon('heroicon-o-user-plus')
             ->schema(static::formFields(editing: false))
-            ->action(fn (array $data) => app(StaffManagementService::class)->createEmployee(auth()->user(), $data))
+            ->action(function (array $data, Schema $schema): void {
+                FilamentValidationHandler::run(
+                    fn () => app(StaffManagementService::class)->createEmployee(auth()->user(), $data),
+                    $schema,
+                    'تعذر إنشاء الحساب'
+                );
+            })
             ->successNotificationTitle('تم إنشاء الحساب بنجاح');
     }
 
