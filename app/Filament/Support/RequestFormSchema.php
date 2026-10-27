@@ -8,6 +8,7 @@ use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
 use App\Enums\RentalTerm;
 use App\Enums\RequestUnitType;
+use App\Models\Area;
 use App\Models\RentalArea;
 use App\Models\RentalBroker;
 use App\Models\RentalCustomer;
@@ -17,6 +18,7 @@ use App\Models\ResaleBroker;
 use App\Models\ResaleCustomer;
 use App\Models\ResaleLeadSource;
 use App\Models\User;
+use App\Services\AreaService;
 use App\Services\BrokerService;
 use App\Services\CustomerService;
 use Filament\Forms\Components\Checkbox;
@@ -40,12 +42,13 @@ final class RequestFormSchema
             Department::Resale => [ResaleCustomer::class, ResaleBroker::class, ResaleArea::class, ResaleLeadSource::class],
         };
 
-        $areaOptions = fn (Get $get): array => $areaClass::query()
+        $areaOptions = fn (Get $get): array => Area::query()
             ->when(
                 $editing && filled($get('area_id')),
                 fn ($query) => $query->withTrashed()->where(function ($query) use ($get): void {
                     $query->whereNull('deleted_at')->orWhere($query->getModel()->getKeyName(), $get('area_id'));
                 }),
+                fn ($query) => $query->whereNull('deleted_at')
             )
             ->orderBy('governorate')
             ->orderBy('name')
@@ -119,7 +122,26 @@ final class RequestFormSchema
                         ->label('المحافظة والمنطقة المطلوبة')
                         ->options($areaOptions)
                         ->searchable()
-                        ->required(),
+                        ->required()
+                        ->createOptionForm([
+                            Select::make('governorate')
+                                ->label('المحافظة')
+                                ->options(['القاهرة' => 'القاهرة', 'الجيزة' => 'الجيزة'])
+                                ->required(),
+                            TextInput::make('name')
+                                ->label('اسم المنطقة')
+                                ->required()
+                                ->maxLength(100),
+                        ])
+                        ->createOptionUsing(function (array $data): int {
+                            $actor = auth()->user();
+                            abort_unless($actor instanceof User, 403);
+
+                            return (int) app(AreaService::class)->create($actor, $data)->getKey();
+                        })
+                        ->createOptionAction(fn ($action) => $action->visible(
+                            fn (): bool => auth()->user()?->is_company_manager || (bool) auth()->user()?->canAddRentalAreas()
+                        )),
                     Select::make('lead_source_id')
                         ->label('مصدر الوصول')
                         ->options(fn (): array => $sourceClass::query()

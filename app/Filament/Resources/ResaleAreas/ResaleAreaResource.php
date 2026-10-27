@@ -22,11 +22,18 @@ use Illuminate\Database\Eloquent\Model;
 class ResaleAreaResource extends Resource
 {
     protected static ?string $model = ResaleArea::class;
+
     protected static ?string $modelLabel = 'منطقة إعادة بيع';
+
     protected static ?string $pluralModelLabel = 'مناطق إعادة البيع';
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-map';
-    protected static string | \UnitEnum | null $navigationGroup = 'إعادة البيع';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-map';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'إعادة البيع';
+
     protected static ?int $navigationSort = 35;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getEloquentQuery(): Builder
     {

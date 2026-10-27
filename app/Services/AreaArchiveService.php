@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\Department;
+use App\Models\Area;
 use App\Models\AuditEvent;
 use App\Models\RentalArea;
 use App\Models\ResaleArea;
@@ -10,6 +11,7 @@ use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class AreaArchiveService
 {
@@ -26,7 +28,39 @@ class AreaArchiveService
 
             $before = ['governorate' => $area->governorate, 'name' => $area->name];
             $area->delete();
+
+            if (Schema::hasTable('areas')) {
+                Area::query()
+                    ->where('governorate', $area->governorate)
+                    ->where('name', $area->name)
+                    ->delete();
+            }
+
             $this->recordAudit($actor, $department, 'area.archived', $area, $before, ['archived' => true]);
+        });
+    }
+
+    public function archiveUnified(User $actor, int $areaId): void
+    {
+        abort_unless($actor->is_company_manager, 403);
+
+        DB::transaction(function () use ($actor, $areaId): void {
+            $area = Area::withTrashed()->lockForUpdate()->findOrFail($areaId);
+            if ($area->trashed()) {
+                return;
+            }
+
+            $before = ['governorate' => $area->governorate, 'name' => $area->name];
+            $area->delete();
+
+            if (Schema::hasTable('rental_areas')) {
+                RentalArea::query()->where('governorate', $area->governorate)->where('name', $area->name)->delete();
+            }
+            if (Schema::hasTable('resale_areas')) {
+                ResaleArea::query()->where('governorate', $area->governorate)->where('name', $area->name)->delete();
+            }
+
+            $this->recordAudit($actor, Department::Rental, 'area.archived', $area, $before, ['archived' => true]);
         });
     }
 
@@ -42,7 +76,38 @@ class AreaArchiveService
             }
 
             $area->restore();
+
+            if (Schema::hasTable('areas')) {
+                Area::withTrashed()
+                    ->where('governorate', $area->governorate)
+                    ->where('name', $area->name)
+                    ->restore();
+            }
+
             $this->recordAudit($actor, $department, 'area.restored', $area, ['archived' => true], ['archived' => false]);
+        });
+    }
+
+    public function restoreUnified(User $actor, int $areaId): void
+    {
+        abort_unless($actor->is_company_manager, 403);
+
+        DB::transaction(function () use ($actor, $areaId): void {
+            $area = Area::withTrashed()->lockForUpdate()->findOrFail($areaId);
+            if (! $area->trashed()) {
+                return;
+            }
+
+            $area->restore();
+
+            if (Schema::hasTable('rental_areas')) {
+                RentalArea::withTrashed()->where('governorate', $area->governorate)->where('name', $area->name)->restore();
+            }
+            if (Schema::hasTable('resale_areas')) {
+                ResaleArea::withTrashed()->where('governorate', $area->governorate)->where('name', $area->name)->restore();
+            }
+
+            $this->recordAudit($actor, Department::Rental, 'area.restored', $area, ['archived' => true], ['archived' => false]);
         });
     }
 

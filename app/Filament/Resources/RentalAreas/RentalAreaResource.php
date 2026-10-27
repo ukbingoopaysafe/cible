@@ -6,28 +6,35 @@ use App\Enums\Department;
 use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
 use App\Models\RentalArea;
 use App\Models\User;
-use App\Services\RentalAreaService;
 use App\Services\AreaArchiveService;
+use App\Services\RentalAreaService;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
+use Filament\Notifications\Notification;
 use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
-use Filament\Notifications\Notification;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class RentalAreaResource extends Resource
 {
     protected static ?string $model = RentalArea::class;
+
     protected static ?string $modelLabel = 'منطقة إيجار';
+
     protected static ?string $pluralModelLabel = 'مناطق الإيجار';
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-map';
-    protected static string | \UnitEnum | null $navigationGroup = 'الإيجار';
+
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-map';
+
+    protected static string|\UnitEnum|null $navigationGroup = 'الإيجار';
+
     protected static ?int $navigationSort = 35;
+
+    protected static bool $shouldRegisterNavigation = false;
 
     public static function getEloquentQuery(): Builder
     {

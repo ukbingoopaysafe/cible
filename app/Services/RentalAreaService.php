@@ -3,10 +3,12 @@
 namespace App\Services;
 
 use App\Enums\Department;
+use App\Models\Area;
 use App\Models\AuditEvent;
 use App\Models\RentalArea;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 
@@ -35,6 +37,13 @@ class RentalAreaService
                 'governorate' => $validated['governorate'],
                 'name' => $validated['name'],
             ]);
+
+            if (Schema::hasTable('areas')) {
+                Area::query()->firstOrCreate([
+                    'governorate' => $validated['governorate'],
+                    'name' => $validated['name'],
+                ]);
+            }
 
             AuditEvent::query()->create([
                 'actor_user_id' => $actor->id,
