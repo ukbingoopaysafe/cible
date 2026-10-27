@@ -23,32 +23,46 @@ class StaffManagementService
 
     public function createEmployee(User $actor, array $data): User
     {
-        $departments = $this->validateDepartments($actor, $data['departments'] ?? []);
+        abort_unless($actor->is_company_manager, 403);
+        $isManager = (bool) ($data['is_company_manager'] ?? false);
+        $departments = $isManager ? [] : $this->validateDepartments($actor, $data['departments'] ?? []);
+
         $validated = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
             'password' => ['required', 'string', 'min:12'],
+            'is_company_manager' => ['sometimes', 'boolean'],
             'can_add_rental_areas' => ['sometimes', 'boolean'],
         ])->validate();
 
-        return DB::transaction(function () use ($actor, $validated, $departments): User {
+        return DB::transaction(function () use ($actor, $validated, $departments, $isManager): User {
             $user = User::query()->create([
                 'name' => trim($validated['name']),
                 'email' => mb_strtolower(trim($validated['email'])),
                 'password' => $validated['password'],
             ]);
-            $user->can_add_rental_areas = in_array(Department::Rental, $departments, true)
+            $user->is_company_manager = $isManager;
+            $user->can_add_rental_areas = ! $isManager
+                && in_array(Department::Rental, $departments, true)
                 && (bool) ($validated['can_add_rental_areas'] ?? false);
             $user->save();
 
-            foreach ($departments as $department) {
-                $user->departmentMemberships()->create(['department' => $department]);
-                $this->recordAudit($actor, $department, 'staff.employee_created', $user, null, [
+            if ($isManager) {
+                $this->recordAudit($actor, Department::Rental, 'staff.manager_created', $user, null, [
                     'name' => $user->name,
-                    'department_access' => true,
+                    'is_company_manager' => true,
                     'email_set' => true,
-                    'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
                 ]);
+            } else {
+                foreach ($departments as $department) {
+                    $user->departmentMemberships()->create(['department' => $department]);
+                    $this->recordAudit($actor, $department, 'staff.employee_created', $user, null, [
+                        'name' => $user->name,
+                        'department_access' => true,
+                        'email_set' => true,
+                        'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
+                    ]);
+                }
             }
 
             return $user;
@@ -57,70 +71,125 @@ class StaffManagementService
 
     public function updateEmployee(User $actor, int $userId, array $data): User
     {
+        abort_unless($actor->is_company_manager, 403);
         $managed = $this->managedDepartments($actor);
         $user = User::query()->with('departmentMemberships')->findOrFail($userId);
-        $this->authorizeEmployee($actor, $user, $managed);
-        $departments = $this->validateDepartments($actor, $data['departments'] ?? [], allowEmpty: true);
+
+        if ($actor->is($user) && isset($data['is_company_manager']) && ! (bool) $data['is_company_manager']) {
+            throw ValidationException::withMessages([
+                'is_company_manager' => 'لا يمكنك إلغاء صلاحية المدير عن حسابك لتجنب فقدان صلاحية الوصول للإدارة.',
+            ]);
+        }
+
+        $isManager = isset($data['is_company_manager'])
+            ? (bool) $data['is_company_manager']
+            : (bool) $user->is_company_manager;
+
+        $departments = $isManager
+            ? []
+            : $this->validateDepartments($actor, $data['departments'] ?? [], allowEmpty: true);
+
         $validated = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user)],
             'password' => ['nullable', 'string', 'min:12'],
+            'is_company_manager' => ['sometimes', 'boolean'],
             'can_add_rental_areas' => ['sometimes', 'boolean'],
         ])->validate();
 
         $beforeName = $user->name;
         $beforeEmail = $user->email;
+        $beforeIsManager = (bool) $user->is_company_manager;
         $beforeDepartments = $user->departmentMemberships->pluck('department')->all();
         $beforeCanAddRentalAreas = $user->can_add_rental_areas;
         $passwordChanged = filled($validated['password'] ?? null);
 
-        return DB::transaction(function () use ($actor, $user, $validated, $departments, $managed, $beforeName, $beforeEmail, $beforeDepartments, $beforeCanAddRentalAreas, $passwordChanged): User {
+        return DB::transaction(function () use (
+            $actor, $user, $validated, $departments, $managed, $isManager,
+            $beforeName, $beforeEmail, $beforeIsManager, $beforeDepartments, $beforeCanAddRentalAreas, $passwordChanged
+        ): User {
             $user->name = trim($validated['name']);
             $user->email = mb_strtolower(trim($validated['email']));
-            $user->can_add_rental_areas = in_array(Department::Rental, $departments, true)
+            $user->is_company_manager = $isManager;
+            $user->can_add_rental_areas = ! $isManager
+                && in_array(Department::Rental, $departments, true)
                 && (bool) ($validated['can_add_rental_areas'] ?? false);
+
             if (filled($validated['password'] ?? null)) {
                 $user->password = $validated['password'];
             }
             $user->save();
 
-            foreach ($managed as $department) {
-                $membership = $user->departmentMemberships->firstWhere('department', $department);
-                if (in_array($department, $departments, true) && ! $membership) {
-                    $user->departmentMemberships()->create(['department' => $department]);
-                } elseif (! in_array($department, $departments, true) && $membership) {
-                    $membership->delete();
-                }
-            }
-
-            if (! $user->departmentMemberships()->exists()) {
-                throw ValidationException::withMessages(['departments' => 'يجب أن يظل الموظف تابعًا لقسم واحد على الأقل.']);
-            }
-
-            foreach ($managed as $department) {
-                $hasBefore = in_array($department->value, $beforeDepartments, true);
-                $hasAfter = $user->departmentMemberships()->where('department', $department->value)->exists();
-                $before = [
+            if ($isManager) {
+                $user->departmentMemberships()->delete();
+                $this->recordAudit($actor, Department::Rental, 'staff.employee_updated', $user, [
                     'name' => $beforeName,
-                    'department_access' => $hasBefore,
+                    'is_company_manager' => $beforeIsManager,
                     'email_changed' => false,
                     'password_changed' => false,
-                    'can_add_rental_areas' => $department === Department::Rental ? $beforeCanAddRentalAreas : null,
-                ];
-                $after = [
+                ], [
                     'name' => $user->name,
-                    'department_access' => $hasAfter,
+                    'is_company_manager' => true,
                     'email_changed' => $beforeEmail !== $user->email,
                     'password_changed' => $passwordChanged,
-                    'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
-                ];
-                if ($before !== $after) {
-                    $this->recordAudit($actor, $department, 'staff.employee_updated', $user, $before, $after);
+                ]);
+            } else {
+                foreach ($managed as $department) {
+                    $membership = $user->departmentMemberships->firstWhere('department', $department);
+                    if (in_array($department, $departments, true) && ! $membership) {
+                        $user->departmentMemberships()->create(['department' => $department]);
+                    } elseif (! in_array($department, $departments, true) && $membership) {
+                        $membership->delete();
+                    }
+                }
+
+                if (! $user->departmentMemberships()->exists()) {
+                    throw ValidationException::withMessages(['departments' => 'يجب أن يظل الموظف تابعًا لقسم واحد على الأقل.']);
+                }
+
+                foreach ($managed as $department) {
+                    $hasBefore = in_array($department->value, $beforeDepartments, true);
+                    $hasAfter = $user->departmentMemberships()->where('department', $department->value)->exists();
+                    $before = [
+                        'name' => $beforeName,
+                        'department_access' => $hasBefore,
+                        'email_changed' => false,
+                        'password_changed' => false,
+                        'can_add_rental_areas' => $department === Department::Rental ? $beforeCanAddRentalAreas : null,
+                    ];
+                    $after = [
+                        'name' => $user->name,
+                        'department_access' => $hasAfter,
+                        'email_changed' => $beforeEmail !== $user->email,
+                        'password_changed' => $passwordChanged,
+                        'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
+                    ];
+                    if ($before !== $after) {
+                        $this->recordAudit($actor, $department, 'staff.employee_updated', $user, $before, $after);
+                    }
                 }
             }
 
             return $user->refresh();
         });
+    }
+
+    public function disableMfa(User $actor, int $userId): User
+    {
+        abort_unless($actor->is_company_manager, 403);
+        $user = User::query()->findOrFail($userId);
+        $user->disableMultiFactorAuthentication();
+
+        $this->recordAudit(
+            actor: $actor,
+            department: Department::Rental,
+            event: 'staff.mfa_disabled',
+            subject: $user,
+            before: ['mfa_enabled' => true],
+            after: ['mfa_enabled' => false],
+        );
+
+        return $user;
     }
 
     /** @param array<string, mixed>|null $before @param array<string, mixed> $after */

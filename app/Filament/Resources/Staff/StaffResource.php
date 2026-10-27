@@ -15,6 +15,7 @@ use Filament\Resources\Pages\PageRegistration;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -23,9 +24,9 @@ class StaffResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $modelLabel = 'موظف';
+    protected static ?string $modelLabel = 'مستخدم';
 
-    protected static ?string $pluralModelLabel = 'إدارة الموظفين';
+    protected static ?string $pluralModelLabel = 'إدارة فريق العمل والمديرين';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
@@ -35,15 +36,8 @@ class StaffResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $actor = auth()->user();
-        $departments = $actor instanceof User && $actor->is_company_manager
-            ? array_map(fn (Department $department): string => $department->value, Department::cases())
-            : [];
-
         return parent::getEloquentQuery()
-            ->with('departmentMemberships')
-            ->where('is_company_manager', false)
-            ->whereHas('departmentMemberships', fn (Builder $query) => $query->whereIn('department', $departments));
+            ->with('departmentMemberships');
     }
 
     public static function canViewAny(): bool
@@ -58,7 +52,7 @@ class StaffResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        return static::canViewAny() && $record instanceof User && ! $record->is_company_manager;
+        return static::canViewAny();
     }
 
     public static function canDelete(Model $record): bool
@@ -75,28 +69,69 @@ class StaffResource extends Resource
     public static function table(Table $table): Table
     {
         return $table->columns([
-            TextColumn::make('name')->label('اسم الموظف')->searchable()->sortable(),
-            TextColumn::make('email')->label('البريد الإلكتروني')->searchable(),
+            TextColumn::make('name')
+                ->label('الاسم')
+                ->searchable()
+                ->sortable(),
+            TextColumn::make('email')
+                ->label('البريد الإلكتروني')
+                ->searchable(),
+            TextColumn::make('is_company_manager')
+                ->label('الدور والصلاحية')
+                ->badge()
+                ->state(fn (User $record): string => $record->is_company_manager ? 'مدير شركة' : 'موظف')
+                ->color(fn (User $record): string => $record->is_company_manager ? 'warning' : 'gray')
+                ->icon(fn (User $record): string => $record->is_company_manager ? 'heroicon-m-shield-check' : 'heroicon-m-user'),
             TextColumn::make('departments')
                 ->label('الأقسام')
-                ->state(fn (User $record): string => $record->departmentMemberships
-                    ->map(fn ($membership): string => $membership->department->label())->join('، ')),
+                ->state(function (User $record): string {
+                    if ($record->is_company_manager) {
+                        return 'كافة الأقسام (إدارة شاملة)';
+                    }
+                    $depts = $record->departmentMemberships
+                        ->map(fn ($membership): string => $membership->department->label());
+
+                    return $depts->isNotEmpty() ? $depts->join('، ') : '—';
+                }),
             TextColumn::make('can_add_rental_areas')
                 ->label('إضافة مناطق الإيجار')
-                ->state(fn (User $record): string => $record->can_add_rental_areas ? 'مسموح' : 'غير مسموح'),
-            TextColumn::make('created_at')->label('تاريخ إنشاء الحساب')->dateTime('d/m/Y H:i')->sortable(),
+                ->state(function (User $record): string {
+                    if ($record->is_company_manager) {
+                        return 'مسموح تلقائيًا';
+                    }
+
+                    return $record->can_add_rental_areas ? 'مسموح' : 'غير مسموح';
+                }),
+            TextColumn::make('mfa_status')
+                ->label('المصادقة الثنائية (MFA)')
+                ->badge()
+                ->state(fn (User $record): string => $record->hasMultiFactorAuthentication() ? 'مفعّل' : 'غير مفعّل')
+                ->color(fn (User $record): string => $record->hasMultiFactorAuthentication() ? 'success' : 'gray')
+                ->icon(fn (User $record): string => $record->hasMultiFactorAuthentication() ? 'heroicon-m-check-badge' : 'heroicon-m-x-circle'),
+            TextColumn::make('created_at')
+                ->label('تاريخ الإنشاء')
+                ->dateTime('d/m/Y H:i')
+                ->sortable(),
+        ])->filters([
+            SelectFilter::make('is_company_manager')
+                ->label('تصفية حسب الدور')
+                ->options([
+                    '1' => 'مديرو الشركة',
+                    '0' => 'الموظفون',
+                ]),
         ])->recordActions([
             Action::make('editEmployee')
                 ->label('تعديل')
                 ->icon('heroicon-o-pencil-square')
                 ->visible(fn (User $record): bool => static::canEdit($record))
-                ->schema(static::formFields(editing: true))
+                ->schema(fn (User $record): array => static::formFields(editing: true, record: $record))
                 ->fillForm(function (User $record): array {
                     $managed = app(StaffManagementService::class)->managedDepartments(auth()->user());
 
                     return [
                         'name' => $record->name,
                         'email' => $record->email,
+                        'is_company_manager' => $record->is_company_manager ? 1 : 0,
                         'departments' => $record->departmentMemberships()
                             ->whereIn('department', array_map(fn (Department $d): string => $d->value, $managed))
                             ->pluck('department')->all(),
@@ -106,41 +141,82 @@ class StaffResource extends Resource
                 ->action(function (User $record, array $data): void {
                     app(StaffManagementService::class)->updateEmployee(auth()->user(), (int) $record->getKey(), $data);
                 })
-                ->successNotificationTitle('تم تحديث بيانات الموظف'),
+                ->successNotificationTitle('تم تحديث بيانات المستخدم بنجاح'),
+            Action::make('disableMfa')
+                ->label('تعطيل MFA')
+                ->icon('heroicon-o-shield-exclamation')
+                ->color('danger')
+                ->visible(fn (User $record): bool => $record->hasMultiFactorAuthentication())
+                ->requiresConfirmation()
+                ->modalHeading('تعطيل المصادقة الثنائية (MFA)')
+                ->modalDescription(fn (User $record): string => "هل أنت متأكد من رغبتك في إلغاء تفعيل المصادقة الثنائية لحساب {$record->name} ({$record->email})؟ سيتمكن صاحب الحساب من تسجيل الدخول بكلمة المرور فقط.")
+                ->modalSubmitActionLabel('نعم، تعطيل MFA')
+                ->action(function (User $record): void {
+                    app(StaffManagementService::class)->disableMfa(auth()->user(), (int) $record->getKey());
+                })
+                ->successNotificationTitle('تم إلغاء تفعيل المصادقة الثنائية (MFA) بنجاح لهذا الحساب'),
         ]);
     }
 
     public static function createEmployeeAction(): Action
     {
         return Action::make('createEmployee')
-            ->label('إضافة موظف')
+            ->label('إضافة مستخدم (موظف / مدير)')
+            ->icon('heroicon-o-user-plus')
             ->schema(static::formFields(editing: false))
             ->action(fn (array $data) => app(StaffManagementService::class)->createEmployee(auth()->user(), $data))
-            ->successNotificationTitle('تم إنشاء حساب الموظف');
+            ->successNotificationTitle('تم إنشاء الحساب بنجاح');
     }
 
     /** @return array<int, Component> */
-    private static function formFields(bool $editing): array
+    private static function formFields(bool $editing, ?User $record = null): array
     {
         $actor = auth()->user();
         $departments = $actor instanceof User
             ? app(StaffManagementService::class)->managedDepartments($actor)
             : [];
 
+        $isSelf = $editing && $record && $actor && $actor->is($record);
+
         return [
-            TextInput::make('name')->label('اسم الموظف')->required()->maxLength(255),
-            TextInput::make('email')->label('البريد الإلكتروني')->email()->required()->maxLength(255),
+            TextInput::make('name')
+                ->label('الاسم')
+                ->required()
+                ->maxLength(255),
+            TextInput::make('email')
+                ->label('البريد الإلكتروني')
+                ->email()
+                ->required()
+                ->maxLength(255),
             TextInput::make('password')
                 ->label($editing ? 'كلمة مرور جديدة (اختياري)' : 'كلمة المرور')
-                ->password()->revealable()->required(! $editing)->minLength(12)->dehydrated(fn ($state): bool => filled($state)),
+                ->password()
+                ->revealable()
+                ->required(! $editing)
+                ->minLength(12)
+                ->dehydrated(fn ($state): bool => filled($state)),
+            Select::make('is_company_manager')
+                ->label('نوع الحساب (الدور)')
+                ->options([
+                    0 => 'موظف',
+                    1 => 'مدير شركة',
+                ])
+                ->default(0)
+                ->required()
+                ->disabled((bool) $isSelf)
+                ->helperText($isSelf ? 'لا يمكنك إلغاء صلاحية المدير عن حسابك الحالي تجنبًا لفقدان الوصول للإدارة.' : 'يمتلك مدير الشركة صلاحية الوصول والإدارة لجميع الأقسام تلقائيًا.')
+                ->live(),
             Select::make('departments')
                 ->label('الأقسام المصرح بها')
-                ->multiple()->required(! $editing)->minItems($editing ? 0 : 1)
+                ->multiple()
+                ->visible(fn (Get $get): bool => ! (bool) $get('is_company_manager'))
+                ->required(fn (Get $get): bool => ! $editing && ! (bool) $get('is_company_manager'))
+                ->minItems(fn (Get $get): int => (! (bool) $get('is_company_manager') && ! $editing) ? 1 : 0)
                 ->options(collect($departments)->mapWithKeys(fn (Department $department): array => [$department->value => $department->label()])->all()),
             Toggle::make('can_add_rental_areas')
                 ->label('السماح بإضافة مناطق للإيجار')
                 ->default(false)
-                ->visible(fn (Get $get): bool => in_array(Department::Rental->value, $get('departments') ?? [], true)),
+                ->visible(fn (Get $get): bool => ! (bool) $get('is_company_manager') && in_array(Department::Rental->value, $get('departments') ?? [], true)),
         ];
     }
 }

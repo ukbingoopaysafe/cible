@@ -3,23 +3,23 @@
 namespace App\Models;
 
 use App\Enums\Department;
-use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
-use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
+use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
 use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthenticationRecovery;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
+use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
-use Filament\Panel;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
+use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
-use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery;
+    use HasFactory, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, Notifiable;
 
     /**
      * The attributes that are mass assignable.
@@ -30,6 +30,8 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         'name',
         'email',
         'password',
+        'is_company_manager',
+        'can_add_rental_areas',
     ];
 
     /**
@@ -86,5 +88,17 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     public function canAccessPanel(Panel $panel): bool
     {
         return $this->is_company_manager || $this->departmentMemberships()->exists();
+    }
+
+    public function hasMultiFactorAuthentication(): bool
+    {
+        return filled($this->app_authentication_secret);
+    }
+
+    public function disableMultiFactorAuthentication(): void
+    {
+        $this->app_authentication_secret = null;
+        $this->app_authentication_recovery_codes = null;
+        $this->save();
     }
 }
