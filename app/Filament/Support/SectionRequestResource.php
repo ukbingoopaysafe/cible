@@ -125,26 +125,33 @@ abstract class SectionRequestResource extends Resource
                     ->columnMapping(false),
             ])
             ->columns([
-                TextColumn::make('customer.name')->label('العميل')->placeholder('غير معروف')->searchable(),
-                TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable(),
-                TextColumn::make('broker.name')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->placeholder('—')->searchable(),
-                TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? ''),
-                TextColumn::make('owner.name')->label('المسؤول')->searchable(),
+                TextColumn::make('customer.name')->label('العميل')->placeholder('غير معروف')->searchable()->toggleable(),
+                TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable()->toggleable(),
+                TextColumn::make('broker.name')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->placeholder('—')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? '')->toggleable(),
+                TextColumn::make('owner.name')->label('المسؤول')
+                    ->searchable()
+                    ->icon(fn (Model $record): ?string => (int) $record->pending_reassignment_count > 0 ? 'heroicon-m-arrows-right-left' : null)
+                    ->iconColor(fn (Model $record): ?string => (int) $record->pending_reassignment_count > 0 ? 'warning' : null)
+                    ->tooltip(fn (Model $record): ?string => (int) $record->pending_reassignment_count > 0 ? 'يوجد طلب نقل مسؤولية معلق' : null)
+                    ->description(fn (Model $record): ?string => (int) $record->pending_reassignment_count > 0 ? 'طلب نقل معلق' : null)
+                    ->toggleable(),
                 TextColumn::make('pending_reassignment_count')->label('طلب تغيير المسؤول')
                     ->formatStateUsing(fn ($state): string => (int) $state > 0 ? 'بانتظار المدير' : '—')
                     ->badge()
-                    ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray'),
-                TextColumn::make('stage')->label('المرحلة')->badge()->formatStateUsing(fn ($state): string => RequestFormSchema::stageOptions(static::department())[$state instanceof \BackedEnum ? $state->value : $state] ?? (string) $state),
+                    ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('stage')->label('المرحلة')->badge()->formatStateUsing(fn ($state): string => RequestFormSchema::stageOptions(static::department())[$state instanceof \BackedEnum ? $state->value : $state] ?? (string) $state)->toggleable(),
                 TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state): string => match ($state instanceof RequestStatus ? $state : RequestStatus::from($state)) {
                     RequestStatus::Active => 'نشط',
                     RequestStatus::Paused => 'متوقف مؤقتًا',
                     RequestStatus::Closed => 'مغلق',
-                }),
-                TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable(),
-                TextColumn::make('activities_count')->label('سجل التواصل')->sortable(),
-                TextColumn::make('recommendations_count')->label('الترشيحات')->sortable(),
-                TextColumn::make('viewings_count')->label('المعاينات')->sortable(),
-                TextColumn::make('deal.agreed_total_value')->label('الصفقة')->money(fn (Model $record): string => $record->deal?->currency ?? 'EGP')->placeholder('—'),
+                })->toggleable(),
+                TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(),
+                TextColumn::make('activities_count')->label('سجل التواصل')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('recommendations_count')->label('الترشيحات')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('viewings_count')->label('المعاينات')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('deal.agreed_total_value')->label('الصفقة')->money(fn (Model $record): string => $record->deal?->currency ?? 'EGP')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
             ])
             ->filters([
                 SelectFilter::make('status')->label('الحالة')->options([
