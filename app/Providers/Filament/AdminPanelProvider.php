@@ -31,6 +31,8 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->maxContentWidth('full')
+            ->sidebarCollapsibleOnDesktop()
             ->viteTheme('resources/css/filament/admin/theme.css')
             ->brandName('Cible Real Estate')
             ->brandLogo(fn () => view('filament.admin.logo'))
