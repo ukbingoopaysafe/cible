@@ -207,7 +207,8 @@ class FilamentUiAccessTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
         $request = $this->createRentalRequest($manager);
-        $page = Livewire::actingAs($manager)->test(ListRentalRequests::class);
+        $page = Livewire::actingAs($manager)->test(ListRentalRequests::class)
+            ->assertActionExists('create');
 
         $page->callAction(TestAction::make('changeStage')->table($request), [
             'stage' => 'qualification',
