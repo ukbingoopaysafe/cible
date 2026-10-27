@@ -45,6 +45,7 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
+use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -125,8 +126,18 @@ abstract class SectionRequestResource extends Resource
                     ->columnMapping(false),
             ])
             ->columns([
-                TextColumn::make('customer.name')->label('العميل')->placeholder('غير معروف')->searchable()->toggleable(),
-                TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable()->toggleable(),
+                TextColumn::make('customer.name')
+                    ->label('العميل')
+                    ->placeholder('غير معروف')
+                    ->description(fn (Model $record): ?string => $record->customer?->phone_e164)
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->whereHas('customer', function (Builder $q) use ($search): void {
+                            $q->where('name', 'like', "%{$search}%")
+                                ->orWhere('phone_e164', 'like', "%{$search}%");
+                        });
+                    })
+                    ->toggleable(),
+                TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('broker.name')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->placeholder('—')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? '')->toggleable(),
                 TextColumn::make('owner.name')->label('المسؤول')
@@ -211,9 +222,10 @@ abstract class SectionRequestResource extends Resource
                         };
                     }),
             ])
+            ->recordActionsPosition(RecordActionsPosition::BeforeColumns)
             ->recordActions([
-                ViewAction::make()->label('عرض الطلب'),
-                static::recordContactAction(),
+                ViewAction::make()->iconButton()->tooltip('عرض الطلب'),
+                static::recordContactAction()->iconButton()->tooltip('تسجيل تواصل'),
                 static::getRequestActionsGroup(),
             ])
             ->defaultSort('next_follow_up_at');
@@ -263,6 +275,7 @@ abstract class SectionRequestResource extends Resource
         ])
             ->label('الإجراءات')
             ->icon('heroicon-m-ellipsis-vertical')
+            ->iconButton()
             ->color('gray')
             ->tooltip('خيارات وإجراءات الطلب')
             ->dropdownTeleport();

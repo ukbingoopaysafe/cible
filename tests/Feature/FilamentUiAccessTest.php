@@ -846,4 +846,26 @@ class FilamentUiAccessTest extends TestCase
 
         $this->assertSame(RequestStatus::Paused, $resaleRequest->fresh()->status);
     }
+
+    public function test_rental_and_resale_requests_table_can_be_searched_by_customer_phone_via_description(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        $rentalRequest = $this->createRentalRequest($manager);
+        $phone = $rentalRequest->customer->phone_e164;
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalRequests::class)
+            ->searchTable($phone)
+            ->assertCanSeeTableRecords([$rentalRequest]);
+
+        $resaleRequest = $this->createResaleRequest($manager);
+        $resalePhone = $resaleRequest->customer->phone_e164;
+
+        Livewire::actingAs($manager)
+            ->test(ListResaleRequests::class)
+            ->searchTable($resalePhone)
+            ->assertCanSeeTableRecords([$resaleRequest]);
+    }
 }
