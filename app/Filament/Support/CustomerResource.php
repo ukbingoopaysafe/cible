@@ -17,6 +17,7 @@ use App\Services\CustomerService;
 use App\Services\CustomerSpreadsheetImportService;
 use Closure;
 use Filament\Actions\Action;
+use Filament\Actions\ActionGroup;
 use Filament\Actions\ExportAction;
 use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Forms\Components\Checkbox;
@@ -128,114 +129,121 @@ abstract class CustomerResource extends Resource
                         'requestResource' => static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class,
                         'stageOptions' => RequestFormSchema::stageOptions(static::department()),
                     ])),
-                Action::make('archiveCustomer')
-                    ->label('أرشفة العميل')
-                    ->icon('heroicon-o-archive-box')
-                    ->color('warning')
-                    ->requiresConfirmation()
-                    ->modalDescription('سيختفي العميل من القوائم والاختيارات الجديدة، مع إبقاء بياناته وطلباته وسجل التدقيق. يمكن للمدير استعادته لاحقًا.')
-                    ->visible(fn (Model $record): bool => ! $record->trashed()
-                        && (auth()->user()?->canManageDepartment(static::department()) ?? false))
-                    ->action(function (Model $record): void {
-                        $actor = auth()->user();
-                        abort_unless($actor instanceof User, 403);
-                        app(CustomerService::class)->archive($actor, static::department(), (int) $record->getKey());
-                        Notification::make()->title('تمت أرشفة العميل')->success()->send();
-                    }),
-                Action::make('restoreCustomer')
-                    ->label('استعادة العميل')
-                    ->icon('heroicon-o-arrow-uturn-left')
-                    ->visible(fn (Model $record): bool => $record->trashed()
-                        && (auth()->user()?->canManageDepartment(static::department()) ?? false))
-                    ->action(function (Model $record): void {
-                        $actor = auth()->user();
-                        abort_unless($actor instanceof User, 403);
-                        app(CustomerService::class)->restore($actor, static::department(), (int) $record->getKey());
-                        Notification::make()->title('تمت استعادة العميل')->success()->send();
-                    }),
-                Action::make('createCustomerRequest')
-                    ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب مشتري')
-                    ->icon('heroicon-o-plus-circle')
-                    ->visible(fn (Model $record): bool => ! $record->trashed())
-                    ->url(fn (Model $record): string => (static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class)::getUrl('create', ['customer_id' => $record->getKey()])),
-                Action::make('startAftercare')
-                    ->label('بدء ما بعد الصفقة')
-                    ->icon('heroicon-o-heart')
-                    ->action(function (Model $record): void {
-                        $actor = auth()->user();
-                        abort_unless($actor instanceof User, 403);
-                        app(AftercareService::class)->startForCustomer($actor, static::department(), (int) $record->getKey());
-                    })
-                    ->visible(function (Model $record): bool {
-                        if ($record->trashed()) {
-                            return false;
-                        }
-                        $dealClass = static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class;
+                ActionGroup::make([
+                    Action::make('editCustomer')
+                        ->label('تعديل بيانات العميل')
+                        ->icon('heroicon-o-pencil-square')
+                        ->schema(static::formFields())
+                        ->visible(fn (Model $record): bool => ! $record->trashed())
+                        ->fillForm(fn (Model $record): array => [
+                            'name' => $record->name,
+                            'phone' => $record->phone_e164,
+                            'phone_country' => $record->phone_country,
+                            'nationality' => $record->nationality,
+                        ])
+                        ->action(function (Model $record, array $data, Schema $schema): void {
+                            $actor = auth()->user();
+                            abort_unless($actor instanceof User, 403);
+                            $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
+                            unset($data['reviewed_similar_names']);
 
-                        return $record->aftercare === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
-                    })
-                    ->successNotificationTitle('تم بدء سجل ما بعد الصفقة'),
-                Action::make('recordAftercareActivity')
-                    ->label('تسجيل تواصل ما بعد الصفقة')
-                    ->icon('heroicon-o-chat-bubble-left-ellipsis')
-                    ->schema([
-                        Select::make('deal_id')->label('الصفقة المرتبطة (اختياري)')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
-                            ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
-                            ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
-                        Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
-                        DateTimePicker::make('occurred_at')->label('وقت التواصل')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
-                        Textarea::make('result')->label('نتيجة التواصل')->rows(3)->required()->maxLength(10000),
-                        Textarea::make('notes')->label('ملاحظات (اختيارية)')->rows(2)->maxLength(10000),
-                        Textarea::make('referral_details')->label('إحالة أو فرصة مستقبلية (اختياري)')->rows(2)->maxLength(10000),
-                        DateTimePicker::make('next_follow_up_at')->label('موعد المتابعة القادمة (اختياري)')->native(false)->seconds(false)->minDate(now()->addMinute()),
-                    ])
-                    ->action(function (Model $record, array $data): void {
-                        $actor = auth()->user();
-                        abort_unless($actor instanceof User, 403);
-                        app(AftercareService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
-                    })
-                    ->visible(fn (Model $record): bool => ! $record->trashed() && $record->aftercare !== null)
-                    ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
-                Action::make('aftercareHistory')
-                    ->label('سجل ما بعد الصفقة')
-                    ->icon('heroicon-o-clock')
-                    ->modalHeading(fn (Model $record): string => "سجل ما بعد الصفقة: {$record->name}")
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('إغلاق')
-                    ->modalContent(fn (Model $record) => view('filament.modals.aftercare-history', [
-                        'aftercare' => $record->aftercare?->load(['owner', 'activities.actor', 'activities.deal']),
-                    ]))
-                    ->visible(fn (Model $record): bool => $record->aftercare !== null),
-                Action::make('editCustomer')
-                    ->label('تعديل بيانات العميل')
-                    ->icon('heroicon-o-pencil-square')
-                    ->schema(static::formFields())
-                    ->visible(fn (Model $record): bool => ! $record->trashed())
-                    ->fillForm(fn (Model $record): array => [
-                        'name' => $record->name,
-                        'phone' => $record->phone_e164,
-                        'phone_country' => $record->phone_country,
-                        'nationality' => $record->nationality,
-                    ])
-                    ->action(function (Model $record, array $data, Schema $schema): void {
-                        $actor = auth()->user();
-                        abort_unless($actor instanceof User, 403);
-                        $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
-                        unset($data['reviewed_similar_names']);
+                            FilamentValidationHandler::run(
+                                fn () => app(CustomerService::class)->update(
+                                    $actor,
+                                    static::department(),
+                                    (int) $record->getKey(),
+                                    $data,
+                                    $reviewed,
+                                ),
+                                $schema,
+                                'تعذر تحديث بيانات العميل'
+                            );
+                        })
+                        ->successNotificationTitle('تم تحديث بيانات العميل'),
+                    Action::make('createCustomerRequest')
+                        ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب مشتري')
+                        ->icon('heroicon-o-plus-circle')
+                        ->visible(fn (Model $record): bool => ! $record->trashed())
+                        ->url(fn (Model $record): string => (static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class)::getUrl('create', ['customer_id' => $record->getKey()])),
+                    Action::make('startAftercare')
+                        ->label('بدء ما بعد الصفقة')
+                        ->icon('heroicon-o-heart')
+                        ->action(function (Model $record): void {
+                            $actor = auth()->user();
+                            abort_unless($actor instanceof User, 403);
+                            app(AftercareService::class)->startForCustomer($actor, static::department(), (int) $record->getKey());
+                        })
+                        ->visible(function (Model $record): bool {
+                            if ($record->trashed()) {
+                                return false;
+                            }
+                            $dealClass = static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class;
 
-                        FilamentValidationHandler::run(
-                            fn () => app(CustomerService::class)->update(
-                                $actor,
-                                static::department(),
-                                (int) $record->getKey(),
-                                $data,
-                                $reviewed,
-                            ),
-                            $schema,
-                            'تعذر تحديث بيانات العميل'
-                        );
-                    })
-                    ->successNotificationTitle('تم تحديث بيانات العميل'),
+                            return $record->aftercare === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
+                        })
+                        ->successNotificationTitle('تم بدء سجل ما بعد الصفقة'),
+                    Action::make('recordAftercareActivity')
+                        ->label('تسجيل تواصل ما بعد الصفقة')
+                        ->icon('heroicon-o-chat-bubble-left-ellipsis')
+                        ->schema([
+                            Select::make('deal_id')->label('الصفقة المرتبطة (اختياري)')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
+                                ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
+                                ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
+                            Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
+                            DateTimePicker::make('occurred_at')->label('وقت التواصل')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
+                            Textarea::make('result')->label('نتيجة التواصل')->rows(3)->required()->maxLength(10000),
+                            Textarea::make('notes')->label('ملاحظات (اختيارية)')->rows(2)->maxLength(10000),
+                            Textarea::make('referral_details')->label('إحالة أو فرصة مستقبلية (اختياري)')->rows(2)->maxLength(10000),
+                            DateTimePicker::make('next_follow_up_at')->label('موعد المتابعة القادمة (اختياري)')->native(false)->seconds(false)->minDate(now()->addMinute()),
+                        ])
+                        ->action(function (Model $record, array $data): void {
+                            $actor = auth()->user();
+                            abort_unless($actor instanceof User, 403);
+                            app(AftercareService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
+                        })
+                        ->visible(fn (Model $record): bool => ! $record->trashed() && $record->aftercare !== null)
+                        ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
+                    Action::make('aftercareHistory')
+                        ->label('سجل ما بعد الصفقة')
+                        ->icon('heroicon-o-clock')
+                        ->modalHeading(fn (Model $record): string => "سجل ما بعد الصفقة: {$record->name}")
+                        ->modalSubmitAction(false)
+                        ->modalCancelActionLabel('إغلاق')
+                        ->modalContent(fn (Model $record) => view('filament.modals.aftercare-history', [
+                            'aftercare' => $record->aftercare?->load(['owner', 'activities.actor', 'activities.deal']),
+                        ]))
+                        ->visible(fn (Model $record): bool => $record->aftercare !== null),
+                    Action::make('archiveCustomer')
+                        ->label('أرشفة العميل')
+                        ->icon('heroicon-o-archive-box')
+                        ->color('warning')
+                        ->requiresConfirmation()
+                        ->modalDescription('سيختفي العميل من القوائم والاختيارات الجديدة، مع إبقاء بياناته وطلباته وسجل التدقيق. يمكن للمدير استعادته لاحقًا.')
+                        ->visible(fn (Model $record): bool => ! $record->trashed()
+                            && (auth()->user()?->canManageDepartment(static::department()) ?? false))
+                        ->action(function (Model $record): void {
+                            $actor = auth()->user();
+                            abort_unless($actor instanceof User, 403);
+                            app(CustomerService::class)->archive($actor, static::department(), (int) $record->getKey());
+                            Notification::make()->title('تمت أرشفة العميل')->success()->send();
+                        }),
+                    Action::make('restoreCustomer')
+                        ->label('استعادة العميل')
+                        ->icon('heroicon-o-arrow-uturn-left')
+                        ->visible(fn (Model $record): bool => $record->trashed()
+                            && (auth()->user()?->canManageDepartment(static::department()) ?? false))
+                        ->action(function (Model $record): void {
+                            $actor = auth()->user();
+                            abort_unless($actor instanceof User, 403);
+                            app(CustomerService::class)->restore($actor, static::department(), (int) $record->getKey());
+                            Notification::make()->title('تمت استعادة العميل')->success()->send();
+                        }),
+                ])
+                    ->label('المزيد')
+                    ->icon('heroicon-m-ellipsis-vertical')
+                    ->color('gray')
+                    ->tooltip('خيارات العميل')
+                    ->dropdownTeleport(),
             ]);
     }
 
