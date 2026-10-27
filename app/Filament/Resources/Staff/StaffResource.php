@@ -26,7 +26,7 @@ class StaffResource extends Resource
 
     protected static ?string $modelLabel = 'مستخدم';
 
-    protected static ?string $pluralModelLabel = 'إدارة فريق العمل والمديرين';
+    protected static ?string $pluralModelLabel = 'إدارة المستخدمين';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
@@ -79,14 +79,14 @@ class StaffResource extends Resource
             TextColumn::make('is_company_manager')
                 ->label('الدور والصلاحية')
                 ->badge()
-                ->state(fn (User $record): string => $record->is_company_manager ? 'مدير شركة' : 'موظف')
+                ->state(fn (User $record): string => $record->is_company_manager ? 'مدير' : 'موظف')
                 ->color(fn (User $record): string => $record->is_company_manager ? 'warning' : 'gray')
                 ->icon(fn (User $record): string => $record->is_company_manager ? 'heroicon-m-shield-check' : 'heroicon-m-user'),
             TextColumn::make('departments')
                 ->label('الأقسام')
                 ->state(function (User $record): string {
                     if ($record->is_company_manager) {
-                        return 'كافة الأقسام (إدارة شاملة)';
+                        return 'كافة الأقسام';
                     }
                     $depts = $record->departmentMemberships
                         ->map(fn ($membership): string => $membership->department->label());
@@ -94,7 +94,7 @@ class StaffResource extends Resource
                     return $depts->isNotEmpty() ? $depts->join('، ') : '—';
                 }),
             TextColumn::make('can_add_rental_areas')
-                ->label('إضافة مناطق الإيجار')
+                ->label('إضافة مناطق')
                 ->state(function (User $record): string {
                     if ($record->is_company_manager) {
                         return 'مسموح تلقائيًا';
@@ -116,7 +116,7 @@ class StaffResource extends Resource
             SelectFilter::make('is_company_manager')
                 ->label('تصفية حسب الدور')
                 ->options([
-                    '1' => 'مديرو الشركة',
+                    '1' => 'المديرون',
                     '0' => 'الموظفون',
                 ]),
         ])->recordActions([
@@ -161,7 +161,7 @@ class StaffResource extends Resource
     public static function createEmployeeAction(): Action
     {
         return Action::make('createEmployee')
-            ->label('إضافة مستخدم (موظف / مدير)')
+            ->label('إضافة مستخدم')
             ->icon('heroicon-o-user-plus')
             ->schema(static::formFields(editing: false))
             ->action(fn (array $data) => app(StaffManagementService::class)->createEmployee(auth()->user(), $data))
@@ -199,12 +199,12 @@ class StaffResource extends Resource
                 ->label('نوع الحساب (الدور)')
                 ->options([
                     0 => 'موظف',
-                    1 => 'مدير شركة',
+                    1 => 'مدير',
                 ])
                 ->default(0)
                 ->required()
                 ->disabled((bool) $isSelf)
-                ->helperText($isSelf ? 'لا يمكنك إلغاء صلاحية المدير عن حسابك الحالي تجنبًا لفقدان الوصول للإدارة.' : 'يمتلك مدير الشركة صلاحية الوصول والإدارة لجميع الأقسام تلقائيًا.')
+                ->helperText($isSelf ? 'لا يمكنك إلغاء صلاحية المدير عن حسابك الحالي تجنبًا لفقدان الوصول للإدارة.' : 'يمتلك المدير صلاحية الوصول والإدارة لجميع الأقسام تلقائيًا.')
                 ->live(),
             Select::make('departments')
                 ->label('الأقسام المصرح بها')
@@ -214,7 +214,7 @@ class StaffResource extends Resource
                 ->minItems(fn (Get $get): int => (! (bool) $get('is_company_manager') && ! $editing) ? 1 : 0)
                 ->options(collect($departments)->mapWithKeys(fn (Department $department): array => [$department->value => $department->label()])->all()),
             Toggle::make('can_add_rental_areas')
-                ->label('السماح بإضافة مناطق للإيجار')
+                ->label('السماح بإضافة مناطق')
                 ->default(false)
                 ->visible(fn (Get $get): bool => ! (bool) $get('is_company_manager') && in_array(Department::Rental->value, $get('departments') ?? [], true)),
         ];
