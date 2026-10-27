@@ -216,7 +216,7 @@ class StaffResource extends Resource
             Toggle::make('can_add_rental_areas')
                 ->label('السماح بإضافة مناطق')
                 ->default(false)
-                ->visible(fn (Get $get): bool => ! (bool) $get('is_company_manager') && in_array(Department::Rental->value, $get('departments') ?? [], true)),
+                ->visible(fn (Get $get): bool => ! (bool) $get('is_company_manager')),
         ];
     }
 }

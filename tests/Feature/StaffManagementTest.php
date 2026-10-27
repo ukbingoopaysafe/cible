@@ -105,4 +105,31 @@ class StaffManagementTest extends TestCase
             'departments' => [Department::Rental->value],
         ]);
     }
+
+    public function test_manager_can_grant_area_creation_to_resale_employee(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $service = app(StaffManagementService::class);
+
+        $employee = $service->createEmployee($manager, [
+            'name' => 'موظف إعادة بيع',
+            'email' => 'resale.area.staff@example.test',
+            'password' => 'StrongPass123456!',
+            'departments' => [Department::Resale->value],
+            'can_add_rental_areas' => true,
+        ]);
+
+        $this->assertTrue($employee->fresh()->can_add_rental_areas);
+        $this->assertTrue($employee->fresh()->canManageAreas());
+
+        $service->updateEmployee($manager, $employee->id, [
+            'name' => 'موظف إعادة بيع معدل',
+            'email' => 'resale.area.staff@example.test',
+            'departments' => [Department::Resale->value],
+            'can_add_rental_areas' => false,
+        ]);
+
+        $this->assertFalse($employee->fresh()->can_add_rental_areas);
+        $this->assertFalse($employee->fresh()->canManageAreas());
+    }
 }

@@ -43,7 +43,6 @@ class StaffManagementService
             ]);
             $user->is_company_manager = $isManager;
             $user->can_add_rental_areas = ! $isManager
-                && in_array(Department::Rental, $departments, true)
                 && (bool) ($validated['can_add_rental_areas'] ?? false);
             $user->save();
 
@@ -60,7 +59,7 @@ class StaffManagementService
                         'name' => $user->name,
                         'department_access' => true,
                         'email_set' => true,
-                        'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
+                        'can_add_rental_areas' => $user->can_add_rental_areas,
                     ]);
                 }
             }
@@ -112,7 +111,6 @@ class StaffManagementService
             $user->email = mb_strtolower(trim($validated['email']));
             $user->is_company_manager = $isManager;
             $user->can_add_rental_areas = ! $isManager
-                && in_array(Department::Rental, $departments, true)
                 && (bool) ($validated['can_add_rental_areas'] ?? false);
 
             if (filled($validated['password'] ?? null)) {
@@ -155,14 +153,14 @@ class StaffManagementService
                         'department_access' => $hasBefore,
                         'email_changed' => false,
                         'password_changed' => false,
-                        'can_add_rental_areas' => $department === Department::Rental ? $beforeCanAddRentalAreas : null,
+                        'can_add_rental_areas' => $beforeCanAddRentalAreas,
                     ];
                     $after = [
                         'name' => $user->name,
                         'department_access' => $hasAfter,
                         'email_changed' => $beforeEmail !== $user->email,
                         'password_changed' => $passwordChanged,
-                        'can_add_rental_areas' => $department === Department::Rental ? $user->can_add_rental_areas : null,
+                        'can_add_rental_areas' => $user->can_add_rental_areas,
                     ];
                     if ($before !== $after) {
                         $this->recordAudit($actor, $department, 'staff.employee_updated', $user, $before, $after);

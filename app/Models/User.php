@@ -80,9 +80,14 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         return $this->is_company_manager;
     }
 
-    public function canAddRentalAreas(): bool
+    public function canManageAreas(): bool
     {
         return $this->is_company_manager || $this->can_add_rental_areas;
+    }
+
+    public function canAddRentalAreas(): bool
+    {
+        return $this->canManageAreas();
     }
 
     public function canAccessPanel(Panel $panel): bool
