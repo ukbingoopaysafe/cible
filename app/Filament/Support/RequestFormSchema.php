@@ -7,6 +7,7 @@ use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
 use App\Enums\RentalTerm;
+use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
 use App\Models\Area;
 use App\Models\RentalArea;
@@ -23,6 +24,7 @@ use App\Services\BrokerService;
 use App\Services\CustomerPhoneNormalizer;
 use App\Services\CustomerService;
 use App\Support\RecordCode;
+use Carbon\Carbon;
 use Closure;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
@@ -31,9 +33,13 @@ use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Infolists\Components\TextEntry;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
+use Filament\Support\Enums\FontWeight;
+use Filament\Support\Enums\TextSize;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Validation\ValidationException;
 use Propaganistas\LaravelPhone\PhoneNumber;
@@ -318,31 +324,17 @@ final class RequestFormSchema
     public static function details(Schema $schema, Department $department): Schema
     {
         $stageOptions = self::stageOptions($department);
-        $components = [
-            Section::make('الحالة والمتابعة')
-                ->schema([
-                    TextEntry::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
-                        'active' => 'نشط',
-                        'paused' => 'متوقف مؤقتًا',
-                        'closed' => 'مغلق',
-                        default => '—',
-                    }),
-                    TextEntry::make('stage')->label('المرحلة')->badge()->formatStateUsing(fn ($state): string => $stageOptions[self::enumValue($state) ?? ''] ?? '—'),
-                    TextEntry::make('outcome')->label('النتيجة')->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
-                        'successful' => 'ناجح',
-                        'unsuccessful' => 'غير ناجح',
-                        default => '—',
-                    }),
-                    TextEntry::make('next_follow_up_at')->label('موعد المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—'),
-                    TextEntry::make('owner.name')->label('الموظف المسؤول'),
-                    TextEntry::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i'),
-                ])
-                ->columns(2),
-            Section::make('أطراف الطلب والموقع')
+
+        $mainComponents = [
+            Section::make('أطراف الطلب والتواصل')
+                ->icon('heroicon-o-user-group')
+                ->description('بيانات العميل والوسيط وقنوات الاتصال المباشرة')
                 ->schema([
                     TextEntry::make('customer.name')
                         ->label('العميل')
-                        ->placeholder('غير معروف')
+                        ->icon('heroicon-m-user')
+                        ->weight(FontWeight::Bold)
+                        ->placeholder('غير معروف (بانتظار ربط عميل)')
                         ->formatStateUsing(function ($state, ?Model $record) use ($department): string {
                             if (blank($state)) {
                                 return 'غير معروف';
@@ -351,65 +343,393 @@ final class RequestFormSchema
 
                             return $code ? "{$state} ({$code})" : (string) $state;
                         }),
-                    TextEntry::make('broker.name')->label('الوسيط')->state(fn ($record): ?string => $record?->broker?->name ?? $record?->broker_name_snapshot)->placeholder('—'),
-                    TextEntry::make('contact_party')->label('جهة الاتصال')->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
-                        'customer' => 'العميل',
-                        'broker' => 'الوسيط',
+                    TextEntry::make('customer.phone_e164')
+                        ->label('هاتف العميل')
+                        ->icon('heroicon-m-phone')
+                        ->placeholder('—')
+                        ->copyable()
+                        ->copyMessage('تم نسخ رقم الهاتف')
+                        ->url(fn (?Model $record): ?string => $record?->customer?->phone_e164 ? "tel:{$record->customer->phone_e164}" : null)
+                        ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400']),
+                    TextEntry::make('customer_whatsapp')
+                        ->label('واتساب العميل')
+                        ->icon('heroicon-m-chat-bubble-left-ellipsis')
+                        ->state(fn (?Model $record): ?string => $record?->customer?->phone_e164 ? 'محادثة فورية' : null)
+                        ->placeholder('—')
+                        ->url(function (?Model $record): ?string {
+                            $phone = $record?->customer?->phone_e164;
+                            if (blank($phone)) {
+                                return null;
+                            }
+                            $digits = preg_replace('/\D+/', '', $phone);
+
+                            return "https://wa.me/{$digits}";
+                        })
+                        ->openUrlInNewTab()
+                        ->badge()
+                        ->color('success')
+                        ->visible(fn (?Model $record): bool => filled($record?->customer?->phone_e164)),
+                    TextEntry::make('contact_party')
+                        ->label('جهة الاتصال المفضلة')
+                        ->badge()
+                        ->color(fn ($state): string => match (self::enumValue($state)) {
+                            'customer' => 'primary',
+                            'broker' => 'warning',
+                            default => 'gray',
+                        })
+                        ->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
+                            'customer' => 'العميل مباشرة',
+                            'broker' => 'عبر الوسيط',
+                            default => '—',
+                        }),
+                    TextEntry::make('broker.name')
+                        ->label('الوسيط العقاري')
+                        ->icon('heroicon-m-briefcase')
+                        ->state(fn (?Model $record): ?string => $record?->broker?->name ?? $record?->broker_name_snapshot)
+                        ->placeholder('لا يوجد وسيط'),
+                    TextEntry::make('broker.phone_e164')
+                        ->label('هاتف الوسيط')
+                        ->icon('heroicon-m-phone')
+                        ->placeholder('—')
+                        ->copyable()
+                        ->copyMessage('تم نسخ رقم هاتف الوسيط')
+                        ->url(fn (?Model $record): ?string => $record?->broker?->phone_e164 ? "tel:{$record->broker->phone_e164}" : null)
+                        ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400'])
+                        ->visible(fn (?Model $record): bool => filled($record?->broker_id) || filled($record?->broker_name_snapshot)),
+                    TextEntry::make('area_location')
+                        ->label('المحافظة والمنطقة المطلوبة')
+                        ->icon('heroicon-m-map-pin')
+                        ->state(fn (?Model $record): string => $record?->area ? "{$record->area->governorate} — {$record->area->name}" : '—')
+                        ->placeholder('—'),
+                    TextEntry::make('leadSource.name')
+                        ->label('مصدر الوصول')
+                        ->icon('heroicon-m-arrow-trending-up')
+                        ->placeholder('—'),
+                    TextEntry::make('lead_source_other')
+                        ->label('توضيح مصدر الوصول')
+                        ->placeholder('—')
+                        ->visible(fn (?Model $record): bool => filled($record?->lead_source_other)),
+                ])
+                ->columns(['default' => 1, 'sm' => 2]),
+        ];
+
+        if ($department === Department::Rental) {
+            $mainComponents[] = Section::make('مواصفات ومتطلبات الإيجار')
+                ->icon('heroicon-o-home-modern')
+                ->description('المواصفات المطلوبة للوحدة وشروط الإيجار')
+                ->schema([
+                    TextEntry::make('unit_type')
+                        ->label('نوع الوحدة')
+                        ->badge()
+                        ->color('gray')
+                        ->formatStateUsing(fn ($state): string => self::unitTypeOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('unit_type_other')
+                        ->label('توضيح نوع الوحدة')
+                        ->placeholder('—')
+                        ->visible(fn (?Model $record): bool => filled($record?->unit_type_other)),
+                    TextEntry::make('rental_term_summary')
+                        ->label('مدة الإيجار')
+                        ->icon('heroicon-m-calendar-days')
+                        ->state(function (?Model $record): string {
+                            if (! $record || blank($record->rental_term)) {
+                                return '—';
+                            }
+                            $term = self::rentalTermOptions()[self::enumValue($record->rental_term) ?? ''] ?? '—';
+                            $count = $record->rental_term_count;
+
+                            return $count ? "{$term} ({$count})" : $term;
+                        }),
+                    TextEntry::make('finishing')
+                        ->label('مستوى التشطيب')
+                        ->badge()
+                        ->color('gray')
+                        ->formatStateUsing(fn ($state): string => self::finishingOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('bedrooms')
+                        ->label('عدد غرف النوم')
+                        ->icon('heroicon-m-building-office')
+                        ->placeholder('—'),
+                    TextEntry::make('occupants')
+                        ->label('عدد الأفراد')
+                        ->icon('heroicon-m-user-group')
+                        ->placeholder('—'),
+                    TextEntry::make('household')
+                        ->label('طبيعة الساكنين')
+                        ->badge()
+                        ->color(fn ($state): string => $state === null ? 'gray' : ($state ? 'info' : 'warning'))
+                        ->formatStateUsing(fn ($state): string => $state === null ? '—' : ($state ? 'أسرة' : 'أفراد')),
+                    TextEntry::make('floor_preference')
+                        ->label('الدور المفضل')
+                        ->formatStateUsing(fn ($state): string => self::floorPreferenceOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('elevator_required')
+                        ->label('المصعد')
+                        ->badge()
+                        ->color(fn ($state): string => $state === null ? 'gray' : ($state ? 'success' : 'gray'))
+                        ->formatStateUsing(fn ($state): string => $state === null ? '—' : ($state ? 'يشترط مصعد' : 'لا يشترط')),
+                ])
+                ->columns(['default' => 1, 'sm' => 2, 'md' => 3]);
+        } else {
+            $mainComponents[] = Section::make('مواصفات ومتطلبات الشراء')
+                ->icon('heroicon-o-home-modern')
+                ->description('المواصفات المطلوبة للوحدة ونطاق المساحة')
+                ->schema([
+                    TextEntry::make('unit_type')
+                        ->label('نوع الوحدة')
+                        ->badge()
+                        ->color('gray')
+                        ->formatStateUsing(fn ($state): string => self::unitTypeOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('area_range')
+                        ->label('نطاق المساحة المطلوبة')
+                        ->icon('heroicon-m-arrows-pointing-out')
+                        ->state(function (?Model $record): string {
+                            if (! $record) {
+                                return '—';
+                            }
+                            $min = $record->area_min ? number_format((float) $record->area_min, 1) : null;
+                            $max = $record->area_max ? number_format((float) $record->area_max, 1) : null;
+                            if ($min && $max) {
+                                return "من {$min} م² إلى {$max} م²";
+                            }
+                            if ($min) {
+                                return "من {$min} م² فما فوق";
+                            }
+                            if ($max) {
+                                return "حتى {$max} م²";
+                            }
+
+                            return '—';
+                        }),
+                    TextEntry::make('area_min')
+                        ->label('المساحة من (م²)')
+                        ->numeric(decimalPlaces: 2)
+                        ->placeholder('—'),
+                    TextEntry::make('area_max')
+                        ->label('المساحة إلى (م²)')
+                        ->numeric(decimalPlaces: 2)
+                        ->placeholder('—'),
+                ])
+                ->columns(['default' => 1, 'sm' => 2, 'md' => 3]);
+        }
+
+        $mainComponents[] = Section::make('الميزانية والحدود المالية')
+            ->icon('heroicon-o-banknotes')
+            ->description('القيم المالية المعلنة والمستهدفة والعملة المعتمدة')
+            ->schema([
+                TextEntry::make('budget_declared')
+                    ->label($department === Department::Rental ? 'الميزانية المعلنة (شهرياً)' : 'الميزانية المعلنة (إجمالي الشراء)')
+                    ->weight(FontWeight::Bold)
+                    ->size(TextSize::Large)
+                    ->color('primary')
+                    ->formatStateUsing(function ($state, ?Model $record): string {
+                        if ($state === null || $state === '') {
+                            return '—';
+                        }
+                        $curr = $record?->budget_currency === 'USD' ? 'USD' : 'ج.م';
+
+                        return number_format((float) $state, 2)." {$curr}";
+                    })
+                    ->placeholder('—'),
+                TextEntry::make('budget_targeted')
+                    ->label($department === Department::Rental ? 'الميزانية المستهدفة (شهرياً)' : 'الميزانية المستهدفة (إجمالي الشراء)')
+                    ->weight(FontWeight::SemiBold)
+                    ->size(TextSize::Medium)
+                    ->formatStateUsing(function ($state, ?Model $record): string {
+                        if ($state === null || $state === '') {
+                            return '—';
+                        }
+                        $curr = $record?->budget_currency === 'USD' ? 'USD' : 'ج.م';
+
+                        return number_format((float) $state, 2)." {$curr}";
+                    })
+                    ->placeholder('—'),
+                TextEntry::make('budget_currency')
+                    ->label('العملة المعتمدة')
+                    ->badge()
+                    ->color(fn ($state): string => $state === 'USD' ? 'success' : 'info')
+                    ->formatStateUsing(fn ($state): string => match ($state) {
+                        'USD' => 'دولار أمريكي (USD)',
+                        'EGP' => 'جنيه مصري (EGP)',
                         default => '—',
                     }),
-                    TextEntry::make('area.name')->label('المنطقة')->placeholder('—'),
-                    TextEntry::make('area.governorate')->label('المحافظة')->placeholder('—'),
-                    TextEntry::make('leadSource.name')->label('مصدر الوصول')->placeholder('—'),
-                    TextEntry::make('lead_source_other')->label('توضيح المصدر')->placeholder('—'),
+            ])
+            ->columns(['default' => 1, 'sm' => 3]);
+
+        $mainComponents[] = Section::make('الملاحظات والمتطلبات الخاصة')
+            ->icon('heroicon-o-document-text')
+            ->collapsible()
+            ->schema([
+                TextEntry::make('other_requirements')
+                    ->label('متطلبات إضافية')
+                    ->placeholder('لا توجد متطلبات إضافية مسجلة')
+                    ->columnSpanFull(),
+                TextEntry::make('notes')
+                    ->label('ملاحظات داخلية لفريق العمل')
+                    ->placeholder('لا توجد ملاحظات داخلية')
+                    ->columnSpanFull(),
+            ]);
+
+        $mainComponents[] = Section::make('بيانات الإغلاق والنتيجة')
+            ->icon('heroicon-o-lock-closed')
+            ->schema([
+                TextEntry::make('outcome')
+                    ->label('النتيجة العامة للطلب')
+                    ->badge()
+                    ->color(fn ($state): string => match (self::enumValue($state)) {
+                        'successful' => 'success',
+                        'unsuccessful' => 'danger',
+                        default => 'gray',
+                    })
+                    ->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
+                        'successful' => 'ناجح',
+                        'unsuccessful' => 'غير ناجح',
+                        default => '—',
+                    }),
+                TextEntry::make('closeReason.name')
+                    ->label('التصنيف المساعد للإغلاق')
+                    ->placeholder('—'),
+                TextEntry::make('outcome_reason_text')
+                    ->label('سبب الإغلاق المكتوب')
+                    ->placeholder('—')
+                    ->columnSpanFull(),
+                TextEntry::make('outcome_notes')
+                    ->label('ملاحظات ختامية إضافية')
+                    ->placeholder('—')
+                    ->columnSpanFull(),
+            ])
+            ->columns(['default' => 1, 'sm' => 2])
+            ->visible(fn (?Model $record): bool => filled($record?->outcome));
+
+        $sidebarComponents = [
+            Section::make('الحالة ومسار المتابعة')
+                ->icon('heroicon-o-arrow-path')
+                ->schema([
+                    TextEntry::make('status')
+                        ->label('الحالة التشغيلية')
+                        ->badge()
+                        ->color(fn ($state): string => match (self::enumValue($state)) {
+                            'active' => 'success',
+                            'paused' => 'warning',
+                            'closed' => 'gray',
+                            default => 'gray',
+                        })
+                        ->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
+                            'active' => 'نشط',
+                            'paused' => 'متوقف مؤقتًا',
+                            'closed' => 'مغلق',
+                            default => '—',
+                        }),
+                    TextEntry::make('stage')
+                        ->label('المرحلة الحالية')
+                        ->badge()
+                        ->color('primary')
+                        ->formatStateUsing(fn ($state): string => $stageOptions[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('next_follow_up_at')
+                        ->label('موعد المتابعة القادمة')
+                        ->icon('heroicon-m-calendar')
+                        ->badge()
+                        ->color(function ($state, ?Model $record): string {
+                            if (! $state) {
+                                return 'gray';
+                            }
+                            if ($record?->status === RequestStatus::Active) {
+                                $date = Carbon::parse($state);
+                                if ($date->isPast()) {
+                                    return 'danger';
+                                }
+                                if ($date->isToday()) {
+                                    return 'warning';
+                                }
+
+                                return 'info';
+                            }
+
+                            return 'gray';
+                        })
+                        ->formatStateUsing(function ($state, ?Model $record): string {
+                            if (! $state) {
+                                return 'لم يحدد موعد متابعة';
+                            }
+                            $date = Carbon::parse($state);
+                            $formatted = $date->format('d/m/Y H:i');
+                            if ($record?->status === RequestStatus::Active) {
+                                if ($date->isPast()) {
+                                    return "{$formatted} (متأخرة)";
+                                }
+                                if ($date->isToday()) {
+                                    return "{$formatted} (اليوم)";
+                                }
+                            }
+
+                            return $formatted;
+                        }),
+                ])
+                ->columns(1),
+
+            Section::make('المسؤولية وسجل التسجيل')
+                ->icon('heroicon-o-identification')
+                ->schema([
+                    TextEntry::make('owner.name')
+                        ->label('الموظف المسؤول')
+                        ->icon('heroicon-m-user-circle')
+                        ->weight(FontWeight::SemiBold)
+                        ->placeholder('غير محدد'),
+                    TextEntry::make('pending_reassignment')
+                        ->label('نقل المسؤولية')
+                        ->badge()
+                        ->color('warning')
+                        ->state('يوجد طلب نقل بانتظار المدير')
+                        ->visible(fn (?Model $record): bool => (int) ($record?->pending_reassignment_count ?? 0) > 0),
+                    TextEntry::make('created_at')
+                        ->label('تاريخ التسجيل')
+                        ->icon('heroicon-m-calendar')
+                        ->dateTime('d/m/Y H:i'),
+                    TextEntry::make('updated_at')
+                        ->label('آخر تحديث')
+                        ->icon('heroicon-m-clock')
+                        ->dateTime('d/m/Y H:i'),
+                ])
+                ->columns(1),
+
+            Section::make('مؤشرات العمليات')
+                ->icon('heroicon-o-chart-bar')
+                ->schema([
+                    TextEntry::make('activities_count')
+                        ->label('سجل التواصل')
+                        ->icon('heroicon-m-phone-arrow-up-right')
+                        ->badge()
+                        ->color('gray')
+                        ->state(fn (?Model $record): int => (int) ($record?->activities_count ?? $record?->activities()->count() ?? 0)),
+                    TextEntry::make('recommendations_count')
+                        ->label('الترشيحات')
+                        ->icon('heroicon-m-document-magnifying-glass')
+                        ->badge()
+                        ->color('gray')
+                        ->state(fn (?Model $record): int => (int) ($record?->recommendations_count ?? $record?->recommendations()->count() ?? 0)),
+                    TextEntry::make('viewings_count')
+                        ->label('المعاينات')
+                        ->icon('heroicon-m-eye')
+                        ->badge()
+                        ->color('gray')
+                        ->state(fn (?Model $record): int => (int) ($record?->viewings_count ?? $record?->viewings()->count() ?? 0)),
+                    TextEntry::make('deal_status')
+                        ->label('الصفقة')
+                        ->icon('heroicon-m-check-badge')
+                        ->badge()
+                        ->color(fn (?Model $record): string => $record?->deal ? 'success' : 'gray')
+                        ->state(fn (?Model $record): string => $record?->deal ? 'منجزة' : 'لا توجد'),
                 ])
                 ->columns(2),
         ];
 
-        if ($department === Department::Rental) {
-            $components[] = Section::make('متطلبات الإيجار والميزانية')
+        return $schema->columns(1)->components([
+            Grid::make(['default' => 1, 'lg' => 3])
+                ->columnSpanFull()
                 ->schema([
-                    TextEntry::make('unit_type')->label('نوع الوحدة')->formatStateUsing(fn ($state): string => self::unitTypeOptions()[self::enumValue($state) ?? ''] ?? '—'),
-                    TextEntry::make('unit_type_other')->label('نوع الوحدة — توضيح')->placeholder('—'),
-                    TextEntry::make('bedrooms')->label('عدد غرف النوم')->placeholder('—'),
-                    TextEntry::make('occupants')->label('عدد الأفراد')->placeholder('—'),
-                    TextEntry::make('household')->label('الأفراد أسرة')->formatStateUsing(fn ($state): string => $state === null ? '—' : ($state ? 'نعم' : 'لا')),
-                    TextEntry::make('rental_term')->label('مدة الإيجار')->formatStateUsing(fn ($state): string => self::rentalTermOptions()[self::enumValue($state) ?? ''] ?? '—'),
-                    TextEntry::make('rental_term_count')->label('عدد وحدات المدة')->placeholder('—'),
-                    TextEntry::make('finishing')->label('مستوى التشطيب')->formatStateUsing(fn ($state): string => self::finishingOptions()[self::enumValue($state) ?? ''] ?? '—'),
-                    TextEntry::make('floor_preference')->label('الدور المفضل')->formatStateUsing(fn ($state): string => self::floorPreferenceOptions()[self::enumValue($state) ?? ''] ?? '—'),
-                    TextEntry::make('elevator_required')->label('يشترط وجود مصعد')->formatStateUsing(fn ($state): string => $state === null ? '—' : ($state ? 'نعم' : 'لا')),
-                    TextEntry::make('budget_declared')->label('الميزانية المعلنة (قسط شهري)')->numeric(decimalPlaces: 2)->placeholder('—'),
-                    TextEntry::make('budget_targeted')->label('الميزانية المستهدفة (قسط شهري)')->numeric(decimalPlaces: 2)->placeholder('—'),
-                    TextEntry::make('budget_currency')->label('العملة')->formatStateUsing(fn ($state): string => $state === 'USD' ? 'دولار أمريكي' : ($state === 'EGP' ? 'جنيه مصري' : '—')),
-                    TextEntry::make('other_requirements')->label('متطلبات أخرى')->placeholder('—')->columnSpanFull(),
-                    TextEntry::make('notes')->label('ملاحظات داخلية')->placeholder('—')->columnSpanFull(),
-                ])
-                ->columns(2);
-        } else {
-            $components[] = Section::make('متطلبات الشراء والميزانية')
-                ->schema([
-                    TextEntry::make('unit_type')->label('نوع الوحدة')->formatStateUsing(fn ($state): string => self::unitTypeOptions()[self::enumValue($state) ?? ''] ?? '—'),
-                    TextEntry::make('area_min')->label('المساحة من (م²)')->numeric(decimalPlaces: 2)->placeholder('—'),
-                    TextEntry::make('area_max')->label('المساحة إلى (م²)')->numeric(decimalPlaces: 2)->placeholder('—'),
-                    TextEntry::make('budget_declared')->label('الميزانية المعلنة (إجمالي الشراء)')->numeric(decimalPlaces: 2)->placeholder('—'),
-                    TextEntry::make('budget_targeted')->label('الميزانية المستهدفة (إجمالي الشراء)')->numeric(decimalPlaces: 2)->placeholder('—'),
-                    TextEntry::make('budget_currency')->label('العملة')->formatStateUsing(fn ($state): string => $state === 'USD' ? 'دولار أمريكي' : ($state === 'EGP' ? 'جنيه مصري' : '—')),
-                    TextEntry::make('other_requirements')->label('متطلبات أخرى')->placeholder('—')->columnSpanFull(),
-                    TextEntry::make('notes')->label('ملاحظات داخلية')->placeholder('—')->columnSpanFull(),
-                ])
-                ->columns(2);
-        }
-
-        $components[] = Section::make('الإغلاق')
-            ->schema([
-                TextEntry::make('outcome_reason_text')->label('سبب الإغلاق')->placeholder('—'),
-                TextEntry::make('closeReason.name')->label('التصنيف المساعد')->placeholder('—'),
-                TextEntry::make('outcome_notes')->label('ملاحظات إضافية')->placeholder('—'),
-            ])
-            ->columns(2)
-            ->visible(fn (Model $record): bool => filled($record->outcome));
-
-        return $schema->components($components);
+                    Group::make($mainComponents)
+                        ->columnSpan(['default' => 1, 'lg' => 2]),
+                    Group::make($sidebarComponents)
+                        ->columnSpan(['default' => 1, 'lg' => 1]),
+                ]),
+        ]);
     }
 
     /** @return array<string, string> */

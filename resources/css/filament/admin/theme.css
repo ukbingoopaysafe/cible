@@ -280,3 +280,45 @@ footer.fi-footer {
     flex-shrink: 0 !important;
 }
 
+/* Infolist and View Page Refinements */
+.fi-in {
+    gap: 1.5rem !important;
+}
+
+.fi-in-entry {
+    gap: 0.25rem !important;
+}
+
+.fi-in-entry-label {
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    color: #64748b !important;
+}
+
+.dark .fi-in-entry-label {
+    color: #94a3b8 !important;
+}
+
+.fi-section-header {
+    padding-bottom: 0.75rem !important;
+    border-bottom: 1px solid rgba(24, 63, 60, 0.06) !important;
+    margin-bottom: 0.75rem !important;
+}
+
+.dark .fi-section-header {
+    border-bottom-color: rgba(196, 163, 105, 0.12) !important;
+}
+
+.fi-section-header-heading svg {
+    color: #c4a369 !important;
+}
+
+.dark .fi-section-header-heading svg {
+    color: #c4a369 !important;
+}
+
+.fi-in-text-item {
+    font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+
