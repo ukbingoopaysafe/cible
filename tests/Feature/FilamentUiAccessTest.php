@@ -6,6 +6,7 @@ use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
+use App\Filament\Resources\RentalAftercares\Pages\ListRentalAftercares;
 use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
 use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
 use App\Filament\Resources\RentalCloseReasons\Pages\ListRentalCloseReasons;
@@ -64,6 +65,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/rental-requests/create',
             "/admin/rental-requests/{$rentalRequest->id}",
             "/admin/rental-requests/{$rentalRequest->id}/edit",
+            '/admin/rental-aftercares',
             '/admin/resale-customers',
             '/admin/resale-brokers',
             '/admin/resale-areas',
@@ -74,6 +76,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/resale-requests/create',
             "/admin/resale-requests/{$resaleRequest->id}",
             "/admin/resale-requests/{$resaleRequest->id}/edit",
+            '/admin/resale-aftercares',
         ];
 
         foreach ($paths as $path) {
@@ -98,6 +101,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/rental-requests/create',
             "/admin/rental-requests/{$request->id}",
             "/admin/rental-requests/{$request->id}/edit",
+            '/admin/rental-aftercares',
         ] as $path) {
             $this->actingAs($employee)->get($path)->assertOk();
         }
@@ -115,6 +119,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/resale-audit-events',
             '/admin/resale-requests',
             '/admin/resale-requests/create',
+            '/admin/resale-aftercares',
         ] as $path) {
             $this->actingAs($employee)->get($path)->assertForbidden();
         }
@@ -867,5 +872,49 @@ class FilamentUiAccessTest extends TestCase
             ->test(ListResaleRequests::class)
             ->searchTable($resalePhone)
             ->assertCanSeeTableRecords([$resaleRequest]);
+    }
+
+    public function test_manager_can_manage_aftercare_resource(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $customer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل صفحة ما بعد الصفقة',
+            'phone' => '01012345599',
+            'phone_country' => 'EG',
+        ]);
+        $request = app(RequestService::class)->create($manager, Department::Rental, [
+            'customer_id' => $customer->id,
+            'area_id' => RentalArea::query()->firstOrFail()->id,
+            'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+        ]);
+        app(RequestService::class)->close($manager, Department::Rental, $request->id, ['outcome' => 'successful']);
+        app(DealService::class)->createFromRequest($manager, Department::Rental, $request->id, [
+            'deal_date' => now()->toDateString(),
+            'agreed_total_value' => 200000,
+            'currency' => 'EGP',
+            'rental_term' => 'monthly',
+            'rental_term_count' => 1,
+            'payment_schedule' => 'monthly',
+        ]);
+
+        $aftercare = RentalAftercare::query()->where('customer_id', $customer->id)->sole();
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalAftercares::class)
+            ->assertCanSeeTableRecords([$aftercare])
+            ->callAction(TestAction::make('recordActivity')->table($aftercare), [
+                'channel' => 'phone',
+                'occurred_at' => now()->subMinute()->toDateTimeString(),
+                'result' => 'متابعة دورية عبر صفحة ما بعد الصفقة',
+                'next_follow_up_at' => now()->addMonths(2)->toDateTimeString(),
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_aftercare_activities', [
+            'aftercare_id' => $aftercare->id,
+            'channel' => 'phone',
+            'result' => 'متابعة دورية عبر صفحة ما بعد الصفقة',
+        ]);
     }
 }
