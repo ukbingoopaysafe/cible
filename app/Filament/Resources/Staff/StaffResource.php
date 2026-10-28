@@ -78,7 +78,7 @@ class StaffResource extends Resource
                 ->label('الصورة')
                 ->circular()
                 ->disk('public')
-                ->defaultImageUrl(fn (User $record): string => 'https://ui-avatars.com/api/?name='.urlencode($record->name).'&color=896939&background=f5eedc'),
+                ->defaultImageUrl(asset('images/brand/default-avatar.svg')),
             TextColumn::make('name')
                 ->label('الاسم')
                 ->searchable()

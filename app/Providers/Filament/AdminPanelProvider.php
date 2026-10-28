@@ -3,6 +3,7 @@
 namespace App\Providers\Filament;
 
 use App\Auth\SafeAppAuthentication;
+use App\Support\DefaultAvatarProvider;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Http\Middleware\RestrictAdminPanelByIp;
@@ -40,12 +41,19 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogoHeight('2.75rem')
             ->favicon(asset('images/brand/favicon.png'))
             ->login()
+            ->defaultAvatarProvider(DefaultAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
-                MenuItem::make()
+                'profile' => MenuItem::make()
+                    ->label(fn (): string => auth()->user()?->name ?? '')
+                    ->url(null)
+                    ->icon('heroicon-o-user-circle')
+                    ->sort(-1),
+                'profile_link' => MenuItem::make()
                     ->label('الملف الشخصي')
                     ->url(fn (): string => filament()->getProfileUrl())
-                    ->icon('heroicon-o-user-circle'),
+                    ->icon('heroicon-o-user')
+                    ->sort(0),
             ])
             ->navigationItems([
                 NavigationItem::make('الملف الشخصي')
