@@ -242,6 +242,7 @@ abstract class SectionRequestResource extends Resource
                         };
                     }),
             ])
+            ->columnManagerMaxHeight('24rem')
             ->recordActions([
                 ViewAction::make()->iconButton()->tooltip('عرض الطلب'),
                 static::recordContactAction()->iconButton()->tooltip('تسجيل تواصل'),

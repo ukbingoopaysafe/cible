@@ -118,6 +118,7 @@ abstract class CustomerResource extends Resource
                     ->label('الأرشيف')
                     ->visible(fn (): bool => auth()->user()?->is_company_manager ?? false),
             ])
+            ->columnManagerMaxHeight('24rem')
             ->recordActions([
                 Action::make('openWhatsApp')
                     ->label('فتح WhatsApp')
