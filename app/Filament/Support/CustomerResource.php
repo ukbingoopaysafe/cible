@@ -33,7 +33,6 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
@@ -119,7 +118,6 @@ abstract class CustomerResource extends Resource
                     ->label('الأرشيف')
                     ->visible(fn (): bool => auth()->user()?->is_company_manager ?? false),
             ])
-            ->recordActionsPosition(RecordActionsPosition::BeforeColumns)
             ->recordActions([
                 Action::make('openWhatsApp')
                     ->label('فتح WhatsApp')

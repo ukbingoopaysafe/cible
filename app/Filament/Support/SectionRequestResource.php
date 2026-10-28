@@ -46,7 +46,6 @@ use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
@@ -243,7 +242,6 @@ abstract class SectionRequestResource extends Resource
                         };
                     }),
             ])
-            ->recordActionsPosition(RecordActionsPosition::BeforeColumns)
             ->recordActions([
                 ViewAction::make()->iconButton()->tooltip('عرض الطلب'),
                 static::recordContactAction()->iconButton()->tooltip('تسجيل تواصل'),
