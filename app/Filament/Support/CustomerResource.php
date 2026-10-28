@@ -90,7 +90,7 @@ abstract class CustomerResource extends Resource
                 self::importCustomersAction(),
                 self::downloadImportTemplateAction(),
                 ExportAction::make()
-                    ->label('تصدير Excel')
+                    ->label('تصدير')
                     ->exporter(static::department() === Department::Rental ? RentalCustomerExporter::class : ResaleCustomerExporter::class)
                     ->formats([ExportFormat::Xlsx])
                     ->columnMapping(false),
@@ -103,10 +103,10 @@ abstract class CustomerResource extends Resource
                     ->extraCellAttributes(['class' => 'record-code-cell whitespace-nowrap'])
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction))
                     ->searchable(query: fn (Builder $query, string $search): Builder => RecordCode::applySearch($query, $search, static::department(), RecordCode::TYPE_CUSTOMER)),
-                TextColumn::make('name')->label('اسم العميل')->searchable()->sortable()->toggleable(),
-                TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable()->toggleable(),
+                TextColumn::make('name')->label('الاسم')->searchable()->sortable()->toggleable(),
+                TextColumn::make('phone_e164')->label('الهاتف')->searchable()->toggleable(),
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('requests_count')->label('عدد الطلبات')->sortable()->toggleable(),
+                TextColumn::make('requests_count')->label('الطلبات')->sortable()->toggleable(),
                 TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('aftercare.next_follow_up_at')->label('متابعة ما بعد الصفقة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
@@ -144,7 +144,7 @@ abstract class CustomerResource extends Resource
                     ])),
                 ActionGroup::make([
                     Action::make('editCustomer')
-                        ->label('تعديل بيانات العميل')
+                        ->label('تعديل العميل')
                         ->icon('heroicon-o-pencil-square')
                         ->schema(static::formFields())
                         ->visible(fn (Model $record): bool => ! $record->trashed())
@@ -172,9 +172,9 @@ abstract class CustomerResource extends Resource
                                 'تعذر تحديث بيانات العميل'
                             );
                         })
-                        ->successNotificationTitle('تم تحديث بيانات العميل'),
+                        ->successNotificationTitle('تم حفظ التعديلات'),
                     Action::make('createCustomerRequest')
-                        ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب مشتري')
+                        ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب إعادة بيع')
                         ->icon('heroicon-o-plus-circle')
                         ->visible(fn (Model $record): bool => ! $record->trashed())
                         ->url(fn (Model $record): string => (static::department() === Department::Rental ? RentalRequestResource::class : ResaleRequestResource::class)::getUrl('create', ['customer_id' => $record->getKey()])),
@@ -199,15 +199,15 @@ abstract class CustomerResource extends Resource
                         ->label('تسجيل تواصل ما بعد الصفقة')
                         ->icon('heroicon-o-chat-bubble-left-ellipsis')
                         ->schema([
-                            Select::make('deal_id')->label('الصفقة المرتبطة (اختياري)')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
+                            Select::make('deal_id')->label('الصفقة المرتبطة')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
                                 ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
                                 ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
                             Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
                             DateTimePicker::make('occurred_at')->label('وقت التواصل')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
                             Textarea::make('result')->label('نتيجة التواصل')->rows(3)->required()->maxLength(10000),
-                            Textarea::make('notes')->label('ملاحظات (اختيارية)')->rows(2)->maxLength(10000),
-                            Textarea::make('referral_details')->label('إحالة أو فرصة مستقبلية (اختياري)')->rows(2)->maxLength(10000),
-                            DateTimePicker::make('next_follow_up_at')->label('موعد المتابعة القادمة (اختياري)')->native(false)->seconds(false)->minDate(now()->addMinute()),
+                            Textarea::make('notes')->label('ملاحظات')->rows(2)->maxLength(10000),
+                            Textarea::make('referral_details')->label('إحالة أو فرصة مستقبلية')->rows(2)->maxLength(10000),
+                            DateTimePicker::make('next_follow_up_at')->label('المتابعة القادمة')->native(false)->seconds(false)->minDate(now()->addMinute()),
                         ])
                         ->action(function (Model $record, array $data): void {
                             $actor = auth()->user();
@@ -231,7 +231,7 @@ abstract class CustomerResource extends Resource
                         ->icon('heroicon-o-archive-box')
                         ->color('warning')
                         ->requiresConfirmation()
-                        ->modalDescription('سيختفي العميل من القوائم والاختيارات الجديدة، مع إبقاء بياناته وطلباته وسجل التدقيق. يمكن للمدير استعادته لاحقًا.')
+                        ->modalDescription('سيتم إخفاء العميل من القوائم الجديدة مع الاحتفاظ بسجل طلباته. يمكن استعادته لاحقًا.')
                         ->visible(fn (Model $record): bool => ! $record->trashed()
                             && (auth()->user()?->canManageDepartment(static::department()) ?? false))
                         ->action(function (Model $record): void {
@@ -265,16 +265,16 @@ abstract class CustomerResource extends Resource
     private static function importCustomersAction(): Action
     {
         return Action::make('importCustomers')
-            ->label('استيراد عملاء من Excel')
+            ->label('استيراد Excel')
             ->icon('heroicon-o-arrow-up-tray')
             ->schema([
                 FileUpload::make('file')
-                    ->label('ملف Excel بصيغة XLSX')
+                    ->label('ملف الإكسيل (XLSX)')
                     ->required()
                     ->storeFiles(false)
                     ->acceptedFileTypes(['application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'])
                     ->rules(['extensions:xlsx', 'max:10240'])
-                    ->helperText('الحد الأقصى 10 ميجابايت و5,000 صف. الأعمدة يجب أن تطابق القالب حرفيًا.'),
+                    ->helperText('بحد أقصى 10 ميجابايت و5,000 صف. يجب مطابقة أعمدة القالب.'),
             ])
             ->action(function (array $data) {
                 $actor = auth()->user();
@@ -316,7 +316,7 @@ abstract class CustomerResource extends Resource
     private static function downloadImportTemplateAction(): Action
     {
         return Action::make('downloadImportTemplate')
-            ->label('تنزيل قالب الاستيراد')
+            ->label('تحميل القالب')
             ->icon('heroicon-o-document-arrow-down')
             ->action(function () {
                 $path = tempnam(sys_get_temp_dir(), 'cible-import-template-');
@@ -378,7 +378,7 @@ abstract class CustomerResource extends Resource
                 ->default('EG')
                 ->required()
                 ->length(2)
-                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
+                ->helperText('مثال: EG لمصر، SA للسعودية.')
                 ->rules([
                     fn (): Closure => function (string $attribute, $value, Closure $fail): void {
                         if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
@@ -387,7 +387,7 @@ abstract class CustomerResource extends Resource
                     },
                 ]),
             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
-            Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا عميل مختلف.'),
+            Checkbox::make('reviewed_similar_names')->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.'),
         ];
     }
 

@@ -10,6 +10,7 @@ use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthentication;
 use Filament\Auth\MultiFactor\App\Contracts\HasAppAuthenticationRecovery;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Models\Contracts\HasAvatar;
+use Filament\Models\Contracts\HasName;
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -18,7 +19,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\Storage;
 
-class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar
+class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery, HasAvatar, HasName
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, Notifiable;
@@ -110,8 +111,13 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
         $this->save();
     }
 
+    public function getFilamentName(): string
+    {
+        return $this->name;
+    }
+
     public function getFilamentAvatarUrl(): ?string
     {
-        return $this->avatar_url ? Storage::disk('public')->url($this->avatar_url) : null;
+        return $this->avatar_url ? Storage::disk('public')->url($this->avatar_url) : asset('images/brand/default-avatar.svg');
     }
 }

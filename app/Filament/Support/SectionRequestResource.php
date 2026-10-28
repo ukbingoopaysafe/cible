@@ -133,7 +133,7 @@ abstract class SectionRequestResource extends Resource
         return $table
             ->headerActions([
                 ExportAction::make()
-                    ->label('تصدير Excel')
+                    ->label('تصدير')
                     ->exporter(static::department() === Department::Rental ? RentalRequestExporter::class : ResaleRequestExporter::class)
                     ->formats([ExportFormat::Xlsx])
                     ->columnMapping(false),
@@ -179,7 +179,7 @@ abstract class SectionRequestResource extends Resource
                     RequestStatus::Closed => 'مغلق',
                 })->toggleable(),
                 TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(),
-                TextColumn::make('activities_count')->label('سجل التواصل')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('activities_count')->label('التواصل')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('recommendations_count')->label('الترشيحات')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('viewings_count')->label('المعاينات')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('deal.agreed_total_value')->label('الصفقة')->money(fn (Model $record): string => $record->deal?->currency ?? 'EGP')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
@@ -191,10 +191,10 @@ abstract class SectionRequestResource extends Resource
                     RequestStatus::Closed->value => 'مغلق',
                 ]),
                 SelectFilter::make('customer_link')
-                    ->label('ارتباط العميل')
+                    ->label('العميل')
                     ->options([
-                        'linked' => 'مرتبط بعميل',
-                        'unlinked' => 'بانتظار ربط العميل',
+                        'linked' => 'مرتبط',
+                        'unlinked' => 'غير مرتبط',
                     ])
                     ->query(fn (Builder $query, array $data): Builder => match ($data['value'] ?? null) {
                         'linked' => $query->whereNotNull('customer_id'),
@@ -255,7 +255,7 @@ abstract class SectionRequestResource extends Resource
     {
         return ActionGroup::make([
             ActionGroup::make([
-                EditAction::make()->label('تعديل التفاصيل'),
+                EditAction::make()->label('تعديل الطلب'),
                 static::linkCustomerAction(),
             ])->dropdown(false),
 
@@ -315,7 +315,7 @@ abstract class SectionRequestResource extends Resource
                     ->options(fn (): array => $customerClass::query()->orderBy('name')->pluck('name', 'id')->all())
                     ->searchable()
                     ->required(),
-                Toggle::make('make_contact')->label('اجعل العميل جهة الاتصال الحالية'),
+                Toggle::make('make_contact')->label('تعيين كجهة اتصال رئيسية'),
             ])
             ->visible(fn (Model $record): bool => blank($record->customer_id))
             ->action(function (Model $record, array $data): void {
@@ -340,14 +340,14 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-home-modern')
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
             ->schema([
-                TextInput::make('unit_code')->label('كود الوحدة الداخلي')->maxLength(100),
-                TextInput::make('listing_code')->label('كود Listing الرقمي')->numeric()->maxLength(30),
+                TextInput::make('unit_code')->label('كود الوحدة')->maxLength(100),
+                TextInput::make('listing_code')->label('كود القائمة (Listing)')->numeric()->maxLength(30),
                 TextInput::make('unit_type')->label('نوع الوحدة')->maxLength(80),
-                TextInput::make('unit_area')->label('المساحة بالمتر')->numeric()->minValue(0.01),
+                TextInput::make('unit_area')->label('المساحة (م²)')->numeric()->minValue(0.01),
                 Textarea::make('location_description')->label('وصف الموقع')->rows(2)->maxLength(10000),
                 TextInput::make('asking_price')->label('السعر المعروض')->numeric()->minValue(0),
                 Select::make('currency')->label('العملة')->options(['EGP' => 'جنيه مصري', 'USD' => 'دولار أمريكي'])->default('EGP')->required(),
-                Textarea::make('notes')->label('ملاءمة الوحدة وملاحظات الترشيح')->rows(3)->maxLength(10000),
+                Textarea::make('notes')->label('ملاحظات الترشيح')->rows(3)->maxLength(10000),
             ])
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
@@ -387,7 +387,7 @@ abstract class SectionRequestResource extends Resource
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->recommendations()->exists())
             ->schema([
                 Select::make('recommendation_id')->label('الوحدة')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable()->required(),
-                TextInput::make('field_representative_name')->label('اسم المندوب الميداني')->maxLength(160)->required(),
+                TextInput::make('field_representative_name')->label('المندوب الميداني')->maxLength(160)->required(),
                 DateTimePicker::make('inspected_at')->label('وقت الفحص')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
                 Select::make('photo_match')->label('مدى مطابقة الوحدة للصور')->options(['matches' => 'مطابقة', 'partly_matches' => 'مطابقة جزئيًا', 'does_not_match' => 'غير مطابقة'])->required(),
                 Textarea::make('observed_defects')->label('العيوب الملحوظة')->rows(3)->maxLength(10000),
@@ -411,9 +411,9 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-calendar-days')
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
             ->schema([
-                Select::make('recommendation_id')->label('الوحدة المرشحة (اختياري)')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable(),
+                Select::make('recommendation_id')->label('الوحدة المرشحة')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable(),
                 DateTimePicker::make('scheduled_at')->label('موعد المعاينة')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
-                TextInput::make('field_representative_name')->label('اسم المندوب الميداني')->maxLength(160),
+                TextInput::make('field_representative_name')->label('المندوب الميداني')->maxLength(160),
             ])
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
@@ -464,7 +464,7 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-arrow-path')
             ->schema([
                 Select::make('stage')->label('المرحلة الجديدة')->options(RequestFormSchema::stageOptions(static::department()))->required(),
-                Textarea::make('notes')->label('ملاحظة (اختيارية)')->rows(2),
+                Textarea::make('notes')->label('ملاحظات')->rows(2),
             ])
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
             ->action(function (Model $record, array $data): void {
@@ -535,8 +535,8 @@ abstract class SectionRequestResource extends Resource
                     ->rows(3)
                     ->maxLength(10000),
                 Textarea::make('next_action')
-                    ->label('الإجراء التالي (اختياري)')
-                    ->helperText('هذا الوصف لا يغير موعد المتابعة القادم؛ حدّث الموعد من إجراء المتابعة عند الحاجة.')
+                    ->label('الإجراء التالي')
+                    ->helperText('لتغيير موعد المتابعة، استخدم إجراء تحديد المتابعة.')
                     ->rows(2)
                     ->maxLength(10000),
             ])
@@ -580,7 +580,7 @@ abstract class SectionRequestResource extends Resource
                 Select::make('target_user_id')->label('المسؤول المقترح')
                     ->options(fn (Model $record): array => self::reassignmentStaffOptions($record))
                     ->searchable()->required(),
-                Textarea::make('reason')->label('سبب طلب التغيير')->rows(3)->required()->maxLength(10000),
+                Textarea::make('reason')->label('سبب الطلب')->rows(3)->required()->maxLength(10000),
             ])
             ->visible(function (Model $record): bool {
                 $actor = auth()->user();
@@ -603,7 +603,7 @@ abstract class SectionRequestResource extends Resource
                 );
                 $record->refresh();
             })
-            ->successNotificationTitle('أُرسل طلب إعادة التعيين للمدير');
+            ->successNotificationTitle('تم إرسال الطلب للمدير');
     }
 
     public static function directReassignmentAction(): Action
@@ -615,7 +615,7 @@ abstract class SectionRequestResource extends Resource
                 Select::make('target_user_id')->label('المسؤول الجديد')
                     ->options(fn (Model $record): array => self::reassignmentStaffOptions($record))
                     ->searchable()->required(),
-                Textarea::make('reason')->label('سبب إعادة التعيين')->rows(3)->required()->maxLength(10000),
+                Textarea::make('reason')->label('السبب')->rows(3)->required()->maxLength(10000),
             ])
             ->visible(function (Model $record): bool {
                 $actor = auth()->user();
@@ -775,7 +775,7 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-play-circle')
             ->schema([
                 DateTimePicker::make('next_follow_up_at')->label('موعد المتابعة القادمة')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
-                Textarea::make('notes')->label('ملاحظة (اختيارية)')->rows(2),
+                Textarea::make('notes')->label('ملاحظات')->rows(2),
             ])
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Paused)
             ->action(function (Model $record, array $data): void {
@@ -809,11 +809,11 @@ abstract class SectionRequestResource extends Resource
                     ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
                     ->required(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
                 Select::make('outcome_reason_id')
-                    ->label('تصنيف مساعد (اختياري)')
+                    ->label('تصنيف الإغلاق')
                     ->options(fn (): array => self::closeReasonOptions())
                     ->dehydrated(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
                     ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
-                Textarea::make('outcome_notes')->label('ملاحظات إضافية (اختيارية)')->rows(2),
+                Textarea::make('outcome_notes')->label('ملاحظات إضافية')->rows(2),
             ])
             ->visible(fn (Model $record): bool => $record->status !== RequestStatus::Closed)
             ->action(function (Model $record, array $data): void {
@@ -835,32 +835,32 @@ abstract class SectionRequestResource extends Resource
                 DatePicker::make('deal_date')->label('تاريخ الصفقة')->default(now())->required(),
                 TextInput::make('agreed_total_value')->label('القيمة الإجمالية المتفق عليها')->numeric()->minValue(0.01)->required(),
                 Select::make('currency')->label('العملة')->options(['EGP' => 'جنيه مصري', 'USD' => 'دولار أمريكي'])->default('EGP')->required(),
-                TextInput::make('unit_code')->label('كود الوحدة في التطبيق الخارجي (اختياري)')->numeric()->maxLength(40),
-                TextInput::make('unit_type')->label('نوع الوحدة (اختياري)')->maxLength(80),
-                TextInput::make('unit_area')->label('المساحة بالمتر (اختياري)')->numeric()->minValue(0.01),
-                TextInput::make('unit_location')->label('وصف موقع الوحدة (اختياري)')->maxLength(255),
-                TextInput::make('contact_representative')->label('ممثل التواصل وقت الصفقة (اختياري)')->maxLength(160),
-                TextInput::make('field_agent_name')->label('اسم المندوب الميداني (اختياري)')->maxLength(160),
+                TextInput::make('unit_code')->label('كود الوحدة')->numeric()->maxLength(40),
+                TextInput::make('unit_type')->label('نوع الوحدة')->maxLength(80),
+                TextInput::make('unit_area')->label('المساحة (م²)')->numeric()->minValue(0.01),
+                TextInput::make('unit_location')->label('موقع الوحدة')->maxLength(255),
+                TextInput::make('contact_representative')->label('ممثل التواصل')->maxLength(160),
+                TextInput::make('field_agent_name')->label('المندوب الميداني')->maxLength(160),
                 ...(static::department() === Department::Rental ? [
                     Select::make('rental_term')->label('مدة الإيجار')->options([
                         'daily' => 'يومي', 'monthly' => 'شهري', 'half_yearly' => 'نصف سنوي', 'yearly' => 'سنوي',
                     ])->default(fn (Model $record): ?string => $record->rental_term?->value)->live()->afterStateUpdated(fn (Set $set, ?string $state) => $set('payment_schedule', $state === 'daily' ? 'daily' : 'monthly'))->required(),
-                    TextInput::make('rental_term_count')->label('عدد مدد العقد الكامل')->numeric()->minValue(1)->maxValue(120)->default(fn (Model $record): ?int => $record->rental_term_count)->required(),
+                    TextInput::make('rental_term_count')->label('مدة العقد')->numeric()->minValue(1)->maxValue(120)->default(fn (Model $record): ?int => $record->rental_term_count)->required(),
                     Select::make('payment_schedule')->label('دورية الدفع')->options([
                         'daily' => 'يومي', 'monthly' => 'شهري',
                     ])->default(fn (Get $get): string => $get('rental_term') === 'daily' ? 'daily' : 'monthly')->required()->disabled()->dehydrated(),
                 ] : [
-                    TextInput::make('seller_name')->label('اسم البائع (اختياري)')->maxLength(160),
-                    TextInput::make('seller_phone')->label('هاتف البائع (اختياري)')->tel()->maxLength(30),
+                    TextInput::make('seller_name')->label('اسم البائع')->maxLength(160),
+                    TextInput::make('seller_phone')->label('هاتف البائع')->tel()->maxLength(30),
                 ]),
-                Repeater::make('commissions')->label('اتفاقات العمولة (اختيارية)')->schema([
+                Repeater::make('commissions')->label('اتفاقات العمولة')->schema([
                     TextInput::make('payer')->label('الملتزم بالدفع')->required()->maxLength(160),
                     TextInput::make('recipient')->label('المستفيد')->required()->maxLength(160),
                     Select::make('calculation_type')->label('طريقة الاتفاق')->options(['amount' => 'قيمة ثابتة', 'percentage' => 'نسبة مئوية'])->required(),
                     TextInput::make('agreed_value')->label('القيمة أو النسبة')->numeric()->minValue(0.01),
-                    Textarea::make('conditions')->label('شروط الاتفاق (اختيارية)')->rows(2),
+                    Textarea::make('conditions')->label('شروط الاتفاق')->rows(2),
                 ])->columns(2)->defaultItems(0)->maxItems(20),
-                Textarea::make('notes')->label('ملاحظات الصفقة (اختيارية)')->rows(3),
+                Textarea::make('notes')->label('ملاحظات الصفقة')->rows(3),
             ])
             ->visible(function (Model $record): bool {
                 $dealClass = static::department() === Department::Rental

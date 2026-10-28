@@ -82,7 +82,7 @@
             <!-- Brand Badge -->
             <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#183F3C]/80 border border-[#C4A369]/30 text-xs font-['beIN'] text-[#F5EEDC] mb-8 shadow-inner">
                 <span class="w-2 h-2 rounded-full bg-[#C4A369] animate-pulse"></span>
-                <span>البوابة التشغيلية المعتمدة • منصة العمل الداخلية لسيبل العقارية</span>
+                <span>منصة العمل الداخلية • سيبل العقارية</span>
             </div>
 
             <!-- Logo SVG Display -->
@@ -103,7 +103,7 @@
 
             <!-- Subtitle -->
             <p class="font-['beIN'] text-lg sm:text-xl text-slate-300 max-w-2xl mb-10 leading-relaxed font-normal">
-                منصة العمل الداخلية لسيبل العقارية لتنسيق طلبات الإيجار وإعادة البيع، متابعة الصفقات، وتأكيد المعاينات وحماية بيانات العملاء بأعلى معايير الخصوصية.
+                إدارة ومتابعة طلبات الإيجار وإعادة البيع وتنسيق المعاينات اليومية لفريق العمل.
             </p>
 
             <!-- Action Buttons -->
@@ -122,7 +122,7 @@
                     href="#departments"
                     class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-4 rounded-xl font-['beIN'] text-base font-medium text-white/90 bg-white/5 hover:bg-white/10 border border-white/15 hover:border-[#C4A369]/40 transition-all duration-200 backdrop-blur-sm"
                 >
-                    <span>استكشاف قطاعات التشغيل</span>
+                    <span>أقسام العمل</span>
                 </a>
             </div>
 
@@ -140,11 +140,11 @@
                     </div>
                     <h3 class="font-['beIN'] text-xl font-bold text-white mb-2">قطاع الإيجار</h3>
                     <p class="font-['beIN'] text-sm text-slate-300 leading-relaxed font-light mb-4">
-                        إدارة طلبات الإيجار اليومي والشهري والسنوي، مطابقة تفضيلات الأدوار والمصاعد، وتنسيق المعاينات الميدانية للمندوبين والعملاء.
+                        تسجيل ومتابعة طلبات الإيجار بمختلف مددها وتنسيق المعاينات الميدانية للوحدات.
                     </p>
                     <div class="flex items-center gap-2 text-xs text-[#F5EEDC]/80 font-['beIN'] border-t border-white/5 pt-3">
                         <span class="w-1.5 h-1.5 rounded-full bg-[#C4A369]"></span>
-                        <span>متابعة مستمرة • فحص الوحدات قبل الزيارة</span>
+                        <span>فحص الوحدات وتنسيق المواعيد</span>
                     </div>
                 </div>
 
@@ -160,11 +160,11 @@
                     </div>
                     <h3 class="font-['beIN'] text-xl font-bold text-white mb-2">قطاع إعادة البيع</h3>
                     <p class="font-['beIN'] text-sm text-slate-300 leading-relaxed font-light mb-4">
-                        تتبع طلبات المشترين والمستثمرين، دراسة المساحات والميزانيات المستهدفة، وتوثيق الصفقات الاستثمارية وما بعد البيع.
+                        متابعة طلبات الشراء والاستثمار، مطابقة الميزانيات وتوثيق الصفقات.
                     </p>
                     <div class="flex items-center gap-2 text-xs text-[#F5EEDC]/80 font-['beIN'] border-t border-white/5 pt-3">
                         <span class="w-1.5 h-1.5 rounded-full bg-[#C4A369]"></span>
-                        <span>صفقات معتمدة • عزل مالي وتشغيلي كامل</span>
+                        <span>توثيق الصفقات ومتابعة ما بعد البيع</span>
                     </div>
                 </div>
             </div>
@@ -175,19 +175,19 @@
                     <svg class="w-4 h-4 text-[#C4A369]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
                     </svg>
-                    <span>دعم التوثيق الثنائي MFA لحماية الحسابات</span>
+                    <span>مصادقة ثنائية لحماية الحسابات</span>
                 </div>
                 <div class="flex items-center justify-center gap-2.5 text-xs font-['beIN'] text-slate-300">
                     <svg class="w-4 h-4 text-[#C4A369]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z" />
                     </svg>
-                    <span>عزل صارم للبيانات بين الأقسام</span>
+                    <span>فصل صلاحيات الأقسام</span>
                 </div>
                 <div class="flex items-center justify-center gap-2.5 text-xs font-['beIN'] text-slate-300">
                     <svg class="w-4 h-4 text-[#C4A369]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 5.625c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125" />
                     </svg>
-                    <span>نسخ احتياطي يومي مشفر خارج الموقع</span>
+                    <span>نسخ احتياطي يومي مشفر</span>
                 </div>
             </div>
         </div>

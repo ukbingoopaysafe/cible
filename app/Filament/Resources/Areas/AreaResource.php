@@ -28,7 +28,7 @@ class AreaResource extends Resource
 
     protected static ?string $modelLabel = 'منطقة';
 
-    protected static ?string $pluralModelLabel = 'المناطق الجغرافية';
+    protected static ?string $pluralModelLabel = 'المناطق';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-map-pin';
 
@@ -80,7 +80,7 @@ class AreaResource extends Resource
                 ->color('gray')
                 ->sortable(),
             TextColumn::make('name')
-                ->label('اسم المنطقة')
+                ->label('المنطقة')
                 ->searchable()
                 ->sortable(),
             TextColumn::make('rental_requests_count')
@@ -109,22 +109,22 @@ class AreaResource extends Resource
                 ->visible(fn (): bool => auth()->user()?->is_company_manager ?? false),
         ])->recordActions([
             Action::make('archiveArea')
-                ->label('أرشفة المنطقة')
+                ->label('أرشفة')
                 ->icon('heroicon-o-archive-box')
                 ->color('warning')
                 ->requiresConfirmation()
-                ->modalHeading('أرشفة المنطقة الجغرافية')
-                ->modalDescription('ستبقى كافة طلبات الإيجار وإعادة البيع السابقة المرتبطة بهذه المنطقة محفوظة ومتاحة، ولكن لن تظهر المنطقة في قائمة الاختيار للطلبات الجديدة.')
+                ->modalHeading('أرشفة المنطقة')
+                ->modalDescription('ستبقى الطلبات السابقة في هذه المنطقة كما هي، لكن لن تتاح المنطقة في الطلبات الجديدة.')
                 ->visible(fn (Model $record): bool => ! $record->trashed()
                     && (auth()->user()?->is_company_manager ?? false))
                 ->action(function (Model $record): void {
                     $actor = auth()->user();
                     abort_unless($actor instanceof User, 403);
                     app(AreaArchiveService::class)->archiveUnified($actor, (int) $record->getKey());
-                    Notification::make()->title('تمت أرشفة المنطقة بنجاح')->success()->send();
+                    Notification::make()->title('تمت أرشفة المنطقة')->success()->send();
                 }),
             Action::make('restoreArea')
-                ->label('استعادة المنطقة')
+                ->label('استعادة')
                 ->icon('heroicon-o-arrow-uturn-left')
                 ->visible(fn (Model $record): bool => $record->trashed()
                     && (auth()->user()?->is_company_manager ?? false))
@@ -132,7 +132,7 @@ class AreaResource extends Resource
                     $actor = auth()->user();
                     abort_unless($actor instanceof User, 403);
                     app(AreaArchiveService::class)->restoreUnified($actor, (int) $record->getKey());
-                    Notification::make()->title('تمت استعادة المنطقة بنجاح')->success()->send();
+                    Notification::make()->title('تمت استعادة المنطقة')->success()->send();
                 }),
         ]);
     }
@@ -140,7 +140,7 @@ class AreaResource extends Resource
     public static function createAreaAction(): Action
     {
         return Action::make('createArea')
-            ->label('إضافة منطقة جديدة')
+            ->label('إضافة منطقة')
             ->icon('heroicon-o-plus')
             ->schema([
                 Select::make('governorate')

@@ -29,7 +29,7 @@
                     @endif
                 </article>
             @empty
-                <p class="text-sm text-gray-600">لم تُسجل تفاعلات بعد. أضف أول تواصل من زر تسجيل تواصل ما بعد الصفقة.</p>
+                <p class="text-sm text-gray-600">لا توجد تفاعلات مسجلة بعد.</p>
             @endforelse
         </div>
     @endif

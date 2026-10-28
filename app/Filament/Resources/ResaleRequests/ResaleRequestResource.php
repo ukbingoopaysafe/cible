@@ -15,13 +15,13 @@ class ResaleRequestResource extends SectionRequestResource
 {
     protected static ?string $model = ResaleRequest::class;
 
-    protected static ?string $modelLabel = 'طلب مشتري إعادة بيع';
+    protected static ?string $modelLabel = 'طلب إعادة بيع';
 
-    protected static ?string $pluralModelLabel = 'طلبات مشتري إعادة البيع';
+    protected static ?string $pluralModelLabel = 'طلبات إعادة البيع';
 
-    protected static string | \BackedEnum | null $navigationIcon = 'heroicon-o-home-modern';
+    protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-home-modern';
 
-    protected static string | \UnitEnum | null $navigationGroup = 'إعادة البيع';
+    protected static string|\UnitEnum|null $navigationGroup = 'إعادة البيع';
 
     protected static ?int $navigationSort = 10;
 

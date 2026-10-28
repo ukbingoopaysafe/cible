@@ -111,7 +111,7 @@ final class RequestFormSchema
                                 ->default('EG')
                                 ->required()
                                 ->length(2)
-                                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
+                                ->helperText('مثال: EG لمصر، SA للسعودية.')
                                 ->rules([
                                     fn (): Closure => function (string $attribute, $value, Closure $fail): void {
                                         if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
@@ -120,7 +120,7 @@ final class RequestFormSchema
                                     },
                                 ]),
                             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
-                            Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا عميل مختلف.'),
+                            Checkbox::make('reviewed_similar_names')->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.'),
                         ])
                         ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
                             $actor = auth()->user();
@@ -162,7 +162,7 @@ final class RequestFormSchema
                                 ->label('رمز الدولة')
                                 ->default('EG')
                                 ->length(2)
-                                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
+                                ->helperText('مثال: EG لمصر، SA للسعودية.')
                                 ->rules([
                                     fn (): Closure => function (string $attribute, $value, Closure $fail): void {
                                         if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
@@ -170,7 +170,7 @@ final class RequestFormSchema
                                         }
                                     },
                                 ]),
-                            Checkbox::make('reviewed_similar_names')->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا وسيط مختلف.'),
+                            Checkbox::make('reviewed_similar_names')->label('تأكيد: هذا وسيط مختلف رغم تشابه الاسم.'),
                         ])
                         ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
                             $actor = auth()->user();
@@ -192,7 +192,7 @@ final class RequestFormSchema
                         ->dehydrated(fn (Get $get): bool => filled($get('customer_id')) && filled($get('broker_id')))
                         ->visible(fn (Get $get): bool => filled($get('customer_id')) && filled($get('broker_id'))),
                     Select::make('area_id')
-                        ->label('المحافظة والمنطقة المطلوبة')
+                        ->label('المنطقة والمحافظة')
                         ->options($areaOptions)
                         ->searchable()
                         ->required()
@@ -227,7 +227,7 @@ final class RequestFormSchema
                         ->searchable()
                         ->live(),
                     TextInput::make('lead_source_other')
-                        ->label('مصدر الوصول — توضيح')
+                        ->label('توضيح مصدر الوصول')
                         ->maxLength(255)
                         ->visible(fn (Get $get): bool => filled($get('lead_source_id')) && $sourceClass::query()->whereKey($get('lead_source_id'))->where('is_other', true)->exists())
                         ->required(fn (Get $get): bool => filled($get('lead_source_id')) && $sourceClass::query()->whereKey($get('lead_source_id'))->where('is_other', true)->exists()),
@@ -272,21 +272,21 @@ final class RequestFormSchema
                     TextInput::make('unit_type_other')->label('نوع الوحدة — توضيح')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value)
                         ->required(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value),
-                    TextInput::make('bedrooms')->label('عدد غرف النوم')->numeric()->integer()->minValue(1)->maxValue(100),
-                    TextInput::make('occupants')->label('عدد الأفراد')->numeric()->integer()->minValue(1)->maxValue(1000),
-                    Toggle::make('household')->label('الأفراد أسرة'),
+                    TextInput::make('bedrooms')->label('غرف النوم')->numeric()->integer()->minValue(1)->maxValue(100),
+                    TextInput::make('occupants')->label('الأفراد')->numeric()->integer()->minValue(1)->maxValue(1000),
+                    Toggle::make('household')->label('أسرة'),
                     Select::make('rental_term')
                         ->label('مدة الإيجار')
                         ->options(self::rentalTermOptions())
-                        ->helperText('في الإيجار نصف السنوي والسنوي يكون السداد شهريًا ويُكتب العقد لكامل المدة.')
+                        ->helperText('في الإيجار نصف السنوي والسنوي يكون السداد شهريًا.')
                         ->live(),
-                    TextInput::make('rental_term_count')->label('عدد وحدات المدة')->numeric()->integer()->minValue(1)->maxValue(3650),
+                    TextInput::make('rental_term_count')->label('مدة العقد (بالأرقام)')->numeric()->integer()->minValue(1)->maxValue(3650),
                     Select::make('finishing')->label('مستوى التشطيب')->options(self::finishingOptions())->live(),
                     TextInput::make('finishing_other')->label('التشطيب — توضيح')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('finishing') === FinishingLevel::Other->value)
                         ->required(fn (Get $get): bool => $get('finishing') === FinishingLevel::Other->value),
                     Select::make('floor_preference')->label('الدور المفضل')->options(self::floorPreferenceOptions()),
-                    Toggle::make('elevator_required')->label('يشترط وجود مصعد'),
+                    Toggle::make('elevator_required')->label('يشترط مصعد'),
                 ])
                 ->columns(2);
         } else {
@@ -305,7 +305,7 @@ final class RequestFormSchema
         $budgetDeclaredLabel = $department === Department::Rental ? 'الميزانية المعلنة (القسط الشهري)' : 'الميزانية المعلنة (إجمالي الشراء)';
         $budgetTargetedLabel = $department === Department::Rental ? 'الميزانية المستهدفة (القسط الشهري)' : 'الميزانية المستهدفة (إجمالي الشراء)';
 
-        $components[] = Section::make('الميزانية والمتطلبات الإضافية')
+        $components[] = Section::make('الميزانية والملاحظات')
             ->schema([
                 TextInput::make('budget_declared')->label($budgetDeclaredLabel)->numeric()->minValue(0.01),
                 TextInput::make('budget_targeted')->label($budgetTargetedLabel)->numeric()->minValue(0.01),
@@ -326,15 +326,14 @@ final class RequestFormSchema
         $stageOptions = self::stageOptions($department);
 
         $mainComponents = [
-            Section::make('أطراف الطلب والتواصل')
+            Section::make('بيانات التواصل')
                 ->icon('heroicon-o-user-group')
-                ->description('بيانات العميل والوسيط وقنوات الاتصال المباشرة')
                 ->schema([
                     TextEntry::make('customer.name')
                         ->label('العميل')
                         ->icon('heroicon-m-user')
                         ->weight(FontWeight::Bold)
-                        ->placeholder('غير معروف (بانتظار ربط عميل)')
+                        ->placeholder('غير مربوط')
                         ->formatStateUsing(function ($state, ?Model $record) use ($department): string {
                             if (blank($state)) {
                                 return 'غير معروف';
@@ -354,7 +353,7 @@ final class RequestFormSchema
                     TextEntry::make('customer_whatsapp')
                         ->label('واتساب العميل')
                         ->icon('heroicon-m-chat-bubble-left-ellipsis')
-                        ->state(fn (?Model $record): ?string => $record?->customer?->phone_e164 ? 'محادثة فورية' : null)
+                        ->state(fn (?Model $record): ?string => $record?->customer?->phone_e164 ? 'واتساب' : null)
                         ->placeholder('—')
                         ->url(function (?Model $record): ?string {
                             $phone = $record?->customer?->phone_e164;
@@ -370,7 +369,7 @@ final class RequestFormSchema
                         ->color('success')
                         ->visible(fn (?Model $record): bool => filled($record?->customer?->phone_e164)),
                     TextEntry::make('contact_party')
-                        ->label('جهة الاتصال المفضلة')
+                        ->label('جهة الاتصال')
                         ->badge()
                         ->color(fn ($state): string => match (self::enumValue($state)) {
                             'customer' => 'primary',
@@ -378,8 +377,8 @@ final class RequestFormSchema
                             default => 'gray',
                         })
                         ->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
-                            'customer' => 'العميل مباشرة',
-                            'broker' => 'عبر الوسيط',
+                            'customer' => 'العميل',
+                            'broker' => 'الوسيط',
                             default => '—',
                         }),
                     TextEntry::make('broker.name')
@@ -397,7 +396,7 @@ final class RequestFormSchema
                         ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400'])
                         ->visible(fn (?Model $record): bool => filled($record?->broker_id) || filled($record?->broker_name_snapshot)),
                     TextEntry::make('area_location')
-                        ->label('المحافظة والمنطقة المطلوبة')
+                        ->label('المنطقة والمحافظة')
                         ->icon('heroicon-m-map-pin')
                         ->state(fn (?Model $record): string => $record?->area ? "{$record->area->governorate} — {$record->area->name}" : '—')
                         ->placeholder('—'),
@@ -414,9 +413,8 @@ final class RequestFormSchema
         ];
 
         if ($department === Department::Rental) {
-            $mainComponents[] = Section::make('مواصفات ومتطلبات الإيجار')
+            $mainComponents[] = Section::make('مواصفات الوحدة')
                 ->icon('heroicon-o-home-modern')
-                ->description('المواصفات المطلوبة للوحدة وشروط الإيجار')
                 ->schema([
                     TextEntry::make('unit_type')
                         ->label('نوع الوحدة')
@@ -445,11 +443,11 @@ final class RequestFormSchema
                         ->color('gray')
                         ->formatStateUsing(fn ($state): string => self::finishingOptions()[self::enumValue($state) ?? ''] ?? '—'),
                     TextEntry::make('bedrooms')
-                        ->label('عدد غرف النوم')
+                        ->label('غرف النوم')
                         ->icon('heroicon-m-building-office')
                         ->placeholder('—'),
                     TextEntry::make('occupants')
-                        ->label('عدد الأفراد')
+                        ->label('الأفراد')
                         ->icon('heroicon-m-user-group')
                         ->placeholder('—'),
                     TextEntry::make('household')
@@ -468,9 +466,8 @@ final class RequestFormSchema
                 ])
                 ->columns(['default' => 1, 'sm' => 2, 'md' => 3]);
         } else {
-            $mainComponents[] = Section::make('مواصفات ومتطلبات الشراء')
+            $mainComponents[] = Section::make('مواصفات الوحدة')
                 ->icon('heroicon-o-home-modern')
-                ->description('المواصفات المطلوبة للوحدة ونطاق المساحة')
                 ->schema([
                     TextEntry::make('unit_type')
                         ->label('نوع الوحدة')
@@ -510,9 +507,8 @@ final class RequestFormSchema
                 ->columns(['default' => 1, 'sm' => 2, 'md' => 3]);
         }
 
-        $mainComponents[] = Section::make('الميزانية والحدود المالية')
+        $mainComponents[] = Section::make('الميزانية')
             ->icon('heroicon-o-banknotes')
-            ->description('القيم المالية المعلنة والمستهدفة والعملة المعتمدة')
             ->schema([
                 TextEntry::make('budget_declared')
                     ->label($department === Department::Rental ? 'الميزانية المعلنة (شهرياً)' : 'الميزانية المعلنة (إجمالي الشراء)')
@@ -553,7 +549,7 @@ final class RequestFormSchema
             ])
             ->columns(['default' => 1, 'sm' => 3]);
 
-        $mainComponents[] = Section::make('الملاحظات والمتطلبات الخاصة')
+        $mainComponents[] = Section::make('ملاحظات إضافية')
             ->icon('heroicon-o-document-text')
             ->collapsible()
             ->schema([
@@ -562,16 +558,16 @@ final class RequestFormSchema
                     ->placeholder('لا توجد متطلبات إضافية مسجلة')
                     ->columnSpanFull(),
                 TextEntry::make('notes')
-                    ->label('ملاحظات داخلية لفريق العمل')
+                    ->label('ملاحظات داخلية')
                     ->placeholder('لا توجد ملاحظات داخلية')
                     ->columnSpanFull(),
             ]);
 
-        $mainComponents[] = Section::make('بيانات الإغلاق والنتيجة')
+        $mainComponents[] = Section::make('تفاصيل الإغلاق')
             ->icon('heroicon-o-lock-closed')
             ->schema([
                 TextEntry::make('outcome')
-                    ->label('النتيجة العامة للطلب')
+                    ->label('النتيجة')
                     ->badge()
                     ->color(fn ($state): string => match (self::enumValue($state)) {
                         'successful' => 'success',
@@ -584,14 +580,14 @@ final class RequestFormSchema
                         default => '—',
                     }),
                 TextEntry::make('closeReason.name')
-                    ->label('التصنيف المساعد للإغلاق')
+                    ->label('تصنيف الإغلاق')
                     ->placeholder('—'),
                 TextEntry::make('outcome_reason_text')
-                    ->label('سبب الإغلاق المكتوب')
+                    ->label('سبب الإغلاق')
                     ->placeholder('—')
                     ->columnSpanFull(),
                 TextEntry::make('outcome_notes')
-                    ->label('ملاحظات ختامية إضافية')
+                    ->label('ملاحظات الإغلاق')
                     ->placeholder('—')
                     ->columnSpanFull(),
             ])
@@ -599,11 +595,11 @@ final class RequestFormSchema
             ->visible(fn (?Model $record): bool => filled($record?->outcome));
 
         $sidebarComponents = [
-            Section::make('الحالة ومسار المتابعة')
+            Section::make('حالة الطلب')
                 ->icon('heroicon-o-arrow-path')
                 ->schema([
                     TextEntry::make('status')
-                        ->label('الحالة التشغيلية')
+                        ->label('الحالة')
                         ->badge()
                         ->color(fn ($state): string => match (self::enumValue($state)) {
                             'active' => 'success',
@@ -618,7 +614,7 @@ final class RequestFormSchema
                             default => '—',
                         }),
                     TextEntry::make('stage')
-                        ->label('المرحلة الحالية')
+                        ->label('المرحلة')
                         ->badge()
                         ->color('primary')
                         ->formatStateUsing(fn ($state): string => $stageOptions[self::enumValue($state) ?? ''] ?? '—'),
@@ -646,7 +642,7 @@ final class RequestFormSchema
                         })
                         ->formatStateUsing(function ($state, ?Model $record): string {
                             if (! $state) {
-                                return 'لم يحدد موعد متابعة';
+                                return 'غير محدد';
                             }
                             $date = Carbon::parse($state);
                             $formatted = $date->format('d/m/Y H:i');
@@ -664,7 +660,7 @@ final class RequestFormSchema
                 ])
                 ->columns(1),
 
-            Section::make('المسؤولية وسجل التسجيل')
+            Section::make('المسؤولية')
                 ->icon('heroicon-o-identification')
                 ->schema([
                     TextEntry::make('owner.name')
@@ -676,7 +672,7 @@ final class RequestFormSchema
                         ->label('نقل المسؤولية')
                         ->badge()
                         ->color('warning')
-                        ->state('يوجد طلب نقل بانتظار المدير')
+                        ->state('طلب نقل معلق')
                         ->visible(fn (?Model $record): bool => (int) ($record?->pending_reassignment_count ?? 0) > 0),
                     TextEntry::make('created_at')
                         ->label('تاريخ التسجيل')
@@ -689,11 +685,11 @@ final class RequestFormSchema
                 ])
                 ->columns(1),
 
-            Section::make('مؤشرات العمليات')
+            Section::make('سجل النشاط')
                 ->icon('heroicon-o-chart-bar')
                 ->schema([
                     TextEntry::make('activities_count')
-                        ->label('سجل التواصل')
+                        ->label('التواصل')
                         ->icon('heroicon-m-phone-arrow-up-right')
                         ->badge()
                         ->color('gray')

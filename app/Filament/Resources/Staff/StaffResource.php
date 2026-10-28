@@ -29,9 +29,9 @@ class StaffResource extends Resource
 {
     protected static ?string $model = User::class;
 
-    protected static ?string $modelLabel = 'مستخدم';
+    protected static ?string $modelLabel = 'موظف';
 
-    protected static ?string $pluralModelLabel = 'إدارة المستخدمين';
+    protected static ?string $pluralModelLabel = 'فريق العمل';
 
     protected static string|\BackedEnum|null $navigationIcon = 'heroicon-o-user-group';
 
@@ -124,10 +124,10 @@ class StaffResource extends Resource
                 ->sortable(),
         ])->filters([
             SelectFilter::make('is_company_manager')
-                ->label('تصفية حسب الدور')
+                ->label('الدور')
                 ->options([
-                    '1' => 'المديرون',
-                    '0' => 'الموظفون',
+                    '1' => 'مدير',
+                    '0' => 'موظف',
                 ]),
         ])->recordActions([
             Action::make('editEmployee')
@@ -153,10 +153,10 @@ class StaffResource extends Resource
                     FilamentValidationHandler::run(
                         fn () => app(StaffManagementService::class)->updateEmployee(auth()->user(), (int) $record->getKey(), $data),
                         $schema,
-                        'تعذر تحديث بيانات المستخدم'
+                        'تعذر حفظ التعديلات'
                     );
                 })
-                ->successNotificationTitle('تم تحديث بيانات المستخدم بنجاح'),
+                ->successNotificationTitle('تم حفظ التعديلات'),
             Action::make('setupMyMfa')
                 ->label('إعداد MFA لحسابك')
                 ->icon('heroicon-o-shield-check')
@@ -169,7 +169,7 @@ class StaffResource extends Resource
                 ->color('gray')
                 ->visible(fn (User $record): bool => ! $record->hasMultiFactorAuthentication() && (auth()->id() !== $record->id))
                 ->modalHeading('تفعيل المصادقة الثنائية (MFA)')
-                ->modalDescription(fn (User $record): string => "المصادقة الثنائية (MFA عبر تطبيق TOTP) اختيارية. لتفعيلها على حساب {$record->name}، يقوم صاحب الحساب بتسجيل الدخول إلى لوحة الإدارة، ثم فتح صفحة «الملف الشخصي» من القائمة الجانبية أو من قائمته الشخصية، ومسح رمز الـ QR بتطبيق المصادقة على هاتفه (مثل Google Authenticator أو Microsoft Authenticator).")
+                ->modalDescription(fn (User $record): string => "لتفعيل المصادقة الثنائية، يفتح {$record->name} صفحة «الملف الشخصي» ويمسح رمز QR بتطبيق المصادقة (مثل Google Authenticator).")
                 ->modalSubmitAction(false)
                 ->modalCancelActionLabel('إغلاق'),
             Action::make('disableMfa')
@@ -179,7 +179,7 @@ class StaffResource extends Resource
                 ->visible(fn (User $record): bool => $record->hasMultiFactorAuthentication())
                 ->requiresConfirmation()
                 ->modalHeading('تعطيل المصادقة الثنائية (MFA)')
-                ->modalDescription(fn (User $record): string => "هل أنت متأكد من رغبتك في إلغاء تفعيل المصادقة الثنائية لحساب {$record->name} ({$record->email})؟ سيتمكن صاحب الحساب من تسجيل الدخول بكلمة المرور فقط.")
+                ->modalDescription(fn (User $record): string => "تعطيل المصادقة الثنائية لحساب {$record->name}؟ سيكتفي الحساب بكلمة المرور فقط لتسجيل الدخول.")
                 ->modalSubmitActionLabel('نعم، تعطيل MFA')
                 ->action(function (User $record): void {
                     app(StaffManagementService::class)->disableMfa(auth()->user(), (int) $record->getKey());
@@ -191,17 +191,17 @@ class StaffResource extends Resource
     public static function createEmployeeAction(): Action
     {
         return Action::make('createEmployee')
-            ->label('إضافة مستخدم')
+            ->label('إضافة موظف')
             ->icon('heroicon-o-user-plus')
             ->schema(static::formFields(editing: false))
             ->action(function (array $data, Schema $schema): void {
                 FilamentValidationHandler::run(
                     fn () => app(StaffManagementService::class)->createEmployee(auth()->user(), $data),
                     $schema,
-                    'تعذر إنشاء الحساب'
+                    'تعذر إضافة الموظف'
                 );
             })
-            ->successNotificationTitle('تم إنشاء الحساب بنجاح');
+            ->successNotificationTitle('تمت إضافة الموظف بنجاح');
     }
 
     /** @return array<int, Component> */
@@ -242,7 +242,7 @@ class StaffResource extends Resource
                 ->minLength(12)
                 ->dehydrated(fn ($state): bool => filled($state)),
             Select::make('is_company_manager')
-                ->label('نوع الحساب (الدور)')
+                ->label('الدور')
                 ->options([
                     0 => 'موظف',
                     1 => 'مدير',
@@ -250,7 +250,7 @@ class StaffResource extends Resource
                 ->default(0)
                 ->required()
                 ->disabled((bool) $isSelf)
-                ->helperText($isSelf ? 'لا يمكنك إلغاء صلاحية المدير عن حسابك الحالي تجنبًا لفقدان الوصول للإدارة.' : 'يمتلك المدير صلاحية الوصول والإدارة لجميع الأقسام تلقائيًا.')
+                ->helperText($isSelf ? 'لا يمكن إزالة صلاحية المدير عن حسابك الحالي.' : 'المدير لديه وصول كامل لجميع الأقسام.')
                 ->live(),
             Select::make('departments')
                 ->label('الأقسام المصرح بها')
@@ -267,13 +267,13 @@ class StaffResource extends Resource
                 ->label('المصادقة الثنائية (MFA)')
                 ->content(function (?User $record): string {
                     if (! $record) {
-                        return 'المصادقة الثنائية اختيارية وتعتمد على تطبيق الهاتف (TOTP). يمكن للمستخدم إعدادها ومسح رمز QR عبر صفحته الشخصية فور إنشاء حسابه.';
+                        return 'يمكن للموظف إعداد المصادقة الثنائية من صفحته الشخصية فور إنشاء حسابه.';
                     }
                     if ($record->hasMultiFactorAuthentication()) {
-                        return 'مفعّلة عبر تطبيق رموز الأمان (TOTP). يمكن للمدير تعطيلها من جدول المستخدمين عند الحاجة.';
+                        return 'مفعّلة على هذا الحساب.';
                     }
 
-                    return 'غير مفعّلة حاليًا. يقوم صاحب الحساب بتفعيلها مباشرة عبر قائمة «الملف الشخصي» في القائمة الجانبية بمسح رمز QR من هاتفه.';
+                    return 'غير مفعّلة. يمكن تفعيلها من صفحة الملف الشخصي.';
                 }),
         ];
     }

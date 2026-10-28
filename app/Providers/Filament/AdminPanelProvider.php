@@ -3,11 +3,11 @@
 namespace App\Providers\Filament;
 
 use App\Auth\SafeAppAuthentication;
-use App\Support\DefaultAvatarProvider;
 use App\Filament\Pages\Auth\EditProfile;
 use App\Filament\Widgets\OperationalRequestsOverview;
 use App\Http\Middleware\RestrictAdminPanelByIp;
 use App\Http\Middleware\SetSecurityHeaders;
+use App\Support\DefaultAvatarProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
@@ -45,7 +45,7 @@ class AdminPanelProvider extends PanelProvider
             ->profile(EditProfile::class, isSimple: false)
             ->userMenuItems([
                 'profile' => MenuItem::make()
-                    ->label(fn (): string => auth()->user()?->name ?? '')
+                    ->label(fn (): string => filament()->auth()->user() ? filament()->getUserName(filament()->auth()->user()) : '')
                     ->url(null)
                     ->icon('heroicon-o-user-circle')
                     ->sort(-1),
