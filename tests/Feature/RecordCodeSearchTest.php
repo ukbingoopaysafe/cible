@@ -24,35 +24,43 @@ class RecordCodeSearchTest extends TestCase
 
     public function test_record_code_helper_generates_correct_prefixes_and_padding(): void
     {
-        $this->assertSame('RN-000012', RecordCode::request(Department::Rental, 12));
-        $this->assertSame('RS-000012', RecordCode::request(Department::Resale, 12));
-        $this->assertSame('RC-000045', RecordCode::customer(Department::Rental, 45));
-        $this->assertSame('SC-000045', RecordCode::customer(Department::Resale, 45));
+        $this->assertSame('RN-12', RecordCode::request(Department::Rental, 12));
+        $this->assertSame('RS-12', RecordCode::request(Department::Resale, 12));
+        $this->assertSame('RC-45', RecordCode::customer(Department::Rental, 45));
+        $this->assertSame('SC-45', RecordCode::customer(Department::Resale, 45));
 
-        $this->assertSame('RN-000012', Department::Rental->requestCode(12));
-        $this->assertSame('RS-000012', Department::Resale->requestCode(12));
-        $this->assertSame('RC-000045', Department::Rental->customerCode(45));
-        $this->assertSame('SC-000045', Department::Resale->customerCode(45));
+        $this->assertSame('RN-01', RecordCode::request(Department::Rental, 1));
+        $this->assertSame('RS-01', RecordCode::request(Department::Resale, 1));
+        $this->assertSame('RC-01', RecordCode::customer(Department::Rental, 1));
+        $this->assertSame('SC-01', RecordCode::customer(Department::Resale, 1));
+
+        $this->assertSame('RN-12', Department::Rental->requestCode(12));
+        $this->assertSame('RS-12', Department::Resale->requestCode(12));
+        $this->assertSame('RC-45', Department::Rental->customerCode(45));
+        $this->assertSame('SC-45', Department::Resale->customerCode(45));
     }
 
     public function test_record_code_parser_resolves_expected_formats_and_rejects_alien_prefixes(): void
     {
+        $this->assertSame(12, RecordCode::parseId('RN-12', Department::Rental, RecordCode::TYPE_REQUEST));
+        $this->assertSame(12, RecordCode::parseId('rn-12', Department::Rental, RecordCode::TYPE_REQUEST));
         $this->assertSame(12, RecordCode::parseId('RN-000012', Department::Rental, RecordCode::TYPE_REQUEST));
-        $this->assertSame(12, RecordCode::parseId('rn-000012', Department::Rental, RecordCode::TYPE_REQUEST));
         $this->assertSame(12, RecordCode::parseId('000012', Department::Rental, RecordCode::TYPE_REQUEST));
         $this->assertSame(12, RecordCode::parseId('12', Department::Rental, RecordCode::TYPE_REQUEST));
+        $this->assertSame(1, RecordCode::parseId('RN-01', Department::Rental, RecordCode::TYPE_REQUEST));
+        $this->assertSame(1, RecordCode::parseId('01', Department::Rental, RecordCode::TYPE_REQUEST));
 
         // Alien prefix in Rental Request search must return false
-        $this->assertFalse(RecordCode::parseId('RS-000012', Department::Rental, RecordCode::TYPE_REQUEST));
-        $this->assertFalse(RecordCode::parseId('RC-000012', Department::Rental, RecordCode::TYPE_REQUEST));
-        $this->assertFalse(RecordCode::parseId('SC-000012', Department::Rental, RecordCode::TYPE_REQUEST));
+        $this->assertFalse(RecordCode::parseId('RS-12', Department::Rental, RecordCode::TYPE_REQUEST));
+        $this->assertFalse(RecordCode::parseId('RC-12', Department::Rental, RecordCode::TYPE_REQUEST));
+        $this->assertFalse(RecordCode::parseId('SC-12', Department::Rental, RecordCode::TYPE_REQUEST));
 
         // Alien prefix in Resale Request search must return false
-        $this->assertFalse(RecordCode::parseId('RN-000012', Department::Resale, RecordCode::TYPE_REQUEST));
+        $this->assertFalse(RecordCode::parseId('RN-12', Department::Resale, RecordCode::TYPE_REQUEST));
 
         // Customer codes
-        $this->assertSame(45, RecordCode::parseId('RC-000045', Department::Rental, RecordCode::TYPE_CUSTOMER));
-        $this->assertFalse(RecordCode::parseId('SC-000045', Department::Rental, RecordCode::TYPE_CUSTOMER));
+        $this->assertSame(45, RecordCode::parseId('RC-45', Department::Rental, RecordCode::TYPE_CUSTOMER));
+        $this->assertFalse(RecordCode::parseId('SC-45', Department::Rental, RecordCode::TYPE_CUSTOMER));
     }
 
     public function test_rental_requests_table_searchable_by_full_code_padded_and_raw_id(): void
@@ -87,13 +95,13 @@ class RecordCodeSearchTest extends TestCase
 
         $this->actingAs($manager);
 
-        // 1. Search by full code: RN-000012
+        // 1. Search by full code: RN-12
         Livewire::test(ListRentalRequests::class)
-            ->searchTable('RN-000012')
+            ->searchTable('RN-12')
             ->assertCanSeeTableRecords([$targetRequest])
             ->assertCanNotSeeTableRecords([$otherRequest]);
 
-        // 2. Search by padded digits: 000012
+        // 2. Search by legacy padded digits: 000012
         Livewire::test(ListRentalRequests::class)
             ->searchTable('000012')
             ->assertCanSeeTableRecords([$targetRequest])
@@ -105,9 +113,9 @@ class RecordCodeSearchTest extends TestCase
             ->assertCanSeeTableRecords([$targetRequest])
             ->assertCanNotSeeTableRecords([$otherRequest]);
 
-        // 4. Search by alien code (Resale request code RS-000012) must NOT return the rental request
+        // 4. Search by alien code (Resale request code RS-12) must NOT return the rental request
         Livewire::test(ListRentalRequests::class)
-            ->searchTable('RS-000012')
+            ->searchTable('RS-12')
             ->assertCanNotSeeTableRecords([$targetRequest])
             ->assertCanNotSeeTableRecords([$otherRequest]);
     }
@@ -144,15 +152,15 @@ class RecordCodeSearchTest extends TestCase
 
         $this->actingAs($manager);
 
-        // Search by full resale code: RS-000012
+        // Search by full resale code: RS-12
         Livewire::test(ListResaleRequests::class)
-            ->searchTable('RS-000012')
+            ->searchTable('RS-12')
             ->assertCanSeeTableRecords([$targetRequest])
             ->assertCanNotSeeTableRecords([$otherRequest]);
 
-        // Search by rental code: RN-000012 must NOT return the resale request
+        // Search by rental code: RN-12 must NOT return the resale request
         Livewire::test(ListResaleRequests::class)
-            ->searchTable('RN-000012')
+            ->searchTable('RN-12')
             ->assertCanNotSeeTableRecords([$targetRequest])
             ->assertCanNotSeeTableRecords([$otherRequest]);
     }
@@ -175,15 +183,15 @@ class RecordCodeSearchTest extends TestCase
 
         $this->actingAs($manager);
 
-        // 1. Search by RC-000045
+        // 1. Search by RC-45
         Livewire::test(ListRentalCustomers::class)
-            ->searchTable('RC-000045')
+            ->searchTable('RC-45')
             ->assertCanSeeTableRecords([$targetCustomer])
             ->assertCanNotSeeTableRecords([$otherCustomer]);
 
-        // 2. Search by alien code SC-000045 must NOT return rental customer
+        // 2. Search by alien code SC-45 must NOT return rental customer
         Livewire::test(ListRentalCustomers::class)
-            ->searchTable('SC-000045')
+            ->searchTable('SC-45')
             ->assertCanNotSeeTableRecords([$targetCustomer]);
     }
 }

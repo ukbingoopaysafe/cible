@@ -49,7 +49,7 @@ class RecordCode
             return null;
         }
 
-        return sprintf('%s%06d', self::prefix($department, $type), (int) $id);
+        return sprintf('%s%02d', self::prefix($department, $type), (int) $id);
     }
 
     public static function request(Department $department, int|string|null $id): ?string
@@ -66,7 +66,7 @@ class RecordCode
      * Parses a search query into an ID for the given department and type.
      *
      * Returns:
-     * - positive int if search query matches the expected prefix (e.g. RN-000012) or is pure digits.
+     * - positive int if search query matches the expected prefix (e.g. RN-01) or is pure digits.
      * - false if search query has an explicit alien prefix (e.g. RS-000012 in Rental).
      * - null if search query does not look like a code or ID (e.g. names/words).
      */

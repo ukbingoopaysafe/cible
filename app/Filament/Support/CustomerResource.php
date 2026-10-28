@@ -99,8 +99,8 @@ abstract class CustomerResource extends Resource
                 TextColumn::make('code')
                     ->label('الكود')
                     ->state(fn (Model $record): ?string => RecordCode::customer(static::department(), $record->id))
-                    ->extraHeaderAttributes(['class' => 'w-16 whitespace-nowrap px-2'])
-                    ->extraCellAttributes(['class' => 'record-code-cell whitespace-nowrap px-2'])
+                    ->extraHeaderAttributes(['class' => 'whitespace-nowrap'])
+                    ->extraCellAttributes(['class' => 'record-code-cell whitespace-nowrap'])
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction))
                     ->searchable(query: fn (Builder $query, string $search): Builder => RecordCode::applySearch($query, $search, static::department(), RecordCode::TYPE_CUSTOMER)),
                 TextColumn::make('name')->label('اسم العميل')->searchable()->sortable()->toggleable(),

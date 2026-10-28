@@ -213,34 +213,47 @@ footer.fi-footer {
     display: none !important;
 }
 
-/* Derived Code Column (Jost tabular-nums) */
+/* Derived Code Column (Jost tabular-nums, compact & clean) */
 .record-code-cell {
     font-family: 'Jost', -apple-system, BlinkMacSystemFont, monospace, sans-serif !important;
     font-variant-numeric: tabular-nums !important;
     font-feature-settings: "tnum" !important;
-    letter-spacing: 0.04em !important;
+    letter-spacing: 0.02em !important;
     font-weight: 600 !important;
-    font-size: 0.8125rem !important;
+    font-size: 0.75rem !important;
+    line-height: 1.25 !important;
     direction: ltr !important;
     display: inline-block !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
 }
 
-/* Tighten Code Column Header & Cell to eliminate horizontal scroll on 1366px */
+/* Compact Code Column Header & Cell: no clipping, no horizontal overflow */
 .fi-ta-header-cell-code .fi-ta-header-cell-sort-btn {
     gap: 0.25rem !important;
+    font-size: 0.75rem !important;
 }
 
 .fi-ta-header-cell-code .fi-ta-header-cell-sort-btn svg {
-    width: 0.875rem !important;
-    height: 0.875rem !important;
+    width: 0.75rem !important;
+    height: 0.75rem !important;
 }
 
 .fi-ta-header-cell-code,
 .fi-ta-cell-code {
-    width: 5.25rem !important;
-    max-width: 5.75rem !important;
-    padding-inline-start: 0.375rem !important;
-    padding-inline-end: 0.375rem !important;
+    width: 4.5rem !important;
+    min-width: 4.5rem !important;
+    padding-inline-start: 0.5rem !important;
+    padding-inline-end: 0.5rem !important;
+    white-space: nowrap !important;
+    overflow: visible !important;
+}
+
+.fi-ta-cell-code .fi-ta-text-item,
+.fi-ta-cell-code .fi-ta-text-item-inner {
+    overflow: visible !important;
+    white-space: nowrap !important;
+    text-overflow: clip !important;
 }
 
 /* Column Manager Dropdown Internal Scrolling */
