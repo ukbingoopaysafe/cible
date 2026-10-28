@@ -22,6 +22,7 @@ use App\Services\AreaService;
 use App\Services\BrokerService;
 use App\Services\CustomerPhoneNormalizer;
 use App\Services\CustomerService;
+use App\Support\RecordCode;
 use Closure;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
@@ -339,7 +340,17 @@ final class RequestFormSchema
                 ->columns(2),
             Section::make('أطراف الطلب والموقع')
                 ->schema([
-                    TextEntry::make('customer.name')->label('العميل')->placeholder('غير معروف'),
+                    TextEntry::make('customer.name')
+                        ->label('العميل')
+                        ->placeholder('غير معروف')
+                        ->formatStateUsing(function ($state, ?Model $record) use ($department): string {
+                            if (blank($state)) {
+                                return 'غير معروف';
+                            }
+                            $code = RecordCode::customer($department, $record?->customer_id);
+
+                            return $code ? "{$state} ({$code})" : (string) $state;
+                        }),
                     TextEntry::make('broker.name')->label('الوسيط')->state(fn ($record): ?string => $record?->broker?->name ?? $record?->broker_name_snapshot)->placeholder('—'),
                     TextEntry::make('contact_party')->label('جهة الاتصال')->formatStateUsing(fn ($state): string => match (self::enumValue($state)) {
                         'customer' => 'العميل',

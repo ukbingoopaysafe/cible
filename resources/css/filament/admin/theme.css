@@ -213,3 +213,33 @@ footer.fi-footer {
     display: none !important;
 }
 
+/* Derived Code Column (Jost tabular-nums) */
+.record-code-cell {
+    font-family: 'Jost', -apple-system, BlinkMacSystemFont, monospace, sans-serif !important;
+    font-variant-numeric: tabular-nums !important;
+    font-feature-settings: "tnum" !important;
+    letter-spacing: 0.04em !important;
+    font-weight: 600 !important;
+    font-size: 0.8125rem !important;
+    direction: ltr !important;
+    display: inline-block !important;
+}
+
+/* Tighten Code Column Header & Cell to eliminate horizontal scroll on 1366px */
+.fi-ta-header-cell-code .fi-ta-header-cell-sort-btn {
+    gap: 0.25rem !important;
+}
+
+.fi-ta-header-cell-code .fi-ta-header-cell-sort-btn svg {
+    width: 0.875rem !important;
+    height: 0.875rem !important;
+}
+
+.fi-ta-header-cell-code,
+.fi-ta-cell-code {
+    width: 5.25rem !important;
+    max-width: 5.75rem !important;
+    padding-inline-start: 0.375rem !important;
+    padding-inline-end: 0.375rem !important;
+}
+

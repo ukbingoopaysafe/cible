@@ -15,6 +15,7 @@ use App\Services\AftercareService;
 use App\Services\CustomerPhoneNormalizer;
 use App\Services\CustomerService;
 use App\Services\CustomerSpreadsheetImportService;
+use App\Support\RecordCode;
 use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -96,6 +97,13 @@ abstract class CustomerResource extends Resource
                     ->columnMapping(false),
             ])
             ->columns([
+                TextColumn::make('code')
+                    ->label('الكود')
+                    ->state(fn (Model $record): ?string => RecordCode::customer(static::department(), $record->id))
+                    ->extraHeaderAttributes(['class' => 'w-16 whitespace-nowrap px-2'])
+                    ->extraCellAttributes(['class' => 'record-code-cell whitespace-nowrap px-2'])
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction))
+                    ->searchable(query: fn (Builder $query, string $search): Builder => RecordCode::applySearch($query, $search, static::department(), RecordCode::TYPE_CUSTOMER)),
                 TextColumn::make('name')->label('اسم العميل')->searchable()->sortable()->toggleable(),
                 TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable()->toggleable(),
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),

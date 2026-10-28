@@ -25,6 +25,7 @@ use App\Services\ContactActivityService;
 use App\Services\DealService;
 use App\Services\RecommendationService;
 use App\Services\RequestService;
+use App\Support\RecordCode;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\EditAction;
@@ -48,6 +49,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Enums\RecordActionsPosition;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -115,6 +117,18 @@ abstract class SectionRequestResource extends Resource
         return false;
     }
 
+    public static function getRecordTitle(?Model $record): string|null|Htmlable
+    {
+        if (! $record) {
+            return null;
+        }
+
+        $code = RecordCode::request(static::department(), $record->id);
+        $prefix = static::department() === Department::Rental ? 'طلب إيجار' : 'طلب إعادة بيع';
+
+        return "{$prefix} {$code}";
+    }
+
     public static function table(Table $table): Table
     {
         return $table
@@ -126,6 +140,13 @@ abstract class SectionRequestResource extends Resource
                     ->columnMapping(false),
             ])
             ->columns([
+                TextColumn::make('code')
+                    ->label('الكود')
+                    ->state(fn (Model $record): ?string => RecordCode::request(static::department(), $record->id))
+                    ->extraHeaderAttributes(['class' => 'w-16 whitespace-nowrap px-2'])
+                    ->extraCellAttributes(['class' => 'record-code-cell whitespace-nowrap px-2'])
+                    ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction))
+                    ->searchable(query: fn (Builder $query, string $search): Builder => RecordCode::applySearch($query, $search, static::department(), RecordCode::TYPE_REQUEST)),
                 TextColumn::make('customer.name')
                     ->label('العميل')
                     ->placeholder('غير معروف')
