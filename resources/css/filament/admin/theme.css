@@ -95,24 +95,7 @@ input[type="tel"] {
 /* ========================================================
    MODERN ULTRA-SLIM LUXURY SCROLLBARS (WCAG & Cross-Browser)
    ======================================================== */
-/* Firefox standard scrollbars */
-@supports not selector(::-webkit-scrollbar) {
-    * {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(196, 163, 105, 0.35) transparent;
-    }
-
-    .dark * {
-        scrollbar-color: rgba(196, 163, 105, 0.3) transparent;
-    }
-
-    .fi-sidebar-nav {
-        scrollbar-width: thin;
-        scrollbar-color: rgba(196, 163, 105, 0.25) transparent;
-    }
-}
-
-/* Chromium (Chrome, Edge, Brave, Opera) & WebKit (Safari) */
+/* Chrome, Edge, Safari, Brave custom luxury scrollbars (buttons completely removed) */
 ::-webkit-scrollbar {
     width: 6px !important;
     height: 6px !important;
@@ -157,10 +140,34 @@ input[type="tel"] {
     background: rgba(196, 163, 105, 0.55) !important;
 }
 
-/* Sidebar navigation scrollbar: ultra-slim (4px) & non-intrusive */
+/* Firefox standard scrollbars (only applied where webkit is not supported) */
+@supports not selector(::-webkit-scrollbar) {
+    * {
+        scrollbar-width: thin;
+        scrollbar-color: rgba(196, 163, 105, 0.35) transparent;
+    }
+
+    .dark * {
+        scrollbar-color: rgba(196, 163, 105, 0.3) transparent;
+    }
+}
+
+/* Sidebar navigation scrollbar: invisible by default, subtle gold on hover */
 .fi-sidebar-nav {
     overflow-y: auto !important;
     overflow-x: hidden !important;
+}
+
+@supports not selector(::-webkit-scrollbar) {
+    .fi-sidebar-nav {
+        scrollbar-width: thin;
+        scrollbar-color: transparent transparent;
+        transition: scrollbar-color 0.3s ease;
+    }
+
+    .fi-sidebar-nav:hover {
+        scrollbar-color: rgba(196, 163, 105, 0.35) transparent;
+    }
 }
 
 .fi-sidebar-nav::-webkit-scrollbar {
@@ -172,76 +179,286 @@ input[type="tel"] {
 }
 
 .fi-sidebar-nav::-webkit-scrollbar-thumb {
-    background: rgba(196, 163, 105, 0.22) !important;
+    background: transparent !important;
     border-radius: 9999px !important;
+    transition: background 0.2s ease !important;
 }
 
 .fi-sidebar-nav:hover::-webkit-scrollbar-thumb {
-    background: rgba(196, 163, 105, 0.5) !important;
+    background: rgba(196, 163, 105, 0.35) !important;
 }
 
-/* Filament Brand Bar / Topbar Refinement */
+.fi-sidebar-nav::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* Collapsed rail MUST never show a visible scrollbar */
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+}
+
+/* ========================================================
+   GLOBAL CANVAS & BACKGROUND STYLING (Refined Lightweight Canvas)
+   ======================================================== */
+body {
+    background-color: #f8fafc !important;
+}
+
+.fi-main-ctn,
+.fi-main {
+    background-color: #f8fafc !important;
+}
+
+.dark body,
+.dark .fi-main-ctn,
+.dark .fi-main {
+    background-color: #0b0f17 !important;
+}
+
+/* Alpine Cloak to avoid flickering and dual-button rendering */
+[x-cloak] {
+    display: none !important;
+}
+
+/* ========================================================
+   TOPBAR: BORDERLESS & LIGHTWEIGHT (No Bulky Rectangular Container)
+   ======================================================== */
+.fi-topbar-ctn {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    pointer-events: none !important;
+}
+
 .fi-topbar {
-    height: 4.25rem !important;
-    border-bottom: 1px solid rgba(24, 63, 60, 0.08) !important;
-    backdrop-filter: blur(12px) !important;
-    padding-inline: 1rem !important;
+    height: 3.75rem !important;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+    backdrop-filter: none !important;
+    padding-inline: 1.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    pointer-events: none !important;
 }
 
 .dark .fi-topbar {
-    border-bottom-color: rgba(196, 163, 105, 0.12) !important;
-    background-color: rgba(12, 13, 14, 0.95) !important;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+
+.fi-topbar-start,
+.fi-topbar-end,
+.fi-topbar-start *,
+.fi-topbar-end * {
+    pointer-events: auto !important;
 }
 
 .fi-topbar-start {
-    gap: 1rem !important;
+    gap: 0.875rem !important;
     align-items: center !important;
 }
 
-.fi-topbar-collapse-sidebar-btn-ctn button {
-    border-radius: 0.5rem !important;
-    transition: all 0.2s ease !important;
+/* On desktop when sidebar is open, hide redundant topbar logo and buttons */
+@media (min-width: 1024px) {
+    .fi-main-ctn-sidebar-open .fi-topbar-start .fi-logo,
+    .fi-main-ctn-sidebar-open .fi-topbar-collapse-sidebar-btn-ctn {
+        display: none !important;
+    }
 }
 
-.fi-topbar-collapse-sidebar-btn-ctn button:hover {
-    background-color: rgba(196, 163, 105, 0.12) !important;
+/* Floating Sidebar Toggle Button */
+.fi-topbar-collapse-sidebar-btn-ctn button {
+    height: 2.25rem !important;
+    width: 2.25rem !important;
+    border-radius: 0.625rem !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #183f3c !important;
+    background: rgba(255, 255, 255, 0.85) !important;
+    backdrop-filter: blur(8px) !important;
+    border: 1px solid rgba(24, 63, 60, 0.08) !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.dark .fi-topbar-collapse-sidebar-btn-ctn button {
+    background: rgba(18, 24, 34, 0.8) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
     color: #c4a369 !important;
 }
 
-/* Filament Sidebar Container & Navigation Polish */
+.fi-topbar-collapse-sidebar-btn-ctn button:hover {
+    color: #c4a369 !important;
+    border-color: rgba(196, 163, 105, 0.4) !important;
+    background: #ffffff !important;
+    box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.06) !important;
+    transform: scale(1.03);
+}
+
+.dark .fi-topbar-collapse-sidebar-btn-ctn button:hover {
+    background: #1a2230 !important;
+}
+
+/* Floating User Menu Trigger Button (Upper Corner) */
+.fi-user-menu {
+    pointer-events: auto !important;
+}
+
+.fi-user-menu button {
+    border-radius: 9999px !important;
+    padding: 0.25rem !important;
+    background: rgba(255, 255, 255, 0.9) !important;
+    backdrop-filter: blur(12px) !important;
+    border: 1.5px solid rgba(196, 163, 105, 0.45) !important;
+    box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.06) !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.dark .fi-user-menu button {
+    background: rgba(18, 24, 34, 0.85) !important;
+    border-color: rgba(196, 163, 105, 0.35) !important;
+    box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.25) !important;
+}
+
+.fi-user-menu button:hover {
+    border-color: #c4a369 !important;
+    box-shadow: 0 4px 12px 0 rgba(196, 163, 105, 0.25) !important;
+    transform: translateY(-1px);
+}
+
+/* Floating Dropdown Menus */
+.fi-dropdown-panel {
+    border-radius: 1rem !important;
+    border: 1px solid rgba(24, 63, 60, 0.08) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06) !important;
+    background: #ffffff !important;
+    overflow: hidden;
+    z-index: 50 !important;
+}
+
+.dark .fi-dropdown-panel {
+    background: #111927 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* ========================================================
+   SIDEBAR: REFINED, COHESIVE, MODERN SAAS NAVIGATION
+   ======================================================== */
 .fi-sidebar {
-    border-inline-end: 1px solid rgba(24, 63, 60, 0.08) !important;
+    background-color: #ffffff !important;
+    border-inline-end: 1px solid rgba(24, 63, 60, 0.06) !important;
     transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.02) !important;
 }
 
 .dark .fi-sidebar {
-    border-inline-end-color: rgba(196, 163, 105, 0.12) !important;
-    background-color: #0c0d0e !important;
+    background-color: #0f1520 !important;
+    border-inline-end-color: rgba(255, 255, 255, 0.06) !important;
+    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* Sidebar Header */
+.fi-sidebar-header {
+    height: 4.5rem !important;
+    padding-inline: 1.25rem !important;
+    border-bottom: 1px solid rgba(24, 63, 60, 0.05) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+}
+
+.dark .fi-sidebar-header {
+    border-bottom-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header {
+    padding-inline: 0 !important;
+    justify-content: center !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header .fi-sidebar-close-btn {
+    display: none !important;
+}
+
+.fi-sidebar-close-btn,
+.fi-sidebar-open-btn {
+    border-radius: 0.5rem !important;
+    color: #64748b !important;
+    transition: all 0.15s ease !important;
+    padding: 0.35rem !important;
+}
+
+.fi-sidebar-close-btn:hover,
+.fi-sidebar-open-btn:hover {
+    color: #c4a369 !important;
+    background-color: rgba(24, 63, 60, 0.04) !important;
+}
+
+.dark .fi-sidebar-close-btn:hover,
+.dark .fi-sidebar-open-btn:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: #c4a369 !important;
 }
 
 .fi-sidebar-nav {
     padding-inline: 0.75rem !important;
-    padding-top: 0.75rem !important;
+    padding-top: 0.5rem !important;
 }
 
 /* Sidebar Groups */
+.fi-sidebar-group {
+    border-top: 1px solid rgba(24, 63, 60, 0.04) !important;
+    padding-top: 0.5rem !important;
+    margin-top: 0.5rem !important;
+}
+
+.fi-sidebar-group:first-child {
+    border-top: none !important;
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+.dark .fi-sidebar-group {
+    border-top-color: rgba(255, 255, 255, 0.04) !important;
+}
+
 .fi-sidebar-group-label {
-    font-size: 0.75rem !important;
+    font-size: 0.7rem !important;
     font-weight: 700 !important;
-    letter-spacing: 0.04em !important;
+    letter-spacing: 0.06em !important;
     text-transform: uppercase !important;
-    color: #183f3c !important;
-    padding-inline: 0.5rem !important;
-    margin-bottom: 0.35rem !important;
+    color: rgba(24, 63, 60, 0.7) !important;
+    padding-inline: 0.6rem !important;
+    margin-bottom: 0.3rem !important;
 }
 
 .dark .fi-sidebar-group-label {
-    color: #c4a369 !important;
+    color: rgba(196, 163, 105, 0.85) !important;
 }
 
 /* Sidebar Items */
 .fi-sidebar-item {
-    margin-bottom: 0.25rem !important;
+    margin-bottom: 0.2rem !important;
 }
 
 .fi-sidebar-item > a,
@@ -249,48 +466,97 @@ input[type="tel"] {
     border-radius: 0.625rem !important;
     padding-block: 0.5rem !important;
     padding-inline: 0.75rem !important;
-    transition: all 0.15s ease-in-out !important;
+    color: #475569 !important;
+    font-size: 0.85rem !important;
+    font-weight: 500 !important;
+    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.dark .fi-sidebar-item > a,
+.dark .fi-sidebar-item > button {
+    color: #cbd5e1 !important;
+}
+
+.fi-sidebar-item svg {
+    color: #64748b !important;
+    transition: all 0.15s ease !important;
+}
+
+.dark .fi-sidebar-item svg {
+    color: #94a3b8 !important;
 }
 
 .fi-sidebar-item > a:hover,
 .fi-sidebar-item > button:hover {
-    background-color: rgba(196, 163, 105, 0.08) !important;
-    color: #c4a369 !important;
+    background-color: rgba(24, 63, 60, 0.04) !important;
+    color: #183f3c !important;
 }
 
 .dark .fi-sidebar-item > a:hover,
 .dark .fi-sidebar-item > button:hover {
-    background-color: rgba(196, 163, 105, 0.1) !important;
-    color: #dfc694 !important;
+    background-color: rgba(255, 255, 255, 0.05) !important;
+    color: #ffffff !important;
 }
 
+.fi-sidebar-item > a:hover svg,
+.fi-sidebar-item > button:hover svg {
+    color: #183f3c !important;
+}
+
+.dark .fi-sidebar-item > a:hover svg,
+.dark .fi-sidebar-item > button:hover svg {
+    color: #c4a369 !important;
+}
+
+/* Active Navigation Item */
 .fi-sidebar-item-active > a,
 .fi-sidebar-item-active > button {
-    background: linear-gradient(90deg, rgba(196, 163, 105, 0.16) 0%, rgba(24, 63, 60, 0.06) 100%) !important;
-    border-inline-start: 3px solid #c4a369 !important;
+    background: linear-gradient(90deg, rgba(196, 163, 105, 0.12) 0%, rgba(24, 63, 60, 0.02) 100%) !important;
+    border-inline-start: 2px solid #c4a369 !important;
     color: #183f3c !important;
     font-weight: 700 !important;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
 }
 
 .dark .fi-sidebar-item-active > a,
 .dark .fi-sidebar-item-active > button {
-    background: linear-gradient(90deg, rgba(196, 163, 105, 0.2) 0%, rgba(196, 163, 105, 0.05) 100%) !important;
-    border-inline-start: 3px solid #c4a369 !important;
-    color: #c4a369 !important;
+    background: linear-gradient(90deg, rgba(196, 163, 105, 0.16) 0%, rgba(196, 163, 105, 0.03) 100%) !important;
+    border-inline-start: 2px solid #c4a369 !important;
+    color: #ffffff !important;
 }
 
 .fi-sidebar-item-active svg {
     color: #c4a369 !important;
-    transform: scale(1.06);
-    transition: transform 0.2s ease;
+    transform: scale(1.05);
+}
+
+.fi-sidebar-item-badge {
+    background-color: rgba(196, 163, 105, 0.16) !important;
+    color: #183f3c !important;
+    border: 1px solid rgba(196, 163, 105, 0.3) !important;
+    font-weight: 700 !important;
+}
+
+.dark .fi-sidebar-item-badge {
+    color: #c4a369 !important;
 }
 
 /* Collapsed Sidebar Rail Optimization */
+.fi-sidebar:not(.fi-sidebar-open) {
+    background-color: #ffffff !important;
+}
+
+.dark .fi-sidebar:not(.fi-sidebar-open) {
+    background-color: #0f1520 !important;
+}
+
 .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item > a,
 .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item > button {
     justify-content: center !important;
     padding-inline: 0 !important;
+    height: 2.5rem !important;
+    width: 2.5rem !important;
+    margin-inline: auto !important;
 }
 
 .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav {
@@ -300,7 +566,7 @@ input[type="tel"] {
 .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active > a,
 .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active > button {
     border-inline-start: none !important;
-    border-radius: 0.75rem !important;
+    border-radius: 0.625rem !important;
     background: rgba(196, 163, 105, 0.18) !important;
 }
 
@@ -316,15 +582,51 @@ input[type="tel"] {
     border-radius: 9999px !important;
 }
 
-/* Stats Overview Cards Polish */
+/* ========================================================
+   CARDS, PANELS & STATS OVERVIEW POLISH (16px Rounded Cards)
+   ======================================================== */
 .fi-wi-stats-overview-stat {
-    border-radius: 0.75rem !important;
-    border: 1px solid rgba(24, 63, 60, 0.07) !important;
+    border-radius: 1rem !important;
+    border: 1px solid #e2e8f0 !important;
     background: #ffffff !important;
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.02) !important;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
     position: relative;
     overflow: hidden;
+    padding: 1.25rem !important;
+}
+
+.dark .fi-wi-stats-overview-stat {
+    background: #111927 !important;
+    border-color: rgba(255, 255, 255, 0.07) !important;
+}
+
+.fi-wi-stats-overview-stat:hover {
+    box-shadow: 0 6px 12px -2px rgba(0, 0, 0, 0.08), 0 3px 6px -3px rgba(0, 0, 0, 0.04) !important;
+    transform: translateY(-2px);
+    border-color: rgba(196, 163, 105, 0.4) !important;
+}
+
+.fi-wi-stats-overview-stat-value {
+    font-size: 2rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em !important;
+    color: #111927 !important;
+    font-family: 'Jost', sans-serif !important;
+}
+
+.dark .fi-wi-stats-overview-stat-value {
+    color: #f8fafc !important;
+}
+
+.fi-wi-stats-overview-stat-label {
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
+}
+
+.dark .fi-wi-stats-overview-stat-label {
+    color: #94a3b8 !important;
 }
 
 .fi-wi-stats-overview-stat:hover {

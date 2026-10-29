@@ -1,13 +1,13 @@
 <div
     x-data="{}"
-    class="flex items-center gap-3.5 py-0.5 select-none transition-all duration-200"
+    class="flex items-center gap-3.5 select-none transition-all duration-200"
     dir="rtl"
 >
     <div class="relative flex-shrink-0 flex items-center justify-center">
         <img
-            src="{{ asset('images/brand/icon.png') }}"
+            src="{{ asset('images/brand/icon-tight.png') }}"
             alt="Cible Real Estate"
-            class="h-11 w-11 object-contain drop-shadow-sm transition-transform duration-300 hover:scale-105"
+            class="h-10 w-10 object-contain drop-shadow-xs transition-transform duration-300 hover:scale-105"
             loading="eager"
         />
     </div>
@@ -22,10 +22,10 @@
         x-transition:leave-end="opacity-0 -translate-x-2"
         class="flex flex-col text-right leading-none overflow-hidden"
     >
-        <span class="font-['beIN'] text-[20px] font-bold tracking-tight text-[#183F3C] dark:text-[#C4A369] drop-shadow-xs">
+        <span class="font-['beIN'] text-[21px] font-bold tracking-tight text-[#183F3C] dark:text-[#C4A369] drop-shadow-xs leading-snug">
             سيبل العقارية
         </span>
-        <span class="font-['Jost'] text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C4A369] dark:text-[#E0D3BC] mt-1">
+        <span class="font-['Jost'] text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C4A369] dark:text-[#E0D3BC] mt-0.5">
             Cible Real Estate
         </span>
     </div>
