@@ -230,206 +230,164 @@ body {
 }
 
 /* ========================================================
-   TOPBAR: BORDERLESS & LIGHTWEIGHT (No Bulky Rectangular Container)
+   CIBLE SAAS DESIGN SYSTEM TOKENS (BROMAN HR INSPIRED)
    ======================================================== */
-.fi-topbar-ctn {
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    position: sticky !important;
-    top: 0 !important;
-    z-index: 30 !important;
-    pointer-events: none !important;
-}
+:root {
+    --app-sidebar-width: 16rem;
+    --app-sidebar-collapsed-width: 4.5rem;
+    --app-header-height: 4rem;
+    --app-shell-gutter: 1.5rem;
 
-.fi-topbar {
-    height: 3.75rem !important;
-    background: transparent !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
-    backdrop-filter: none !important;
-    padding-inline: 1.5rem !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-    pointer-events: none !important;
-}
-
-.dark .fi-topbar {
-    background: transparent !important;
-    border-bottom: none !important;
-    box-shadow: none !important;
-}
-
-.fi-topbar-start,
-.fi-topbar-end,
-.fi-topbar-start *,
-.fi-topbar-end * {
-    pointer-events: auto !important;
-}
-
-.fi-topbar-start {
-    gap: 0.875rem !important;
-    align-items: center !important;
-}
-
-/* On desktop when sidebar is open, hide redundant topbar logo and buttons */
-@media (min-width: 1024px) {
-    .fi-main-ctn-sidebar-open .fi-topbar-start .fi-logo,
-    .fi-main-ctn-sidebar-open .fi-topbar-collapse-sidebar-btn-ctn {
-        display: none !important;
-    }
-}
-
-/* Floating Sidebar Toggle Button */
-.fi-topbar-collapse-sidebar-btn-ctn button {
-    height: 2.25rem !important;
-    width: 2.25rem !important;
-    border-radius: 0.625rem !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    color: #183f3c !important;
-    background: rgba(255, 255, 255, 0.85) !important;
-    backdrop-filter: blur(8px) !important;
-    border: 1px solid rgba(24, 63, 60, 0.08) !important;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.dark .fi-topbar-collapse-sidebar-btn-ctn button {
-    background: rgba(18, 24, 34, 0.8) !important;
-    border-color: rgba(255, 255, 255, 0.08) !important;
-    color: #c4a369 !important;
-}
-
-.fi-topbar-collapse-sidebar-btn-ctn button:hover {
-    color: #c4a369 !important;
-    border-color: rgba(196, 163, 105, 0.4) !important;
-    background: #ffffff !important;
-    box-shadow: 0 2px 5px 0 rgba(0, 0, 0, 0.06) !important;
-    transform: scale(1.03);
-}
-
-.dark .fi-topbar-collapse-sidebar-btn-ctn button:hover {
-    background: #1a2230 !important;
-}
-
-/* Floating User Menu Trigger Button (Upper Corner) */
-.fi-user-menu {
-    pointer-events: auto !important;
-}
-
-.fi-user-menu button {
-    border-radius: 9999px !important;
-    padding: 0.25rem !important;
-    background: rgba(255, 255, 255, 0.9) !important;
-    backdrop-filter: blur(12px) !important;
-    border: 1.5px solid rgba(196, 163, 105, 0.45) !important;
-    box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.06) !important;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-}
-
-.dark .fi-user-menu button {
-    background: rgba(18, 24, 34, 0.85) !important;
-    border-color: rgba(196, 163, 105, 0.35) !important;
-    box-shadow: 0 2px 8px -1px rgba(0, 0, 0, 0.25) !important;
-}
-
-.fi-user-menu button:hover {
-    border-color: #c4a369 !important;
-    box-shadow: 0 4px 12px 0 rgba(196, 163, 105, 0.25) !important;
-    transform: translateY(-1px);
-}
-
-/* Floating Dropdown Menus */
-.fi-dropdown-panel {
-    border-radius: 1rem !important;
-    border: 1px solid rgba(24, 63, 60, 0.08) !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.06) !important;
-    background: #ffffff !important;
-    overflow: hidden;
-    z-index: 50 !important;
-}
-
-.dark .fi-dropdown-panel {
-    background: #111927 !important;
-    border-color: rgba(255, 255, 255, 0.08) !important;
-    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+    --cible-forest-teal: #183f3c;
+    --cible-gold: #c4a369;
+    --cible-gold-light: #dfc694;
+    --cible-dark-forest: #0d211f;
+    --cible-dark-neutral: #0f172a;
+    --cible-border-subtle: #e2e8f0;
+    --cible-surface: #ffffff;
+    --cible-canvas: #f8fafc;
 }
 
 /* ========================================================
-   SIDEBAR: REFINED, COHESIVE, MODERN SAAS NAVIGATION
+   GLOBAL SHELL LAYOUT & CANVAS
    ======================================================== */
-.fi-sidebar {
-    background-color: #ffffff !important;
-    border-inline-end: 1px solid rgba(24, 63, 60, 0.06) !important;
-    transition: width 0.25s cubic-bezier(0.4, 0, 0.2, 1) !important;
-    box-shadow: -2px 0 10px rgba(0, 0, 0, 0.02) !important;
+body,
+.fi-body {
+    background-color: var(--cible-canvas) !important;
+    min-height: 100vh !important;
 }
 
-.dark .fi-sidebar {
-    background-color: #0f1520 !important;
-    border-inline-end-color: rgba(255, 255, 255, 0.06) !important;
-    box-shadow: -4px 0 20px rgba(0, 0, 0, 0.2) !important;
+.dark body,
+.dark .fi-body {
+    background-color: #0b1120 !important;
 }
 
-/* Sidebar Header */
-.fi-sidebar-header {
-    height: 4.5rem !important;
-    padding-inline: 1.25rem !important;
-    border-bottom: 1px solid rgba(24, 63, 60, 0.05) !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-}
-
-.dark .fi-sidebar-header {
-    border-bottom-color: rgba(255, 255, 255, 0.05) !important;
-}
-
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header {
-    padding-inline: 0 !important;
-    justify-content: center !important;
-}
-
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header .fi-sidebar-close-btn {
+/* Alpine Cloak to avoid flickering */
+[x-cloak] {
     display: none !important;
 }
 
-.fi-sidebar-close-btn,
-.fi-sidebar-open-btn {
-    border-radius: 0.5rem !important;
-    color: #64748b !important;
-    transition: all 0.15s ease !important;
-    padding: 0.35rem !important;
+/* ========================================================
+   SIDEBAR: CONTINUOUS DEEP DARK FOREST ARCHITECTURE
+   ======================================================== */
+/* Desktop Sidebar (lg: 1024px+) */
+@media (min-width: 1024px) {
+    .fi-sidebar {
+        position: fixed !important;
+        top: 0 !important;
+        bottom: 0 !important;
+        inset-inline-start: 0 !important;
+        inset-inline-end: auto !important;
+        height: 100vh !important;
+        max-height: 100vh !important;
+        z-index: 40 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        background-color: #0d211f !important;
+        border-inline-end: 1px solid rgba(255, 255, 255, 0.08) !important;
+        box-shadow: -8px 0 24px rgba(0, 0, 0, 0.12) !important;
+        transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        overflow: hidden !important;
+    }
+
+    .fi-sidebar.fi-sidebar-open {
+        width: 16rem !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) {
+        width: 4.5rem !important;
+        transform: none !important;
+    }
 }
 
-.fi-sidebar-close-btn:hover,
-.fi-sidebar-open-btn:hover {
-    color: #c4a369 !important;
-    background-color: rgba(24, 63, 60, 0.04) !important;
+/* Mobile Sidebar (off-canvas drawer) */
+@media (max-width: 1023.98px) {
+    .fi-sidebar {
+        background-color: #0d211f !important;
+        z-index: 50 !important;
+    }
 }
 
-.dark .fi-sidebar-close-btn:hover,
-.dark .fi-sidebar-open-btn:hover {
-    background-color: rgba(255, 255, 255, 0.06) !important;
-    color: #c4a369 !important;
+/* Sidebar Brand Header (Height 4rem / 64px matching Topbar) */
+.fi-sidebar-header-ctn {
+    flex-shrink: 0 !important;
 }
 
+.fi-sidebar-header {
+    height: 4rem !important;
+    min-height: 4rem !important;
+    padding-inline: 1.25rem !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    background-color: #0d211f !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header {
+    padding: 0 !important;
+    padding-inline: 0 !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
+.fi-sidebar .fi-sidebar-open-collapse-sidebar-btn,
+.fi-sidebar .fi-sidebar-close-collapse-sidebar-btn {
+    display: none !important;
+}
+
+.fi-sidebar-header-logo-ctn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    width: 100% !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header-logo-ctn {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-header-logo-ctn a {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+}
+
+.fi-sidebar:not(.fi-sidebar-open) .fi-logo {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 auto !important;
+    margin-inline: auto !important;
+    margin-inline-start: 0 !important;
+    margin-inline-end: 0 !important;
+    padding: 0 !important;
+}
+
+/* Sidebar Navigation Items & Groups */
 .fi-sidebar-nav {
-    padding-inline: 0.75rem !important;
-    padding-top: 0.5rem !important;
+    flex: 1 1 auto !important;
+    height: calc(100vh - 4rem) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 0.75rem 0.65rem 2.5rem !important;
 }
 
-/* Sidebar Groups */
 .fi-sidebar-group {
-    border-top: 1px solid rgba(24, 63, 60, 0.04) !important;
-    padding-top: 0.5rem !important;
-    margin-top: 0.5rem !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+    padding-top: 0.65rem !important;
+    margin-top: 0.65rem !important;
 }
 
 .fi-sidebar-group:first-child {
@@ -438,148 +396,617 @@ body {
     margin-top: 0 !important;
 }
 
-.dark .fi-sidebar-group {
-    border-top-color: rgba(255, 255, 255, 0.04) !important;
-}
-
 .fi-sidebar-group-label {
-    font-size: 0.7rem !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.06em !important;
+    font-size: 0.75rem !important;
+    font-weight: 800 !important;
+    letter-spacing: 0.05em !important;
     text-transform: uppercase !important;
-    color: rgba(24, 63, 60, 0.7) !important;
-    padding-inline: 0.6rem !important;
-    margin-bottom: 0.3rem !important;
+    color: #c4a369 !important;
+    padding-inline: 0.75rem !important;
+    margin-bottom: 0.35rem !important;
+    opacity: 1 !important;
 }
 
-.dark .fi-sidebar-group-label {
-    color: rgba(196, 163, 105, 0.85) !important;
-}
-
-/* Sidebar Items */
 .fi-sidebar-item {
-    margin-bottom: 0.2rem !important;
+    margin-bottom: 0.25rem !important;
 }
 
 .fi-sidebar-item > a,
 .fi-sidebar-item > button {
-    border-radius: 0.625rem !important;
-    padding-block: 0.5rem !important;
+    min-height: 2.45rem !important;
+    border-radius: 0.75rem !important;
+    padding-block: 0.45rem !important;
     padding-inline: 0.75rem !important;
-    color: #475569 !important;
-    font-size: 0.85rem !important;
-    font-weight: 500 !important;
-    transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1) !important;
-}
-
-.dark .fi-sidebar-item > a,
-.dark .fi-sidebar-item > button {
-    color: #cbd5e1 !important;
-}
-
-.fi-sidebar-item svg {
-    color: #64748b !important;
+    color: #f8fafc !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    gap: 0.75rem !important;
+    background: transparent !important;
+    border: 1px solid transparent !important;
     transition: all 0.15s ease !important;
 }
 
-.dark .fi-sidebar-item svg {
-    color: #94a3b8 !important;
+/* Explicit high-contrast label color for expanded sidebar (overriding Filament gray-700) */
+.fi-sidebar .fi-sidebar-item-label,
+.fi-sidebar-item .fi-sidebar-item-label {
+    color: #f8fafc !important;
+    font-size: 0.875rem !important;
+    font-weight: 600 !important;
+    opacity: 1 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.fi-sidebar .fi-sidebar-item-icon,
+.fi-sidebar-item svg,
+.fi-sidebar-item .fi-icon {
+    width: 1.35rem !important;
+    height: 1.35rem !important;
+    color: #cbd5e1 !important;
+    opacity: 1 !important;
+    transition: color 0.15s ease, transform 0.15s ease !important;
 }
 
 .fi-sidebar-item > a:hover,
 .fi-sidebar-item > button:hover {
-    background-color: rgba(24, 63, 60, 0.04) !important;
-    color: #183f3c !important;
+    background-color: rgba(255, 255, 255, 0.09) !important;
 }
 
-.dark .fi-sidebar-item > a:hover,
-.dark .fi-sidebar-item > button:hover {
-    background-color: rgba(255, 255, 255, 0.05) !important;
+.fi-sidebar-item:hover .fi-sidebar-item-label,
+.fi-sidebar-item > a:hover .fi-sidebar-item-label,
+.fi-sidebar-item > button:hover .fi-sidebar-item-label {
     color: #ffffff !important;
 }
 
+.fi-sidebar-item:hover .fi-sidebar-item-icon,
 .fi-sidebar-item > a:hover svg,
 .fi-sidebar-item > button:hover svg {
-    color: #183f3c !important;
-}
-
-.dark .fi-sidebar-item > a:hover svg,
-.dark .fi-sidebar-item > button:hover svg {
-    color: #c4a369 !important;
+    color: #ffffff !important;
 }
 
 /* Active Navigation Item */
 .fi-sidebar-item-active > a,
-.fi-sidebar-item-active > button {
-    background: linear-gradient(90deg, rgba(196, 163, 105, 0.12) 0%, rgba(24, 63, 60, 0.02) 100%) !important;
-    border-inline-start: 2px solid #c4a369 !important;
-    color: #183f3c !important;
-    font-weight: 700 !important;
-    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02) !important;
+.fi-sidebar-item-active > button,
+.fi-sidebar-item.fi-active > a,
+.fi-sidebar-item.fi-active > button {
+    background: rgba(196, 163, 105, 0.2) !important;
+    border: 1px solid rgba(196, 163, 105, 0.45) !important;
+    box-shadow: inset 0 0 0 1px rgba(196, 163, 105, 0.25) !important;
 }
 
-.dark .fi-sidebar-item-active > a,
-.dark .fi-sidebar-item-active > button {
-    background: linear-gradient(90deg, rgba(196, 163, 105, 0.16) 0%, rgba(196, 163, 105, 0.03) 100%) !important;
-    border-inline-start: 2px solid #c4a369 !important;
+.fi-sidebar-item-active .fi-sidebar-item-label,
+.fi-sidebar-item.fi-active .fi-sidebar-item-label {
     color: #ffffff !important;
+    font-weight: 700 !important;
 }
 
-.fi-sidebar-item-active svg {
+.fi-sidebar-item-active .fi-sidebar-item-icon,
+.fi-sidebar-item-active svg,
+.fi-sidebar-item.fi-active .fi-sidebar-item-icon,
+.fi-sidebar-item.fi-active svg {
     color: #c4a369 !important;
-    transform: scale(1.05);
+    transform: scale(1.06);
 }
 
 .fi-sidebar-item-badge {
-    background-color: rgba(196, 163, 105, 0.16) !important;
-    color: #183f3c !important;
-    border: 1px solid rgba(196, 163, 105, 0.3) !important;
-    font-weight: 700 !important;
-}
-
-.dark .fi-sidebar-item-badge {
-    color: #c4a369 !important;
-}
-
-/* Collapsed Sidebar Rail Optimization */
-.fi-sidebar:not(.fi-sidebar-open) {
-    background-color: #ffffff !important;
-}
-
-.dark .fi-sidebar:not(.fi-sidebar-open) {
-    background-color: #0f1520 !important;
-}
-
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item > a,
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item > button {
-    justify-content: center !important;
-    padding-inline: 0 !important;
-    height: 2.5rem !important;
-    width: 2.5rem !important;
-    margin-inline: auto !important;
-}
-
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav {
-    padding-inline: 0.375rem !important;
-}
-
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active > a,
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active > button {
-    border-inline-start: none !important;
-    border-radius: 0.625rem !important;
-    background: rgba(196, 163, 105, 0.18) !important;
-}
-
-.fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-badge {
-    position: absolute !important;
-    top: 0.25rem !important;
-    inset-inline-start: 0.25rem !important;
-    font-size: 0.65rem !important;
-    padding: 0.1rem 0.3rem !important;
-    min-width: 1rem !important;
-    height: 1rem !important;
-    line-height: 1 !important;
+    background-color: #c4a369 !important;
+    color: #0d211f !important;
+    border: 1px solid #c4a369 !important;
+    font-weight: 800 !important;
+    font-size: 0.75rem !important;
     border-radius: 9999px !important;
+    padding: 0.1rem 0.5rem !important;
+}
+
+/* Collapsed Sidebar Rail (Width 4.5rem / 72px) */
+@media (min-width: 1024px) {
+    .fi-sidebar:not(.fi-sidebar-open) {
+        width: 4.5rem !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav {
+        padding-inline: 0 !important;
+        scrollbar-gutter: auto !important;
+        overflow-x: hidden !important;
+        width: 100% !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-nav-groups {
+        margin: 0 !important;
+        margin-inline: 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-group {
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-group-items {
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: center !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item {
+        display: flex !important;
+        justify-content: center !important;
+        align-items: center !important;
+        margin: 0 0 0.35rem 0 !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item > a,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item > button,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-btn {
+        justify-content: center !important;
+        align-items: center !important;
+        padding: 0 !important;
+        height: 2.5rem !important;
+        width: 2.5rem !important;
+        min-width: 2.5rem !important;
+        max-width: 2.5rem !important;
+        margin: 0 auto !important;
+        border-radius: 0.625rem !important;
+        display: flex !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item svg,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item .fi-icon,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-icon {
+        margin: 0 auto !important;
+        display: block !important;
+        flex-shrink: 0 !important;
+        width: 1.35rem !important;
+        height: 1.35rem !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-label,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-group-label,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-group-btn,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-group-collapse-btn {
+        display: none !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active > a,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active > button,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item.fi-active > a,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item.fi-active > button {
+        background: rgba(196, 163, 105, 0.22) !important;
+        border: 1.5px solid rgba(196, 163, 105, 0.5) !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-active svg,
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item.fi-active svg {
+        color: #c4a369 !important;
+    }
+
+    .fi-sidebar:not(.fi-sidebar-open) .fi-sidebar-item-badge {
+        position: absolute !important;
+        top: 0.15rem !important;
+        inset-inline-start: 0.15rem !important;
+        min-width: 0.85rem !important;
+        height: 0.85rem !important;
+        padding: 0 0.25rem !important;
+        font-size: 0.6rem !important;
+    }
+}
+
+/* ========================================================
+   TOPBAR: CLEAN CRISP SAAS HEADER (64px / 4rem Height, 1px Border)
+   ======================================================== */
+.fi-topbar-ctn {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    height: 4rem !important;
+    background-color: #ffffff !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04) !important;
+    backdrop-filter: blur(12px) !important;
+}
+
+.dark .fi-topbar-ctn {
+    background-color: #111827 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.25) !important;
+}
+
+/* On Desktop: Offset Topbar to start exactly beside the Sidebar */
+@media (min-width: 1024px) {
+    .fi-topbar-ctn {
+        transition: margin-inline-start 0.2s cubic-bezier(0.4, 0, 0.2, 1), width 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    }
+
+    /* When sidebar is open (16rem) */
+    .fi-topbar-ctn.fi-topbar-sidebar-open,
+    body:has(.fi-sidebar.fi-sidebar-open) .fi-topbar-ctn,
+    .fi-main-ctn-sidebar-open ~ .fi-topbar-ctn {
+        margin-inline-start: 16rem !important;
+        width: calc(100% - 16rem) !important;
+    }
+
+    /* When sidebar is collapsed (4.5rem) */
+    .fi-topbar-ctn:not(.fi-topbar-sidebar-open),
+    body:not(:has(.fi-sidebar.fi-sidebar-open)) .fi-topbar-ctn {
+        margin-inline-start: 4.5rem !important;
+        width: calc(100% - 4.5rem) !important;
+    }
+}
+
+.fi-topbar {
+    height: 4rem !important;
+    min-height: 4rem !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-inline: 1.25rem !important;
+    background: transparent !important;
+    border-bottom: none !important;
+    box-shadow: none !important;
+}
+
+/* Hide Redundant Topbar Logo on Desktop */
+@media (min-width: 1024px) {
+    .fi-topbar-start .fi-logo,
+    .fi-topbar-start a:has(.fi-logo) {
+        display: none !important;
+    }
+}
+
+.fi-topbar-start {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.875rem !important;
+}
+
+/* Single Unified Sidebar Toggle Button (Start of Topbar) */
+.fi-topbar-sidebar-toggle-btn,
+.fi-topbar-open-sidebar-btn {
+    width: 2.35rem !important;
+    height: 2.35rem !important;
+    min-width: 2.35rem !important;
+    border-radius: 0.625rem !important;
+    border: 1px solid #e2e8f0 !important;
+    background: #ffffff !important;
+    color: #475569 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.03) !important;
+    transition: all 0.15s ease !important;
+    cursor: pointer !important;
+}
+
+.dark .fi-topbar-sidebar-toggle-btn,
+.dark .fi-topbar-open-sidebar-btn {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #cbd5e1 !important;
+}
+
+.fi-topbar-sidebar-toggle-btn:hover,
+.fi-topbar-open-sidebar-btn:hover {
+    background: #f1f5f9 !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+    transform: scale(1.02);
+}
+
+.dark .fi-topbar-sidebar-toggle-btn:hover,
+.dark .fi-topbar-open-sidebar-btn:hover {
+    background: #27354f !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+.fi-topbar-end {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.875rem !important;
+}
+
+/* User Menu Pill Trigger (Broman HR Style) */
+.fi-user-menu button,
+.fi-user-menu-trigger,
+.app-user-menu {
+    display: inline-flex !important;
+    height: 2.45rem !important;
+    min-width: 2.45rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 0.6rem !important;
+    padding-inline: 0.35rem 0.75rem !important;
+    border: 1px solid #e2e8f0 !important;
+    border-radius: 0.75rem !important;
+    background: #ffffff !important;
+    color: #1e293b !important;
+    box-shadow: 0 1px 2px 0 rgba(15, 23, 42, 0.04) !important;
+    transition: all 0.15s ease !important;
+    cursor: pointer !important;
+}
+
+.dark .fi-user-menu button,
+.dark .fi-user-menu-trigger,
+.dark .app-user-menu {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #f8fafc !important;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.2) !important;
+}
+
+.fi-user-menu button:hover,
+.fi-user-menu-trigger:hover,
+.app-user-menu:hover {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    box-shadow: 0 2px 4px 0 rgba(15, 23, 42, 0.08) !important;
+}
+
+.dark .fi-user-menu button:hover,
+.dark .fi-user-menu-trigger:hover,
+.dark .app-user-menu:hover {
+    background: #27354f !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.fi-user-menu .fi-avatar,
+.fi-user-menu img {
+    height: 1.85rem !important;
+    width: 1.85rem !important;
+    border-radius: 9999px !important;
+    border: 1.5px solid #c4a369 !important;
+    object-fit: cover !important;
+    flex-shrink: 0 !important;
+}
+
+/* Floating Dropdown Menus */
+.fi-dropdown-panel {
+    border-radius: 0.875rem !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.1), 0 8px 10px -6px rgba(15, 23, 42, 0.06) !important;
+    background: #ffffff !important;
+    overflow: hidden;
+    z-index: 50 !important;
+    max-width: calc(100vw - 2rem) !important;
+}
+
+.dark .fi-dropdown-panel {
+    background: #111927 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* User Menu Specific Compact Proportions */
+.fi-user-menu-dropdown-panel {
+    width: 13.5rem !important;
+    min-width: 13.5rem !important;
+    max-width: min(13.5rem, calc(100vw - 2rem)) !important;
+    padding: 0.25rem !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-dropdown-header {
+    padding: 0.45rem 0.65rem 0.35rem !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    gap: 0.45rem !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-dropdown-header {
+    color: #f8fafc !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-dropdown-header .fi-icon {
+    width: 1rem !important;
+    height: 1rem !important;
+    color: #94a3b8 !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-dropdown-list {
+    padding: 0.15rem 0 !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-dropdown-list-item {
+    height: 2.1rem !important;
+    min-height: 2.1rem !important;
+    padding: 0.35rem 0.65rem !important;
+    font-size: 0.8125rem !important;
+    font-weight: 600 !important;
+    border-radius: 0.5rem !important;
+    gap: 0.5rem !important;
+    color: #334155 !important;
+    transition: all 0.12s ease !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-dropdown-list-item {
+    color: #e2e8f0 !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-dropdown-list-item:hover {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-dropdown-list-item:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+    color: #ffffff !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-dropdown-list-item .fi-icon {
+    width: 1rem !important;
+    height: 1rem !important;
+    color: #64748b !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-dropdown-list-item .fi-icon {
+    color: #94a3b8 !important;
+}
+
+/* User Menu Compact Theme Switcher */
+.fi-user-menu-dropdown-panel .fi-user-menu-theme-switcher-ctn {
+    padding: 0.2rem 0 0.3rem !important;
+    border-top: 1px solid #f1f5f9 !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    margin: 0.2rem 0 !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-user-menu-theme-switcher-ctn {
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-user-menu-theme-header {
+    padding: 0.2rem 0.65rem 0.25rem !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-user-menu-theme-header .fi-dropdown-header-label {
+    font-size: 0.6875rem !important;
+    font-weight: 700 !important;
+    color: #94a3b8 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-user-menu-theme-header .fi-dropdown-header-label {
+    color: #64748b !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-theme-switcher {
+    display: grid !important;
+    grid-template-columns: repeat(3, 1fr) !important;
+    gap: 0.25rem !important;
+    padding: 0 0.4rem !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-theme-switcher-btn {
+    height: 1.85rem !important;
+    min-height: 1.85rem !important;
+    padding: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    border-radius: 0.375rem !important;
+    border: 1px solid transparent !important;
+    background: #f8fafc !important;
+    color: #64748b !important;
+    transition: all 0.12s ease !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-theme-switcher-btn {
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: #94a3b8 !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-theme-switcher-btn:hover {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-theme-switcher-btn:hover {
+    background: rgba(255, 255, 255, 0.09) !important;
+    color: #ffffff !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-theme-switcher-btn.fi-active {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #c4a369 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06) !important;
+}
+
+.dark .fi-user-menu-dropdown-panel .fi-theme-switcher-btn.fi-active {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.15) !important;
+    color: #c4a369 !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3) !important;
+}
+
+.fi-user-menu-dropdown-panel .fi-theme-switcher-btn svg,
+.fi-user-menu-dropdown-panel .fi-theme-switcher-btn .fi-icon {
+    width: 0.95rem !important;
+    height: 0.95rem !important;
+}
+
+/* ========================================================
+   MAIN CONTENT AREA & PAGE HEADER ALIGNMENT
+   ======================================================== */
+@media (min-width: 1024px) {
+    .fi-main-ctn {
+        transition: margin-inline-start 0.2s cubic-bezier(0.4, 0, 0.2, 1), width 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+        background-color: var(--cible-canvas) !important;
+    }
+
+    .fi-main-ctn.fi-main-ctn-sidebar-open,
+    body:has(.fi-sidebar.fi-sidebar-open) .fi-main-ctn {
+        margin-inline-start: 16rem !important;
+        width: calc(100% - 16rem) !important;
+    }
+
+    .fi-main-ctn:not(.fi-main-ctn-sidebar-open),
+    body:not(:has(.fi-sidebar.fi-sidebar-open)) .fi-main-ctn {
+        margin-inline-start: 4.5rem !important;
+        width: calc(100% - 4.5rem) !important;
+    }
+}
+
+.fi-main {
+    padding: 1.5rem 1.75rem 3.5rem !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    background-color: transparent !important;
+}
+
+/* Page Header Spacing and Heading Polish */
+.fi-header {
+    margin-bottom: 1.75rem !important;
+}
+
+.fi-header-heading {
+    font-size: 1.875rem !important;
+    font-weight: 800 !important;
+    color: #0f172a !important;
+    font-family: 'beIN', sans-serif !important;
+    line-height: 1.35 !important;
+}
+
+.dark .fi-header-heading {
+    color: #f8fafc !important;
+}
+
+.fi-header-subheading {
+    color: #64748b !important;
+    font-size: 0.875rem !important;
+    margin-top: 0.25rem !important;
+}
+
+.dark .fi-header-subheading {
+    color: #94a3b8 !important;
+}
+
+/* Breadcrumbs */
+.fi-breadcrumbs {
+    margin-bottom: 0.5rem !important;
+}
+
+.fi-breadcrumbs-item-label {
+    font-size: 0.85rem !important;
+    color: #64748b !important;
+}
+
+.dark .fi-breadcrumbs-item-label {
+    color: #94a3b8 !important;
 }
 
 /* ========================================================

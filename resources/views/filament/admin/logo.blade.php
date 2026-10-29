@@ -1,6 +1,7 @@
 <div
     x-data="{}"
-    class="flex items-center gap-3.5 select-none transition-all duration-200"
+    x-bind:class="{ 'justify-center w-full !gap-0': ! $store.sidebar.isOpen, 'justify-start gap-3.5': $store.sidebar.isOpen }"
+    class="flex items-center select-none transition-all duration-200"
     dir="rtl"
 >
     <div class="relative flex-shrink-0 flex items-center justify-center">
@@ -22,10 +23,10 @@
         x-transition:leave-end="opacity-0 -translate-x-2"
         class="flex flex-col text-right leading-none overflow-hidden"
     >
-        <span class="font-['beIN'] text-[21px] font-bold tracking-tight text-[#183F3C] dark:text-[#C4A369] drop-shadow-xs leading-snug">
+        <span class="font-['beIN'] text-[21px] font-bold tracking-tight text-white drop-shadow-xs leading-snug">
             سيبل العقارية
         </span>
-        <span class="font-['Jost'] text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C4A369] dark:text-[#E0D3BC] mt-0.5">
+        <span class="font-['Jost'] text-[11px] font-semibold uppercase tracking-[0.22em] text-[#C4A369] mt-0.5">
             Cible Real Estate
         </span>
     </div>
