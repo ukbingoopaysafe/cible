@@ -969,16 +969,22 @@ body,
 }
 
 /* Page Header Spacing and Heading Polish */
+.fi-page-header-main-ctn {
+    padding-top: 0 !important;
+    padding-bottom: 1.25rem !important;
+    gap: 1.15rem !important;
+}
+
 .fi-header {
-    margin-bottom: 1.75rem !important;
+    margin-bottom: 0 !important;
 }
 
 .fi-header-heading {
-    font-size: 1.875rem !important;
+    font-size: 1.625rem !important;
     font-weight: 800 !important;
     color: #0f172a !important;
     font-family: 'beIN', sans-serif !important;
-    line-height: 1.35 !important;
+    line-height: 1.3 !important;
 }
 
 .dark .fi-header-heading {
@@ -1078,35 +1084,506 @@ body,
     opacity: 1;
 }
 
-/* Tables refinement */
+/* ========================================================
+   SHARED UI COMPONENTS (PHASE 3: BROMAN HR INSPIRED)
+   ======================================================== */
+
+/* 1. TABLES: CLEAN SAAS ARCHITECTURE */
 .fi-ta-ctn {
+    background-color: #ffffff !important;
     border-radius: 0.75rem !important;
-    border: 1px solid rgba(24, 63, 60, 0.07) !important;
-    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.03) !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.02) !important;
+    overflow: hidden !important;
 }
 
-.fi-ta-ctn > :first-child {
-    border-top-left-radius: inherit;
-    border-top-right-radius: inherit;
+.dark .fi-ta-ctn {
+    background-color: #111927 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
 }
 
-.fi-ta-ctn > :last-child {
-    border-bottom-left-radius: inherit;
-    border-bottom-right-radius: inherit;
+/* Luxury Cible Horizontal Scrollbar for Data Overflow */
+.fi-ta-content-ctn {
+    scrollbar-width: thin !important;
+    scrollbar-color: rgba(196, 163, 105, 0.45) transparent !important;
+    -webkit-overflow-scrolling: touch !important;
+    overflow-x: auto !important;
 }
 
+.fi-ta-content-ctn::-webkit-scrollbar {
+    height: 6px !important;
+    width: 6px !important;
+}
+
+.fi-ta-content-ctn::-webkit-scrollbar-track {
+    background: transparent !important;
+}
+
+.fi-ta-content-ctn::-webkit-scrollbar-thumb {
+    background: rgba(196, 163, 105, 0.35) !important;
+    border-radius: 9999px !important;
+    transition: background 0.15s ease !important;
+}
+
+.fi-ta-content-ctn:hover::-webkit-scrollbar-thumb {
+    background: rgba(196, 163, 105, 0.65) !important;
+}
+
+.dark .fi-ta-content-ctn {
+    scrollbar-color: rgba(196, 163, 105, 0.35) transparent !important;
+}
+
+.dark .fi-ta-content-ctn::-webkit-scrollbar-thumb {
+    background: rgba(196, 163, 105, 0.3) !important;
+}
+
+.dark .fi-ta-content-ctn:hover::-webkit-scrollbar-thumb {
+    background: rgba(196, 163, 105, 0.55) !important;
+}
+
+.fi-ta-table {
+    border-collapse: separate !important;
+    border-spacing: 0 !important;
+    width: 100% !important;
+}
+
+/* Table Header Row (Compact & Proportional) */
 .fi-ta-header-cell {
-    font-weight: 700 !important;
+    background-color: #f8fafc !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+    color: #1e293b !important;
     font-size: 0.8125rem !important;
-    color: #183f3c !important;
-    background: #f8fafc !important;
+    font-weight: 800 !important;
+    padding-block: 0.75rem !important;
+    padding-inline: 0.65rem !important;
     text-transform: none !important;
+    white-space: nowrap !important;
+    letter-spacing: 0.01em !important;
+    vertical-align: middle !important;
 }
 
-/* Sections and Forms */
+.dark .fi-ta-header-cell {
+    background-color: #172033 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    color: #f1f5f9 !important;
+}
+
+.fi-ta-header-cell-sort-btn {
+    gap: 0.35rem !important;
+    color: inherit !important;
+    font-weight: 800 !important;
+    transition: color 0.12s ease !important;
+}
+
+.fi-ta-header-cell-sort-btn:hover {
+    color: #c4a369 !important;
+}
+
+/* Table Body Rows & Cells (Balanced Row Height: ~64-72px single line, ~80-96px multi-line) */
+.fi-ta-row {
+    border-bottom: 1px solid #f1f5f9 !important;
+    transition: background-color 0.12s ease !important;
+}
+
+.dark .fi-ta-row {
+    border-bottom-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.fi-ta-row:hover {
+    background-color: rgba(248, 250, 252, 0.85) !important;
+}
+
+.dark .fi-ta-row:hover {
+    background-color: rgba(255, 255, 255, 0.025) !important;
+}
+
+.fi-ta-row.fi-selected {
+    background-color: rgba(196, 163, 105, 0.08) !important;
+}
+
+.dark .fi-ta-row.fi-selected {
+    background-color: rgba(196, 163, 105, 0.14) !important;
+}
+
+.fi-ta-cell {
+    padding-block: 0.85rem !important;
+    padding-inline: 0.65rem !important;
+    vertical-align: middle !important;
+}
+
+/* Neutralize Filament v5's internal px-3 py-4 padding on column wrappers to eliminate double padding */
+.fi-ta-cell .fi-ta-text:not(.fi-inline),
+.fi-ta-cell .fi-ta-icon:not(.fi-inline),
+.fi-ta-cell .fi-ta-checkbox:not(.fi-inline) {
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+}
+
+.fi-ta-text-item {
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    color: #1e293b !important;
+    line-height: 1.35 !important;
+}
+
+.dark .fi-ta-text-item {
+    color: #e2e8f0 !important;
+}
+
+.fi-ta-text-description {
+    font-size: 0.75rem !important;
+    color: #64748b !important;
+    line-height: 1.3 !important;
+}
+
+.dark .fi-ta-text-description {
+    color: #94a3b8 !important;
+}
+
+/* Table Record Actions & Header Actions Cell (No Edge Clipping) */
+.fi-ta-table td:has(.fi-ta-actions),
+.fi-ta-table th.fi-ta-actions-header-cell {
+    width: 1% !important;
+    min-width: max-content !important;
+    white-space: nowrap !important;
+    padding-inline-start: 0.5rem !important;
+    padding-inline-end: 0.75rem !important; /* Safe clearance from border prevents icon cutoff */
+}
+
+.fi-ta-actions {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 0.35rem !important;
+    flex-wrap: nowrap !important;
+    min-width: max-content !important;
+}
+
+/* Neutralize negative margins on table icon buttons and ensure consistent sizing */
+.fi-ta-actions .fi-icon-btn {
+    margin: 0 !important;
+    flex-shrink: 0 !important;
+    width: 2.125rem !important;
+    height: 2.125rem !important;
+}
+
+.fi-ta-actions .fi-btn {
+    flex-shrink: 0 !important;
+    white-space: nowrap !important;
+}
+
+/* 2. TABLE TOOLBAR, SEARCH & FILTERS */
+.fi-ta-header-ctn {
+    border-bottom: 1px solid #f1f5f9 !important;
+    background-color: #ffffff !important;
+}
+
+.dark .fi-ta-header-ctn {
+    border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+    background-color: #111927 !important;
+}
+
+/* Table Header Actions Row (e.g. Export, Import) */
+.fi-ta-header {
+    padding: 0.75rem 1rem !important;
+    gap: 0.65rem !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+    background-color: #ffffff !important;
+}
+
+.dark .fi-ta-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+    background-color: #111927 !important;
+}
+
+.fi-ta-header .fi-ta-actions {
+    gap: 0.5rem !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.fi-ta-header-toolbar {
+    padding: 0.75rem 1rem !important;
+    gap: 0.65rem !important;
+    align-items: center !important;
+}
+
+/* Search Field Wrapper */
+.fi-ta-search-field {
+    min-width: 12.5rem !important;
+    max-width: 20rem !important;
+}
+
+@media (max-width: 639.98px) {
+    .fi-ta-search-field {
+        min-width: 100% !important;
+        width: 100% !important;
+    }
+}
+
+.fi-ta-search-field .fi-input-wrp {
+    height: 2.35rem !important;
+    min-height: 2.35rem !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+    transition: all 0.15s ease !important;
+}
+
+.dark .fi-ta-search-field .fi-input-wrp {
+    background-color: #172033 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.fi-ta-search-field .fi-input-wrp:focus-within {
+    border-color: #c4a369 !important;
+    box-shadow: 0 0 0 2px rgba(196, 163, 105, 0.2) !important;
+}
+
+.fi-ta-search-field input {
+    font-size: 0.8125rem !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-ta-search-field input {
+    color: #f8fafc !important;
+}
+
+.fi-ta-search-field input::placeholder {
+    color: #94a3b8 !important;
+}
+
+/* Filter Trigger & Column Manager Action Buttons */
+.fi-ta-filter-trigger-action,
+.fi-ta-col-manager-trigger-action {
+    height: 2.35rem !important;
+    min-height: 2.35rem !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #ffffff !important;
+    color: #475569 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+    padding-inline: 0.75rem !important;
+    transition: all 0.15s ease !important;
+}
+
+.dark .fi-ta-filter-trigger-action,
+.dark .fi-ta-col-manager-trigger-action {
+    background-color: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #cbd5e1 !important;
+}
+
+.fi-ta-filter-trigger-action:hover,
+.fi-ta-col-manager-trigger-action:hover {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-ta-filter-trigger-action:hover,
+.dark .fi-ta-col-manager-trigger-action:hover {
+    background-color: #27354f !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+.fi-ta-filter-trigger-action .fi-badge {
+    background-color: #c4a369 !important;
+    color: #ffffff !important;
+    font-size: 0.6875rem !important;
+    font-weight: 800 !important;
+}
+
+/* 3. BUTTONS & ACTIONS (CONSISTENT SIZING & CIBLE BRANDING) */
+.fi-btn {
+    border-radius: 0.5rem !important;
+    font-family: 'Tajawal', sans-serif !important;
+    font-size: 0.875rem !important;
+    font-weight: 700 !important;
+    line-height: 1.25 !important;
+    transition: all 0.15s ease !important;
+    white-space: nowrap !important;
+}
+
+.fi-btn:not(.fi-size-xs):not(.fi-size-sm):not(.fi-size-lg) {
+    height: 2.35rem !important;
+    min-height: 2.35rem !important;
+    padding-inline: 0.875rem !important;
+}
+
+.fi-btn.fi-size-sm,
+.fi-btn.fi-size-xs {
+    height: 2rem !important;
+    min-height: 2rem !important;
+    padding-inline: 0.65rem !important;
+    font-size: 0.8125rem !important;
+}
+
+.fi-btn.fi-size-lg {
+    height: 2.75rem !important;
+    min-height: 2.75rem !important;
+    padding-inline: 1.25rem !important;
+    font-size: 0.9375rem !important;
+}
+
+/* Primary Button: Cible Gold */
+.fi-btn-color-primary {
+    background-color: #c4a369 !important;
+    border: 1px solid #b08f56 !important;
+    color: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(196, 163, 105, 0.25) !important;
+}
+
+.fi-btn-color-primary:hover,
+.fi-btn-color-primary:focus-visible {
+    background-color: #b08f56 !important;
+    border-color: #9d7d47 !important;
+    box-shadow: 0 2px 4px rgba(196, 163, 105, 0.3) !important;
+    transform: translateY(-1px);
+}
+
+.fi-btn-color-primary:active {
+    transform: translateY(0);
+}
+
+/* Gray / Outline Button */
+.fi-btn-color-gray {
+    background-color: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    color: #334155 !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+.dark .fi-btn-color-gray {
+    background-color: #1e293b !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #f1f5f9 !important;
+}
+
+.fi-btn-color-gray:hover,
+.fi-btn-color-gray:focus-visible {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-btn-color-gray:hover,
+.dark .fi-btn-color-gray:focus-visible {
+    background-color: #27354f !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #ffffff !important;
+}
+
+/* Success Button: Deep Forest Teal */
+.fi-btn-color-success {
+    background-color: #183f3c !important;
+    border: 1px solid #112d2b !important;
+    color: #ffffff !important;
+}
+
+.fi-btn-color-success:hover,
+.fi-btn-color-success:focus-visible {
+    background-color: #112d2b !important;
+}
+
+/* Danger Button: Red */
+.fi-btn-color-danger {
+    background-color: #dc2626 !important;
+    border: 1px solid #b91c1c !important;
+    color: #ffffff !important;
+}
+
+.fi-btn-color-danger:hover,
+.fi-btn-color-danger:focus-visible {
+    background-color: #b91c1c !important;
+}
+
+/* Icon Buttons */
+.fi-icon-btn {
+    border-radius: 0.5rem !important;
+    transition: all 0.15s ease !important;
+}
+
+.fi-icon-btn:hover {
+    background-color: rgba(15, 23, 42, 0.06) !important;
+}
+
+.dark .fi-icon-btn:hover {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* 4. FORM CONTROLS & FIELD WRAPPERS */
+.fi-input-wrp {
+    min-height: 2.45rem !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #cbd5e1 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03) !important;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.dark .fi-input-wrp {
+    background-color: #172033 !important;
+    border-color: rgba(255, 255, 255, 0.12) !important;
+}
+
+.fi-input-wrp:focus-within {
+    border-color: #c4a369 !important;
+    box-shadow: 0 0 0 2px rgba(196, 163, 105, 0.2) !important;
+}
+
+.fi-fo-field-wrp-label {
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    color: #1e293b !important;
+    margin-bottom: 0.35rem !important;
+}
+
+.dark .fi-fo-field-wrp-label {
+    color: #f1f5f9 !important;
+}
+
+.fi-fo-field-wrp-label sup {
+    color: #dc2626 !important;
+    font-weight: 700 !important;
+    margin-inline-start: 0.25rem !important;
+}
+
+.fi-fo-field-wrp-helper-text {
+    font-size: 0.75rem !important;
+    color: #64748b !important;
+    margin-top: 0.25rem !important;
+}
+
+.dark .fi-fo-field-wrp-helper-text {
+    color: #94a3b8 !important;
+}
+
+.fi-fo-field-wrp-error-message {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    color: #dc2626 !important;
+    margin-top: 0.25rem !important;
+}
+
+/* Sections & Form Cards */
 .fi-section {
     border-radius: 0.75rem !important;
-    border: 1px solid rgba(24, 63, 60, 0.07) !important;
+    border: 1px solid #e2e8f0 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04) !important;
+}
+
+.dark .fi-section {
+    background-color: #111927 !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .fi-section-header-heading {
@@ -1115,23 +1592,225 @@ body,
     color: #183f3c !important;
 }
 
-/* Primary Buttons */
-.fi-btn-color-primary {
-    background-color: #c4a369 !important;
+.dark .fi-section-header-heading {
+    color: #f8fafc !important;
+}
+
+/* 5. STATUS BADGES */
+.fi-badge {
+    border-radius: 9999px !important;
+    font-size: 0.75rem !important;
+    font-weight: 700 !important;
+    padding: 0.2rem 0.6rem !important;
+    line-height: 1.2 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.35rem !important;
+}
+
+.fi-badge.fi-color-success {
+    background-color: rgba(16, 185, 129, 0.12) !important;
+    color: #047857 !important;
+    border: 1px solid rgba(16, 185, 129, 0.25) !important;
+}
+
+.dark .fi-badge.fi-color-success {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    color: #34d399 !important;
+    border-color: rgba(16, 185, 129, 0.3) !important;
+}
+
+.fi-badge.fi-color-warning {
+    background-color: rgba(245, 158, 11, 0.12) !important;
+    color: #b45309 !important;
+    border: 1px solid rgba(245, 158, 11, 0.25) !important;
+}
+
+.dark .fi-badge.fi-color-warning {
+    background-color: rgba(245, 158, 11, 0.2) !important;
+    color: #fbbf24 !important;
+    border-color: rgba(245, 158, 11, 0.3) !important;
+}
+
+.fi-badge.fi-color-danger {
+    background-color: rgba(239, 68, 68, 0.12) !important;
+    color: #b91c1c !important;
+    border: 1px solid rgba(239, 68, 68, 0.25) !important;
+}
+
+.dark .fi-badge.fi-color-danger {
+    background-color: rgba(239, 68, 68, 0.2) !important;
+    color: #f87171 !important;
+    border-color: rgba(239, 68, 68, 0.3) !important;
+}
+
+.fi-badge.fi-color-primary {
+    background-color: rgba(196, 163, 105, 0.15) !important;
+    color: #8e6f32 !important;
+    border: 1px solid rgba(196, 163, 105, 0.3) !important;
+}
+
+.dark .fi-badge.fi-color-primary {
+    background-color: rgba(196, 163, 105, 0.25) !important;
+    color: #dfc694 !important;
+    border-color: rgba(196, 163, 105, 0.4) !important;
+}
+
+.fi-badge.fi-color-gray {
+    background-color: rgba(100, 116, 139, 0.1) !important;
+    color: #475569 !important;
+    border: 1px solid rgba(100, 116, 139, 0.2) !important;
+}
+
+.dark .fi-badge.fi-color-gray {
+    background-color: rgba(100, 116, 139, 0.2) !important;
+    color: #94a3b8 !important;
+    border-color: rgba(100, 116, 139, 0.3) !important;
+}
+
+/* 6. PAGINATION */
+.fi-ta-pagination {
+    padding: 0.75rem 1rem !important;
+    border-top: 1px solid #f1f5f9 !important;
+    background-color: transparent !important;
+}
+
+.dark .fi-ta-pagination {
+    border-top-color: rgba(255, 255, 255, 0.05) !important;
+}
+
+.fi-pagination-item {
+    min-width: 2.1rem !important;
+    height: 2.1rem !important;
+    border-radius: 0.375rem !important;
+    border: 1px solid #e2e8f0 !important;
+    font-size: 0.8125rem !important;
+    font-weight: 700 !important;
+    color: #475569 !important;
+    transition: all 0.12s ease !important;
+}
+
+.dark .fi-pagination-item {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    color: #cbd5e1 !important;
+}
+
+.fi-pagination-item:hover {
+    background-color: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+}
+
+.dark .fi-pagination-item:hover {
+    background-color: rgba(255, 255, 255, 0.06) !important;
     color: #ffffff !important;
-    font-weight: 600 !important;
-    transition: all 0.15s ease-in-out !important;
 }
 
-.fi-btn-color-primary:hover {
-    background-color: #b08f56 !important;
-    box-shadow: 0 2px 4px rgba(196, 163, 105, 0.25) !important;
-}
-
-/* Focus States */
-input:focus, select:focus, textarea:focus {
+.fi-pagination-item.fi-active,
+.fi-pagination-item[aria-current="page"] {
+    background-color: #c4a369 !important;
     border-color: #c4a369 !important;
-    --tw-ring-color: #c4a369 !important;
+    color: #ffffff !important;
+    font-weight: 800 !important;
+    box-shadow: 0 1px 2px rgba(196, 163, 105, 0.3) !important;
+}
+
+.fi-pagination-records-per-page-select .fi-input-wrp {
+    height: 2.1rem !important;
+    min-height: 2.1rem !important;
+    border-radius: 0.375rem !important;
+}
+
+/* 7. MODALS & SLIDE-OVERS */
+.fi-modal-window {
+    border-radius: 1rem !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.06) !important;
+    overflow: hidden !important;
+}
+
+.dark .fi-modal-window {
+    background-color: #111827 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.fi-modal-header {
+    padding: 1.25rem 1.5rem !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+
+.dark .fi-modal-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.fi-modal-heading {
+    font-family: 'beIN', sans-serif !important;
+    font-size: 1.25rem !important;
+    font-weight: 700 !important;
+    color: #183f3c !important;
+}
+
+.dark .fi-modal-heading {
+    color: #f8fafc !important;
+}
+
+.fi-modal-footer {
+    padding: 1rem 1.5rem !important;
+    border-top: 1px solid #f1f5f9 !important;
+    background-color: #f8fafc !important;
+}
+
+.dark .fi-modal-footer {
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: #0f1523 !important;
+}
+
+/* 8. EMPTY STATES */
+.fi-ta-empty-state {
+    padding: 3.5rem 1.5rem !important;
+    text-align: center !important;
+}
+
+.fi-ta-empty-state-icon {
+    width: 3.25rem !important;
+    height: 3.25rem !important;
+    color: #94a3b8 !important;
+    margin: 0 auto 1rem !important;
+}
+
+.fi-ta-empty-state-heading {
+    font-size: 1.125rem !important;
+    font-weight: 700 !important;
+    color: #0f172a !important;
+    font-family: 'Tajawal', sans-serif !important;
+}
+
+.dark .fi-ta-empty-state-heading {
+    color: #f8fafc !important;
+}
+
+.fi-ta-empty-state-description {
+    font-size: 0.875rem !important;
+    color: #64748b !important;
+    margin-top: 0.35rem !important;
+}
+
+/* 9. NOTIFICATIONS / TOAST ALERTS */
+.fi-no-notification {
+    border-radius: 0.875rem !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04) !important;
+    padding: 1rem 1.25rem !important;
+}
+
+.dark .fi-no-notification {
+    background-color: #111827 !important;
+    border-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.fi-no-notification-title {
+    font-weight: 700 !important;
+    font-size: 0.875rem !important;
 }
 
 /* Hide Footer */
@@ -1150,9 +1829,13 @@ footer.fi-footer {
     font-size: 0.75rem !important;
     line-height: 1.25 !important;
     direction: ltr !important;
-    display: inline-block !important;
     white-space: nowrap !important;
     overflow: visible !important;
+}
+
+td.record-code-cell {
+    display: table-cell !important;
+    vertical-align: middle !important;
 }
 
 /* Compact Code Column Header & Cell: no clipping, no horizontal overflow */
@@ -1167,7 +1850,8 @@ footer.fi-footer {
 }
 
 .fi-ta-header-cell-code,
-.fi-ta-cell-code {
+.fi-ta-cell-code,
+td.record-code-cell {
     width: 4.5rem !important;
     min-width: 4.5rem !important;
     padding-inline-start: 0.5rem !important;
@@ -1181,6 +1865,38 @@ footer.fi-footer {
     overflow: visible !important;
     white-space: nowrap !important;
     text-overflow: clip !important;
+}
+
+/* Column proportional widths for request and customer tables to eliminate horizontal overflow on desktop */
+.fi-ta-header-cell-customer\.name,
+.fi-ta-cell-customer\.name {
+    min-width: 9.5rem !important;
+}
+
+.fi-ta-header-cell-area\.name,
+.fi-ta-cell-area\.name {
+    min-width: 8rem !important;
+}
+
+.fi-ta-header-cell-owner\.name,
+.fi-ta-cell-owner\.name {
+    min-width: 8rem !important;
+}
+
+.fi-ta-header-cell-stage,
+.fi-ta-cell-stage {
+    min-width: 5.5rem !important;
+}
+
+.fi-ta-header-cell-status,
+.fi-ta-cell-status {
+    min-width: 5rem !important;
+}
+
+.fi-ta-header-cell-next_follow_up_at,
+.fi-ta-cell-next_follow_up_at {
+    min-width: 7.75rem !important;
+    white-space: nowrap !important;
 }
 
 /* Column Manager Dropdown Internal Scrolling */
