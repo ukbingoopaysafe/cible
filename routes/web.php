@@ -10,5 +10,5 @@ Route::prefix('brand')->name('brand.')->group(function (): void {
 });
 
 Route::get('/', function () {
-    return view('welcome');
+    return response('', 302)->header('Location', '/admin/login');
 });
