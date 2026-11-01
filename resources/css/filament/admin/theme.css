@@ -1668,6 +1668,18 @@ body,
     border-color: rgba(100, 116, 139, 0.3) !important;
 }
 
+.fi-badge.fi-color-info {
+    background-color: rgba(59, 130, 246, 0.12) !important;
+    color: #1d4ed8 !important;
+    border: 1px solid rgba(59, 130, 246, 0.25) !important;
+}
+
+.dark .fi-badge.fi-color-info {
+    background-color: rgba(59, 130, 246, 0.2) !important;
+    color: #60a5fa !important;
+    border-color: rgba(59, 130, 246, 0.3) !important;
+}
+
 /* 6. PAGINATION */
 .fi-ta-pagination {
     padding: 0.75rem 1rem !important;
@@ -1895,8 +1907,17 @@ td.record-code-cell {
 
 .fi-ta-header-cell-next_follow_up_at,
 .fi-ta-cell-next_follow_up_at {
-    min-width: 7.75rem !important;
+    min-width: 9.25rem !important;
     white-space: nowrap !important;
+}
+
+/* Customer Phone LTR Display Isolation */
+.fi-ta-cell-customer\.name .fi-ta-text-description,
+.fi-ta-cell-customer\.phone_e164 .fi-ta-text-item,
+.fi-ta-cell-phone_e164 .fi-ta-text-item {
+    direction: ltr !important;
+    unicode-bidi: isolate !important;
+    text-align: start !important;
 }
 
 /* Column Manager Dropdown Internal Scrolling */

@@ -4,8 +4,10 @@ namespace App\Filament\Support;
 
 use App\Enums\ContactActivityChannel;
 use App\Enums\Department;
+use App\Enums\RentalRequestStage;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
+use App\Enums\ResaleRequestStage;
 use App\Exports\RentalRequestExporter;
 use App\Exports\ResaleRequestExporter;
 use App\Models\RentalCustomer;
@@ -49,6 +51,7 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
+use Illuminate\Support\HtmlString;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -128,9 +131,103 @@ abstract class SectionRequestResource extends Resource
         return "{$prefix} {$code}";
     }
 
+    public static function getStatusColor(RequestStatus|string|null $status): string
+    {
+        $value = $status instanceof RequestStatus ? $status : RequestStatus::tryFrom((string) $status);
+
+        return match ($value) {
+            RequestStatus::Active => 'success',
+            RequestStatus::Paused => 'warning',
+            RequestStatus::Closed => 'gray',
+            default => 'gray',
+        };
+    }
+
+    public static function getStageColor(RentalRequestStage|ResaleRequestStage|string|null $stage): string
+    {
+        $value = $stage instanceof \BackedEnum ? $stage->value : (string) $stage;
+
+        return match ($value) {
+            'intake', 'استقبال' => 'gray',
+            'qualification', 'تأهيل' => 'info',
+            'unit_search', 'بحث عن وحدات' => 'primary',
+            'recommendation', 'ترشيح', 'عرض / ترشيح' => 'primary',
+            'viewing', 'معاينة' => 'warning',
+            'negotiation', 'تفاوض' => 'success',
+            'contract_signed', 'signed', 'contract', 'تم توقيع العقد' => 'success',
+            'cancelled', 'canceled', 'ملغي', 'إلغاء' => 'gray',
+            default => 'gray',
+        };
+    }
+
+    public static function getFollowUpColor(Model $record): string
+    {
+        if (! $record->next_follow_up_at || $record->status !== RequestStatus::Active) {
+            return 'gray';
+        }
+
+        if ($record->next_follow_up_at->lt(now())) {
+            return 'danger';
+        }
+
+        if ($record->next_follow_up_at->lte(now()->endOfDay())) {
+            return 'warning';
+        }
+
+        return 'gray';
+    }
+
+    public static function getFollowUpIcon(Model $record): ?string
+    {
+        if (! $record->next_follow_up_at || $record->status !== RequestStatus::Active) {
+            return null;
+        }
+
+        if ($record->next_follow_up_at->lt(now())) {
+            return 'heroicon-m-exclamation-triangle';
+        }
+
+        if ($record->next_follow_up_at->lte(now()->endOfDay())) {
+            return 'heroicon-m-clock';
+        }
+
+        return null;
+    }
+
+    public static function getFollowUpTooltip(Model $record): ?string
+    {
+        if (! $record->next_follow_up_at) {
+            return null;
+        }
+
+        if ($record->status !== RequestStatus::Active) {
+            return null;
+        }
+
+        if ($record->next_follow_up_at->lt(now())) {
+            return 'موعد المتابعة متأخر';
+        }
+
+        if ($record->next_follow_up_at->lte(now()->endOfDay())) {
+            return 'متابعة مستحقة اليوم';
+        }
+
+        return 'متابعة قادمة';
+    }
+
+    public static function formatPhoneForDisplay(?string $phone): ?Htmlable
+    {
+        if (blank($phone)) {
+            return null;
+        }
+
+        return new HtmlString('<span dir="ltr" class="inline-block" style="unicode-bidi: isolate; direction: ltr;">' . e($phone) . '</span>');
+    }
+
     public static function table(Table $table): Table
     {
         return $table
+            ->searchPlaceholder('بحث بالكود، العميل، الهاتف، أو المسؤول...')
             ->headerActions([
                 ExportAction::make()
                     ->label('تصدير')
@@ -149,7 +246,7 @@ abstract class SectionRequestResource extends Resource
                 TextColumn::make('customer.name')
                     ->label('العميل')
                     ->placeholder('غير معروف')
-                    ->description(fn (Model $record): ?string => $record->customer?->phone_e164)
+                    ->description(fn (Model $record): ?Htmlable => static::formatPhoneForDisplay($record->customer?->phone_e164))
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->whereHas('customer', function (Builder $q) use ($search): void {
                             $q->where('name', 'like', "%{$search}%")
@@ -157,7 +254,12 @@ abstract class SectionRequestResource extends Resource
                         });
                     })
                     ->toggleable(),
-                TextColumn::make('customer.phone_e164')->label('هاتف العميل')->placeholder('—')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('customer.phone_e164')
+                    ->label('هاتف العميل')
+                    ->formatStateUsing(fn (?string $state): ?Htmlable => static::formatPhoneForDisplay($state))
+                    ->placeholder('—')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('broker.name')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->placeholder('—')->searchable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? '')->toggleable(),
                 TextColumn::make('owner.name')->label('المسؤول')
@@ -172,13 +274,32 @@ abstract class SectionRequestResource extends Resource
                     ->badge()
                     ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('stage')->label('المرحلة')->badge()->formatStateUsing(fn ($state): string => RequestFormSchema::stageOptions(static::department())[$state instanceof \BackedEnum ? $state->value : $state] ?? (string) $state)->toggleable(),
-                TextColumn::make('status')->label('الحالة')->badge()->formatStateUsing(fn ($state): string => match ($state instanceof RequestStatus ? $state : RequestStatus::from($state)) {
-                    RequestStatus::Active => 'نشط',
-                    RequestStatus::Paused => 'متوقف مؤقتًا',
-                    RequestStatus::Closed => 'مغلق',
-                })->toggleable(),
-                TextColumn::make('next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(),
+                TextColumn::make('stage')
+                    ->label('المرحلة')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => RequestFormSchema::stageOptions(static::department())[$state instanceof \BackedEnum ? $state->value : $state] ?? (string) $state)
+                    ->color(fn ($state): string => static::getStageColor($state))
+                    ->toggleable(),
+                TextColumn::make('status')
+                    ->label('الحالة')
+                    ->badge()
+                    ->formatStateUsing(fn ($state): string => match ($state instanceof RequestStatus ? $state : RequestStatus::from($state)) {
+                        RequestStatus::Active => 'نشط',
+                        RequestStatus::Paused => 'متوقف مؤقتًا',
+                        RequestStatus::Closed => 'مغلق',
+                    })
+                    ->color(fn ($state): string => static::getStatusColor($state))
+                    ->toggleable(),
+                TextColumn::make('next_follow_up_at')
+                    ->label('المتابعة القادمة')
+                    ->dateTime('d/m/Y H:i')
+                    ->placeholder('—')
+                    ->badge()
+                    ->color(fn (Model $record): string => static::getFollowUpColor($record))
+                    ->icon(fn (Model $record): ?string => static::getFollowUpIcon($record))
+                    ->tooltip(fn (Model $record): ?string => static::getFollowUpTooltip($record))
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('activities_count')->label('التواصل')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('recommendations_count')->label('الترشيحات')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('viewings_count')->label('المعاينات')->sortable()->toggleable(isToggledHiddenByDefault: true),
