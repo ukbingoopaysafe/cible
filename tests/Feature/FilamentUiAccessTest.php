@@ -874,6 +874,32 @@ class FilamentUiAccessTest extends TestCase
             ->assertCanSeeTableRecords([$resaleRequest]);
     }
 
+    public function test_rental_requests_table_can_be_filtered_by_owner(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        $owner = User::factory()->create(['is_company_manager' => false]);
+        $owner->departmentMemberships()->create(['department' => Department::Rental]);
+
+        $managerRequest = $this->createRentalRequest($manager);
+        $ownerRequest = app(RequestService::class)->create($owner, Department::Rental, [
+            'customer_id' => app(CustomerService::class)->create($owner, Department::Rental, [
+                'name' => 'عميل المالك',
+                'phone' => '01012345553',
+                'phone_country' => 'EG',
+            ])->id,
+            'area_id' => RentalArea::query()->firstOrFail()->id,
+            'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalRequests::class)
+            ->filterTable('owner_id', $owner->id)
+            ->assertCanSeeTableRecords([$ownerRequest])
+            ->assertCanNotSeeTableRecords([$managerRequest]);
+    }
+
     public function test_manager_can_manage_aftercare_resource(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);

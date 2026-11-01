@@ -782,6 +782,46 @@ body,
     max-width: calc(100vw - 2rem) !important;
 }
 
+.fi-dropdown-panel.fi-scrollable {
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+}
+
+/* Custom sleek scrollbar for dropdowns and overlay panels */
+.fi-dropdown-panel::-webkit-scrollbar,
+.fi-modal-content::-webkit-scrollbar,
+.fi-ta-filters > .fi-grid::-webkit-scrollbar,
+.fi-ta-filters > form::-webkit-scrollbar,
+.fi-ta-col-manager-items::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+.fi-dropdown-panel::-webkit-scrollbar-track,
+.fi-modal-content::-webkit-scrollbar-track,
+.fi-ta-filters > .fi-grid::-webkit-scrollbar-track,
+.fi-ta-filters > form::-webkit-scrollbar-track,
+.fi-ta-col-manager-items::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.fi-dropdown-panel::-webkit-scrollbar-thumb,
+.fi-modal-content::-webkit-scrollbar-thumb,
+.fi-ta-filters > .fi-grid::-webkit-scrollbar-thumb,
+.fi-ta-filters > form::-webkit-scrollbar-thumb,
+.fi-ta-col-manager-items::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.45);
+    border-radius: 9999px;
+}
+
+.dark .fi-dropdown-panel::-webkit-scrollbar-thumb,
+.dark .fi-modal-content::-webkit-scrollbar-thumb,
+.dark .fi-ta-filters > .fi-grid::-webkit-scrollbar-thumb,
+.dark .fi-ta-filters > form::-webkit-scrollbar-thumb,
+.dark .fi-ta-col-manager-items::-webkit-scrollbar-thumb {
+    background: rgba(196, 163, 105, 0.45);
+}
+
 .dark .fi-dropdown-panel {
     background: #111927 !important;
     border-color: rgba(255, 255, 255, 0.08) !important;
@@ -1095,6 +1135,10 @@ body,
     border: 1px solid #e2e8f0 !important;
     box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.02) !important;
     overflow: hidden !important;
+}
+
+.fi-ta-ctn:has(.fi-dropdown-panel[style*="display: block"]) {
+    overflow: visible !important;
 }
 
 .dark .fi-ta-ctn {
@@ -1734,11 +1778,23 @@ body,
 }
 
 /* 7. MODALS & SLIDE-OVERS */
-.fi-modal-window {
+.fi-modal:not(.fi-modal-slide-over) > .fi-modal-window-ctn {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 1.5rem 1rem !important;
+    overflow-y: hidden !important;
+}
+
+.fi-modal:not(.fi-modal-slide-over) .fi-modal-window {
     border-radius: 1rem !important;
     border: 1px solid #e2e8f0 !important;
     box-shadow: 0 20px 25px -5px rgba(15, 23, 42, 0.12), 0 8px 10px -6px rgba(15, 23, 42, 0.06) !important;
+    max-height: min(88vh, calc(100dvh - 3rem)) !important;
+    display: flex !important;
+    flex-direction: column !important;
     overflow: hidden !important;
+    margin: 0 auto !important;
 }
 
 .dark .fi-modal-window {
@@ -1747,6 +1803,7 @@ body,
 }
 
 .fi-modal-header {
+    flex-shrink: 0 !important;
     padding: 1.25rem 1.5rem !important;
     border-bottom: 1px solid #f1f5f9 !important;
 }
@@ -1766,7 +1823,16 @@ body,
     color: #f8fafc !important;
 }
 
+.fi-modal-content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    padding: 1.25rem 1.5rem !important;
+}
+
 .fi-modal-footer {
+    flex-shrink: 0 !important;
     padding: 1rem 1.5rem !important;
     border-top: 1px solid #f1f5f9 !important;
     background-color: #f8fafc !important;
@@ -1775,6 +1841,27 @@ body,
 .dark .fi-modal-footer {
     border-top-color: rgba(255, 255, 255, 0.08) !important;
     background-color: #0f1523 !important;
+}
+
+/* Slide-over modals internal scrolling */
+.fi-modal-slide-over .fi-modal-window {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    overflow: hidden !important;
+}
+
+.fi-modal-slide-over .fi-modal-header,
+.fi-modal-slide-over .fi-modal-footer {
+    flex-shrink: 0 !important;
+}
+
+.fi-modal-slide-over .fi-modal-content {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
 }
 
 /* 8. EMPTY STATES */
@@ -1920,28 +2007,264 @@ td.record-code-cell {
     text-align: start !important;
 }
 
-/* Column Manager Dropdown Internal Scrolling */
+/* Table Filters Dropdown Viewport Fit & Internal Scroll */
+.fi-ta-filters-dropdown .fi-dropdown-panel,
+.fi-dropdown-panel:has(.fi-ta-filters) {
+    max-height: min(26rem, calc(100vh - 6rem)) !important;
+    overflow: hidden !important;
+}
+
+/* Only take over the panel layout while it is open; the floating plugin hides it with display: none. */
+.fi-ta-filters-dropdown .fi-dropdown-panel[style*="display: block"],
+.fi-dropdown-panel[style*="display: block"]:has(.fi-ta-filters) {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.fi-ta-filters {
+    display: flex !important;
+    flex-direction: column !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+}
+
+.fi-ta-filters-header {
+    flex-shrink: 0 !important;
+    padding: 0.85rem 1.25rem 0.65rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.dark .fi-ta-filters-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.fi-ta-filters > .fi-grid,
+.fi-ta-filters > form,
+.fi-ta-filters > .fi-sc {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    padding: 1rem 1.25rem !important;
+}
+
+.fi-ta-filters-actions-ctn {
+    flex-shrink: 0 !important;
+    padding: 0.75rem 1.25rem !important;
+    border-top: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+}
+
+.dark .fi-ta-filters-actions-ctn {
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: #0f1523 !important;
+}
+
+/* Request Record Actions Dropdown (Phase 4.2B) */
+.fi-request-actions-dropdown .fi-dropdown-panel,
+.fi-dropdown-panel.fi-scrollable:has(.fi-ac-grouped-action),
+.fi-dropdown-panel:has(.fi-ac-grouped-action) {
+    min-width: 14rem !important;
+    max-height: min(22rem, calc(100vh - 6rem)) !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+    border-radius: 0.75rem !important;
+    padding: 0.35rem !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list {
+    padding: 0.2rem 0 !important;
+    position: relative !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list:not(:has(.fi-dropdown-list-item)),
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list:not(:has(.fi-dropdown-list-item)) {
+    display: none !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list + .fi-dropdown-list:has(.fi-dropdown-list-item),
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list + .fi-dropdown-list:has(.fi-dropdown-list-item) {
+    border-top: 1px solid #e2e8f0 !important;
+    margin-top: 0.35rem !important;
+    padding-top: 0.35rem !important;
+}
+
+.dark .fi-request-actions-dropdown .fi-dropdown-list + .fi-dropdown-list:has(.fi-dropdown-list-item),
+.dark .fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list + .fi-dropdown-list:has(.fi-dropdown-list-item) {
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Category Headings inside Request Actions Dropdown */
+.fi-request-actions-dropdown .fi-dropdown-list::before,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list::before {
+    display: block !important;
+    padding: 0.35rem 0.65rem 0.25rem !important;
+    font-size: 0.6875rem !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.03em !important;
+    color: #64748b !important;
+    user-select: none !important;
+    pointer-events: none !important;
+    cursor: default !important;
+    text-align: start !important;
+}
+
+.dark .fi-request-actions-dropdown .fi-dropdown-list::before,
+.dark .fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list::before {
+    color: #c4a369 !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list:nth-of-type(1)::before,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list:nth-of-type(1)::before {
+    content: "العميل والمتابعة" !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list:nth-of-type(2)::before,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list:nth-of-type(2)::before {
+    content: "نقل المسؤولية" !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list:nth-of-type(3)::before,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list:nth-of-type(3)::before {
+    content: "الترشيحات والمعاينات" !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list:nth-of-type(4)::before,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list:nth-of-type(4)::before {
+    content: "الصفقة والإغلاق" !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list-item,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item {
+    height: 2.15rem !important;
+    min-height: 2.15rem !important;
+    padding: 0.35rem 0.65rem !important;
+    font-size: 0.8125rem !important;
+    font-weight: 500 !important;
+    border-radius: 0.5rem !important;
+    gap: 0.55rem !important;
+    color: #334155 !important;
+    transition: all 0.12s ease !important;
+}
+
+.dark .fi-request-actions-dropdown .fi-dropdown-list-item,
+.dark .fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item {
+    color: #e2e8f0 !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list-item:hover,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item:hover {
+    background-color: rgba(196, 163, 105, 0.12) !important;
+    color: #b38e4a !important;
+}
+
+.dark .fi-request-actions-dropdown .fi-dropdown-list-item:hover,
+.dark .fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item:hover {
+    color: #d4b57e !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list-item .fi-icon,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item .fi-icon {
+    width: 1.05rem !important;
+    height: 1.05rem !important;
+    flex-shrink: 0 !important;
+    color: #64748b !important;
+}
+
+.dark .fi-request-actions-dropdown .fi-dropdown-list-item .fi-icon,
+.dark .fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item .fi-icon {
+    color: #94a3b8 !important;
+}
+
+.fi-request-actions-dropdown .fi-dropdown-list-item:hover .fi-icon,
+.fi-dropdown-panel:has(.fi-ac-grouped-action) .fi-dropdown-list-item:hover .fi-icon {
+    color: #c4a369 !important;
+}
+
+/* Column Manager Dropdown Single-Column Vertical Layout */
+.fi-ta-col-manager-dropdown .fi-dropdown-panel,
+.fi-dropdown-panel:has(.fi-ta-col-manager) {
+    max-height: min(24rem, calc(100vh - 6rem)) !important;
+    overflow: hidden !important;
+    min-width: 16rem !important;
+    max-width: 22rem !important;
+}
+
+/* Only take over the panel layout while it is open; the floating plugin hides it with display: none. */
+.fi-ta-col-manager-dropdown .fi-dropdown-panel[style*="display: block"],
+.fi-dropdown-panel[style*="display: block"]:has(.fi-ta-col-manager) {
+    display: flex !important;
+    flex-direction: column !important;
+}
+
 .fi-ta-col-manager {
     display: flex !important;
     flex-direction: column !important;
-    max-height: 24rem !important;
+    max-height: 100% !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding: 0 !important;
+    gap: 0 !important;
 }
 
 .fi-ta-col-manager-header {
     flex-shrink: 0 !important;
+    padding: 0.75rem 1rem 0.5rem !important;
+    border-bottom: 1px solid #e2e8f0 !important;
+}
+
+.dark .fi-ta-col-manager-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 .fi-ta-col-manager-items {
+    display: flex !important;
+    flex-direction: column !important;
+    columns: 1 !important;
+    column-count: 1 !important;
+    grid-auto-flow: row !important;
+    grid-template-columns: 1fr !important;
     flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: 18rem !important;
+    overflow-x: hidden !important;
     overflow-y: auto !important;
-    max-height: 14rem !important;
     overscroll-behavior: contain !important;
-    padding-left: 0.25rem !important;
-    padding-right: 0.25rem !important;
+    padding: 0.5rem 1rem !important;
+    gap: 0.25rem !important;
+}
+
+.fi-ta-col-manager-item {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    padding: 0.35rem 0 !important;
+    gap: 0.75rem !important;
+}
+
+.fi-ta-col-manager-label {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+    white-space: normal !important;
+    word-break: break-word !important;
 }
 
 .fi-ta-col-manager-actions-ctn {
     flex-shrink: 0 !important;
+    padding: 0.75rem 1.25rem !important;
+    border-top: 1px solid #e2e8f0 !important;
+    background-color: #f8fafc !important;
+}
+
+.dark .fi-ta-col-manager-actions-ctn {
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: #0f1523 !important;
 }
 
 /* Infolist and View Page Refinements */

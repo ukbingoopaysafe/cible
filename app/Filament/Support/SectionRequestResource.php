@@ -324,6 +324,7 @@ abstract class SectionRequestResource extends Resource
                     }),
                 SelectFilter::make('owner_id')
                     ->label('المسؤول')
+                    ->attribute('owner_user_id')
                     ->options(fn (): array => User::query()
                         ->whereHas('departmentMemberships', fn (Builder $query) => $query->where('department', static::department()->value))
                         ->orderBy('name')
@@ -363,6 +364,7 @@ abstract class SectionRequestResource extends Resource
                         };
                     }),
             ])
+            ->filtersFormMaxHeight('26rem')
             ->columnManagerMaxHeight('24rem')
             ->recordActions([
                 ViewAction::make()->iconButton()->tooltip('عرض الطلب'),
@@ -378,41 +380,47 @@ abstract class SectionRequestResource extends Resource
             ActionGroup::make([
                 EditAction::make()->label('تعديل الطلب'),
                 static::linkCustomerAction(),
-            ])->dropdown(false),
-
-            ActionGroup::make([
-                static::contactHistoryAction(),
                 static::setFollowUpAction(),
-            ])->dropdown(false),
+                static::contactHistoryAction(),
+                static::changeStageAction(),
+            ])
+                ->label('العميل والمتابعة')
+                ->icon('heroicon-o-user')
+                ->dropdown(false),
 
             ActionGroup::make([
                 static::requestReassignmentAction(),
-                static::cancelReassignmentAction(),
                 static::directReassignmentAction(),
                 static::approveReassignmentAction(),
                 static::rejectReassignmentAction(),
-            ])->dropdown(false),
-
-            ActionGroup::make([
-                static::changeStageAction(),
-                static::pauseAction(),
-                static::resumeAction(),
-                static::closeAction(),
-            ])->dropdown(false),
-
-            ActionGroup::make([
-                static::createDealAction(),
-                static::viewDealAction(),
-            ])->dropdown(false),
+                static::cancelReassignmentAction(),
+            ])
+                ->label('نقل المسؤولية')
+                ->icon('heroicon-o-arrows-right-left')
+                ->dropdown(false),
 
             ActionGroup::make([
                 static::createRecommendationAction(),
                 static::changeRecommendationStatusAction(),
-                static::recordFieldInspectionAction(),
                 static::scheduleViewingAction(),
                 static::recordViewingResultAction(),
+                static::recordFieldInspectionAction(),
                 static::viewPropertyHistoryAction(),
-            ])->dropdown(false),
+            ])
+                ->label('الترشيحات والمعاينات')
+                ->icon('heroicon-o-home-modern')
+                ->dropdown(false),
+
+            ActionGroup::make([
+                static::createDealAction(),
+                static::viewDealAction(),
+                static::pauseAction(),
+                static::resumeAction(),
+                static::closeAction(),
+            ])
+                ->label('الصفقة والإغلاق')
+                ->icon('heroicon-o-check-circle')
+                ->dropdown(false),
         ])
             ->label('الإجراءات')
             ->icon('heroicon-m-ellipsis-vertical')
@@ -420,7 +428,9 @@ abstract class SectionRequestResource extends Resource
             ->color('gray')
             ->tooltip('خيارات وإجراءات الطلب')
             ->dropdownMaxHeight('22rem')
-            ->dropdownTeleport();
+            ->dropdownTeleport()
+            ->dropdownFlip()
+            ->extraDropdownAttributes(['class' => 'fi-request-actions-dropdown']);
     }
 
     public static function linkCustomerAction(): Action
