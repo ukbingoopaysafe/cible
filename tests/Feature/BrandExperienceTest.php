@@ -6,14 +6,11 @@ use Tests\TestCase;
 
 class BrandExperienceTest extends TestCase
 {
-    public function test_the_public_entry_point_uses_the_cible_brand_experience(): void
+    public function test_the_root_url_redirects_to_the_admin_login_page(): void
     {
         $this->get('/')
-            ->assertOk()
-            ->assertSee('Cible Real Estate')
-            ->assertSee('dir="rtl"', false)
-            ->assertSee(route('brand.logo'), false)
-            ->assertSee(route('brand.icon'), false);
+            ->assertRedirect('/admin/login')
+            ->assertHeader('Location', '/admin/login');
     }
 
     public function test_brand_assets_are_served_from_the_project_assets(): void
