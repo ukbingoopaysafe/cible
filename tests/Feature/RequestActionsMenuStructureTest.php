@@ -62,7 +62,7 @@ class RequestActionsMenuStructureTest extends TestCase
         // The admin theme attaches a heading to each list using this attribute.
         // It must be present on every action so headings follow hidden groups.
         $categories = array_map(
-            fn ($action): ?string => $action->getExtraAttributes()['data-request-action-category'] ?? null,
+            fn ($action): ?string => $action->getExtraAttributes()['data-action-category'] ?? null,
             $flatActions,
         );
 

@@ -520,6 +520,34 @@ class FilamentUiAccessTest extends TestCase
         $this->assertDatabaseHas('rental_request_close_reasons', ['name' => 'تصنيف اختبار الواجهة']);
     }
 
+    public function test_customer_status_column_shows_active_and_archived_states(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+
+        $activeCustomer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل نشط',
+            'phone' => '01012345570',
+            'phone_country' => 'EG',
+        ]);
+        $archivedCustomer = app(CustomerService::class)->create($manager, Department::Rental, [
+            'name' => 'عميل مؤرشف',
+            'phone' => '01012345571',
+            'phone_country' => 'EG',
+        ]);
+        app(CustomerService::class)->archive($manager, Department::Rental, $archivedCustomer->id);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalCustomers::class)
+            ->filterTable('trashed', true)
+            ->assertTableColumnFormattedStateSet('deleted_at', 'نشط', $activeCustomer)
+            ->assertTableColumnFormattedStateSet(
+                'deleted_at',
+                'مؤرشف',
+                RentalCustomer::withTrashed()->findOrFail($archivedCustomer->id),
+            );
+    }
+
     public function test_manager_can_archive_and_restore_a_customer_and_area_through_list_actions(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);

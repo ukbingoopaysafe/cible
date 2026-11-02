@@ -428,7 +428,7 @@ abstract class SectionRequestResource extends Resource
         foreach ($categoryGroups as $category => $categoryGroup) {
             foreach ($categoryGroup->getActions() as $action) {
                 $action->extraAttributes([
-                    'data-request-action-category' => $category,
+                    'data-action-category' => $category,
                 ]);
             }
         }
