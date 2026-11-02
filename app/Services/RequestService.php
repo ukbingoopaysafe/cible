@@ -479,6 +479,7 @@ class RequestService
         } else {
             $rules += [
                 'unit_type' => ['nullable', Rule::enum(RequestUnitType::class)],
+                'unit_type_other' => ['nullable', 'string', 'max:255'],
                 'area_min' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
                 'area_max' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
                 'other_requirements' => ['nullable', 'string', 'max:10000'],

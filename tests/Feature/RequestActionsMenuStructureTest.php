@@ -58,6 +58,20 @@ class RequestActionsMenuStructureTest extends TestCase
         // Verify total flat actions count in the group is exactly 21
         $flatActions = $group->getFlatActions();
         $this->assertCount(21, $flatActions, 'Expected exactly 21 flat actions in the dropdown group.');
+
+        // The admin theme attaches a heading to each list using this attribute.
+        // It must be present on every action so headings follow hidden groups.
+        $categories = array_map(
+            fn ($action): ?string => $action->getExtraAttributes()['data-request-action-category'] ?? null,
+            $flatActions,
+        );
+
+        $this->assertNotContains(null, $categories, 'Every request action must declare its category heading.');
+        $this->assertSame(
+            ['customer', 'reassignment', 'recommendations', 'deal'],
+            array_values(array_unique($categories)),
+            'Request action categories must remain grouped in dropdown order.',
+        );
     }
 
     public function test_rental_and_resale_tables_register_all_actions(): void

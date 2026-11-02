@@ -74,6 +74,7 @@ final class RequestFormSchema
 
         $components = [
             Section::make('أطراف الطلب')
+                ->icon('heroicon-o-user-group')
                 ->schema([
                     Select::make('customer_id')
                         ->label('العميل')
@@ -267,9 +268,10 @@ final class RequestFormSchema
 
         if ($department === Department::Rental) {
             $components[] = Section::make('متطلبات الإيجار')
+                ->icon('heroicon-o-home-modern')
                 ->schema([
                     Select::make('unit_type')->label('نوع الوحدة')->options(self::unitTypeOptions())->live(),
-                    TextInput::make('unit_type_other')->label('نوع الوحدة — توضيح')->maxLength(255)
+                    TextInput::make('unit_type_other')->label('توضيح نوع الوحدة')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value)
                         ->required(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value),
                     TextInput::make('bedrooms')->label('غرف النوم')->numeric()->integer()->minValue(1)->maxValue(100),
@@ -282,7 +284,7 @@ final class RequestFormSchema
                         ->live(),
                     TextInput::make('rental_term_count')->label('مدة العقد (بالأرقام)')->numeric()->integer()->minValue(1)->maxValue(3650),
                     Select::make('finishing')->label('مستوى التشطيب')->options(self::finishingOptions())->live(),
-                    TextInput::make('finishing_other')->label('التشطيب — توضيح')->maxLength(255)
+                    TextInput::make('finishing_other')->label('توضيح مستوى التشطيب')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('finishing') === FinishingLevel::Other->value)
                         ->required(fn (Get $get): bool => $get('finishing') === FinishingLevel::Other->value),
                     Select::make('floor_preference')->label('الدور المفضل')->options(self::floorPreferenceOptions()),
@@ -291,9 +293,10 @@ final class RequestFormSchema
                 ->columns(2);
         } else {
             $components[] = Section::make('متطلبات الشراء')
+                ->icon('heroicon-o-home-modern')
                 ->schema([
                     Select::make('unit_type')->label('نوع الوحدة')->options(self::unitTypeOptions())->live(),
-                    TextInput::make('unit_type_other')->label('نوع الوحدة — توضيح')->maxLength(255)
+                    TextInput::make('unit_type_other')->label('توضيح نوع الوحدة')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value)
                         ->required(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value),
                     TextInput::make('area_min')->label('المساحة من (م²)')->numeric()->minValue(0.01),
@@ -306,6 +309,8 @@ final class RequestFormSchema
         $budgetTargetedLabel = $department === Department::Rental ? 'الميزانية المستهدفة (القسط الشهري)' : 'الميزانية المستهدفة (إجمالي الشراء)';
 
         $components[] = Section::make('الميزانية والملاحظات')
+            ->icon('heroicon-o-banknotes')
+            ->columnSpanFull()
             ->schema([
                 TextInput::make('budget_declared')->label($budgetDeclaredLabel)->numeric()->minValue(0.01),
                 TextInput::make('budget_targeted')->label($budgetTargetedLabel)->numeric()->minValue(0.01),
@@ -316,7 +321,7 @@ final class RequestFormSchema
                 Textarea::make('other_requirements')->label('متطلبات أخرى')->rows(3)->columnSpanFull(),
                 Textarea::make('notes')->label('ملاحظات داخلية')->rows(3)->columnSpanFull(),
             ])
-            ->columns(2);
+            ->columns(3);
 
         return $schema->components($components);
     }
@@ -442,6 +447,10 @@ final class RequestFormSchema
                         ->badge()
                         ->color('gray')
                         ->formatStateUsing(fn ($state): string => self::finishingOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('finishing_other')
+                        ->label('توضيح مستوى التشطيب')
+                        ->placeholder('—')
+                        ->visible(fn (?Model $record): bool => filled($record?->finishing_other)),
                     TextEntry::make('bedrooms')
                         ->label('غرف النوم')
                         ->icon('heroicon-m-building-office')
@@ -474,6 +483,10 @@ final class RequestFormSchema
                         ->badge()
                         ->color('gray')
                         ->formatStateUsing(fn ($state): string => self::unitTypeOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('unit_type_other')
+                        ->label('توضيح نوع الوحدة')
+                        ->placeholder('—')
+                        ->visible(fn (?Model $record): bool => filled($record?->unit_type_other)),
                     TextEntry::make('area_range')
                         ->label('نطاق المساحة المطلوبة')
                         ->icon('heroicon-m-arrows-pointing-out')
@@ -511,7 +524,7 @@ final class RequestFormSchema
             ->icon('heroicon-o-banknotes')
             ->schema([
                 TextEntry::make('budget_declared')
-                    ->label($department === Department::Rental ? 'الميزانية المعلنة (شهرياً)' : 'الميزانية المعلنة (إجمالي الشراء)')
+                    ->label($department === Department::Rental ? 'الميزانية المعلنة (القسط الشهري)' : 'الميزانية المعلنة (إجمالي الشراء)')
                     ->weight(FontWeight::Bold)
                     ->size(TextSize::Large)
                     ->color('primary')
@@ -525,7 +538,7 @@ final class RequestFormSchema
                     })
                     ->placeholder('—'),
                 TextEntry::make('budget_targeted')
-                    ->label($department === Department::Rental ? 'الميزانية المستهدفة (شهرياً)' : 'الميزانية المستهدفة (إجمالي الشراء)')
+                    ->label($department === Department::Rental ? 'الميزانية المستهدفة (القسط الشهري)' : 'الميزانية المستهدفة (إجمالي الشراء)')
                     ->weight(FontWeight::SemiBold)
                     ->size(TextSize::Medium)
                     ->formatStateUsing(function ($state, ?Model $record): string {
@@ -554,8 +567,8 @@ final class RequestFormSchema
             ->collapsible()
             ->schema([
                 TextEntry::make('other_requirements')
-                    ->label('متطلبات إضافية')
-                    ->placeholder('لا توجد متطلبات إضافية مسجلة')
+                    ->label('متطلبات أخرى')
+                    ->placeholder('لا توجد متطلبات أخرى مسجلة')
                     ->columnSpanFull(),
                 TextEntry::make('notes')
                     ->label('ملاحظات داخلية')

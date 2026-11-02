@@ -195,6 +195,8 @@ class FilamentUiAccessTest extends TestCase
                 'area_id' => ResaleArea::query()->firstOrFail()->id,
                 'owner_user_id' => $manager->id,
                 'next_follow_up_at' => now()->addDay()->toDateTimeString(),
+                'unit_type' => RequestUnitType::Other->value,
+                'unit_type_other' => 'شقة بحديقة',
                 'budget_declared' => 3500000,
                 'budget_targeted' => 3200000,
                 'budget_currency' => 'EGP',
@@ -204,6 +206,8 @@ class FilamentUiAccessTest extends TestCase
 
         $this->assertDatabaseHas('resale_requests', [
             'customer_id' => $customer->id,
+            'unit_type' => RequestUnitType::Other->value,
+            'unit_type_other' => 'شقة بحديقة',
             'budget_declared' => 3500000,
             'budget_targeted' => 3200000,
             'budget_currency' => 'EGP',

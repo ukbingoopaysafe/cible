@@ -376,8 +376,8 @@ abstract class SectionRequestResource extends Resource
 
     public static function getRequestActionsGroup(): ActionGroup
     {
-        return ActionGroup::make([
-            ActionGroup::make([
+        $categoryGroups = [
+            'customer' => ActionGroup::make([
                 EditAction::make()->label('تعديل الطلب'),
                 static::linkCustomerAction(),
                 static::setFollowUpAction(),
@@ -388,7 +388,7 @@ abstract class SectionRequestResource extends Resource
                 ->icon('heroicon-o-user')
                 ->dropdown(false),
 
-            ActionGroup::make([
+            'reassignment' => ActionGroup::make([
                 static::requestReassignmentAction(),
                 static::directReassignmentAction(),
                 static::approveReassignmentAction(),
@@ -399,7 +399,7 @@ abstract class SectionRequestResource extends Resource
                 ->icon('heroicon-o-arrows-right-left')
                 ->dropdown(false),
 
-            ActionGroup::make([
+            'recommendations' => ActionGroup::make([
                 static::createRecommendationAction(),
                 static::changeRecommendationStatusAction(),
                 static::scheduleViewingAction(),
@@ -411,7 +411,7 @@ abstract class SectionRequestResource extends Resource
                 ->icon('heroicon-o-home-modern')
                 ->dropdown(false),
 
-            ActionGroup::make([
+            'deal' => ActionGroup::make([
                 static::createDealAction(),
                 static::viewDealAction(),
                 static::pauseAction(),
@@ -421,7 +421,19 @@ abstract class SectionRequestResource extends Resource
                 ->label('الصفقة والإغلاق')
                 ->icon('heroicon-o-check-circle')
                 ->dropdown(false),
-        ])
+        ];
+
+        // The admin theme uses this attribute to attach the category heading to
+        // its actions, so headings stay correct when a whole category is hidden.
+        foreach ($categoryGroups as $category => $categoryGroup) {
+            foreach ($categoryGroup->getActions() as $action) {
+                $action->extraAttributes([
+                    'data-request-action-category' => $category,
+                ]);
+            }
+        }
+
+        return ActionGroup::make(array_values($categoryGroups))
             ->label('الإجراءات')
             ->icon('heroicon-m-ellipsis-vertical')
             ->iconButton()
