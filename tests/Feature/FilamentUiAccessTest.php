@@ -695,14 +695,16 @@ class FilamentUiAccessTest extends TestCase
             'agreed_total_value' => 4500000,
             'currency' => 'EGP',
             'seller_name' => 'مالك الوحدة',
-            'seller_phone' => '01012345562',
+            'seller_phone' => '0512345678',
+            'seller_phone_country' => 'SA',
         ])->assertHasNoTableActionErrors();
 
         $this->assertDatabaseHas('resale_deals', [
             'request_id' => $request->id,
             'agreed_total_value' => 4500000,
             'seller_name' => 'مالك الوحدة',
-            'seller_phone' => '01012345562',
+            'seller_phone' => '+966512345678',
+            'seller_phone_country' => 'SA',
         ]);
         $this->assertDatabaseHas('resale_aftercare', [
             'customer_id' => $request->customer_id,

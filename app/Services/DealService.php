@@ -11,6 +11,7 @@ use App\Models\RentalRequest;
 use App\Models\ResaleDeal;
 use App\Models\ResaleRequest;
 use App\Models\User;
+use App\Support\PhoneCountries;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -44,7 +45,8 @@ class DealService
             'rental_term_count' => [$department === Department::Rental ? 'required' : 'nullable', 'integer', 'min:1', 'max:120'],
             'payment_schedule' => [$department === Department::Rental ? 'required' : 'nullable', Rule::in(['monthly', 'daily'])],
             'seller_name' => ['nullable', 'string', 'max:160'],
-            'seller_phone' => ['nullable', 'string', 'max:30'],
+            'seller_phone' => ['nullable', 'string', 'max:40'],
+            'seller_phone_country' => ['nullable', Rule::in(array_keys(PhoneCountries::options()))],
             'commissions' => ['nullable', 'array', 'max:20'],
             'commissions.*.payer' => ['required', 'string', 'max:160'],
             'commissions.*.recipient' => ['required', 'string', 'max:160'],
@@ -62,7 +64,16 @@ class DealService
             }
         })->validate();
 
-        return DB::transaction(function () use ($actor, $department, $requestId, $requestClass, $dealClass, $validated): Model {
+        $sellerPhone = null;
+
+        if ($department === Department::Resale && filled($validated['seller_phone'] ?? null)) {
+            $sellerPhone = app(CustomerPhoneNormalizer::class)->normalize(
+                $validated['seller_phone'],
+                $validated['seller_phone_country'] ?? PhoneCountries::DEFAULT,
+            );
+        }
+
+        return DB::transaction(function () use ($actor, $department, $requestId, $requestClass, $dealClass, $sellerPhone, $validated): Model {
             $request = $requestClass::query()->lockForUpdate()->findOrFail($requestId);
             if ($request->status !== RequestStatus::Closed || $request->outcome !== RequestOutcome::Successful) {
                 throw ValidationException::withMessages(['request' => 'لا يمكن إنشاء صفقة إلا من طلب مغلق بنتيجة ناجحة.']);
@@ -77,7 +88,8 @@ class DealService
                 'payment_schedule' => $validated['payment_schedule'] ?? 'monthly',
             ] : [
                 'seller_name' => $validated['seller_name'] ?? null,
-                'seller_phone' => $validated['seller_phone'] ?? null,
+                'seller_phone' => $sellerPhone['phone_e164'] ?? null,
+                'seller_phone_country' => $sellerPhone['phone_country'] ?? null,
             ];
             $deal = $dealClass::query()->create([
                 'request_id' => $request->id,

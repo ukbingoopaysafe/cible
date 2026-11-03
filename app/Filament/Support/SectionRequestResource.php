@@ -994,7 +994,7 @@ abstract class SectionRequestResource extends Resource
                     ])->default(fn (Get $get): string => $get('rental_term') === 'daily' ? 'daily' : 'monthly')->required()->disabled()->dehydrated(),
                 ] : [
                     TextInput::make('seller_name')->label('اسم البائع')->maxLength(160),
-                    TextInput::make('seller_phone')->label('هاتف البائع')->tel()->maxLength(30),
+                    PhoneField::make('هاتف البائع', required: false, phoneField: 'seller_phone', countryField: 'seller_phone_country'),
                 ]),
                 Repeater::make('commissions')->label('اتفاقات العمولة')->schema([
                     TextInput::make('payer')->label('الملتزم بالدفع')->required()->maxLength(160),
