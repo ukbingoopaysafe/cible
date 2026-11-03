@@ -36,6 +36,7 @@ use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\TextSize;
@@ -86,10 +87,22 @@ final class RequestFormSchema
                         ->searchable()
                         ->placeholder('اختر عميلًا إن كان معروفًا')
                         ->createOptionForm([
-                            TextInput::make('name')->label('الاسم')->required()->maxLength(255),
+                            TextInput::make('name')
+                                ->label('الاسم')
+                                ->required()
+                                ->maxLength(255)
+                                ->live(debounce: 500)
+                                ->afterStateUpdated(function (Set $set): void {
+                                    $set('reviewed_similar_names', false);
+                                }),
                             PhoneField::make('رقم الهاتف', required: true),
                             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
-                            Checkbox::make('reviewed_similar_names')->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.'),
+                            Checkbox::make('reviewed_similar_names')
+                                ->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.')
+                                ->visible(fn (Get $get): bool => app(CustomerService::class)->hasSimilarNames(
+                                    $department,
+                                    (string) $get('name'),
+                                )),
                         ])
                         ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
                             $actor = auth()->user();

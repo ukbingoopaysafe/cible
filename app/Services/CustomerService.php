@@ -18,6 +18,23 @@ class CustomerService
 {
     public function __construct(private readonly CustomerPhoneNormalizer $phoneNormalizer) {}
 
+    public function hasSimilarNames(Department $department, string $name, ?int $ignoreCustomerId = null): bool
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return false;
+        }
+
+        $customerClass = match ($department) {
+            Department::Rental => RentalCustomer::class,
+            Department::Resale => ResaleCustomer::class,
+        };
+
+        return $this->findSimilarNames($customerClass, $name)
+            ->contains(fn (Model $customer): bool => $ignoreCustomerId === null || (int) $customer->getKey() !== $ignoreCustomerId);
+    }
+
     /**
      * @param array{name: string, phone: string, phone_country?: string|null, nationality?: string|null} $attributes
      */

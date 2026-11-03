@@ -30,6 +30,8 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
@@ -405,12 +407,24 @@ abstract class CustomerResource extends Resource
         return [
             Grid::make(['default' => 1, 'sm' => 2])
                 ->schema([
-                    TextInput::make('name')->label('الاسم')->required()->maxLength(255),
+                    TextInput::make('name')
+                        ->label('الاسم')
+                        ->required()
+                        ->maxLength(255)
+                        ->live(debounce: 500)
+                        ->afterStateUpdated(function (Set $set): void {
+                            $set('reviewed_similar_names', false);
+                        }),
                     TextInput::make('nationality')->label('الجنسية')->maxLength(100),
                     PhoneField::make('رقم الهاتف', required: true)
                         ->columnSpanFull(),
                     Checkbox::make('reviewed_similar_names')
                         ->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.')
+                        ->visible(fn (Get $get, ?Model $record = null): bool => app(CustomerService::class)->hasSimilarNames(
+                            static::department(),
+                            (string) $get('name'),
+                            $record ? (int) $record->getKey() : null,
+                        ))
                         ->columnSpanFull(),
                 ]),
         ];
