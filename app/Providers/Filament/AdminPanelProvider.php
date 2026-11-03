@@ -17,6 +17,7 @@ use Filament\Navigation\NavigationItem;
 use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\View\PanelsRenderHook;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\VerifyCsrfToken;
@@ -40,6 +41,10 @@ class AdminPanelProvider extends PanelProvider
             ->brandLogo(fn () => view('filament.admin.logo'))
             ->brandLogoHeight('3.25rem')
             ->favicon(asset('images/brand/favicon.png'))
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): \Illuminate\Contracts\Support\Htmlable => view('filament.admin.phone-country-dropdown'),
+            )
             ->login()
             ->defaultAvatarProvider(DefaultAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)

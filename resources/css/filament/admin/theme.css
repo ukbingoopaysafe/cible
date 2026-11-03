@@ -2043,9 +2043,9 @@ td.record-code-cell {
     text-align: right !important;
 }
 
-/* Country phone select: use viewport positioning in clipped modals and allow the full list to scroll. */
-.fi-phone-country-select .fi-dropdown-panel {
-    z-index: 1000 !important;
+/* Portaled country select dropdowns escape modal overflow and keep their own scroll area. */
+.fi-phone-country-dropdown {
+    z-index: 10000 !important;
     max-height: min(18rem, calc(100vh - 8rem)) !important;
     overflow-y: auto !important;
 }

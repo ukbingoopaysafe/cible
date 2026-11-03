@@ -51,7 +51,6 @@ final class PhoneField
             ->tel()
             ->required($required)
             ->maxLength(40)
-            ->live(onBlur: true)
             ->placeholder(fn (Get $get): ?string => PhoneCountries::isOther((string) $get($countryField))
                 ? '+4915112345678'
                 : PhoneCountries::example((string) $get($countryField)))
