@@ -2043,9 +2043,10 @@ td.record-code-cell {
     text-align: right !important;
 }
 
-/* Country phone select: keep its floating list outside modal clipping and align flag images with labels. */
+/* Country phone select: keep the menu compact above modal footers and align flag images with labels. */
 .fi-phone-country-select .fi-select-input-dropdown {
     z-index: 1000;
+    max-height: 11rem !important;
 }
 
 .fi-phone-country-flag {

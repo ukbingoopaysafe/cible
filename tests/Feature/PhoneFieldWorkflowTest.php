@@ -40,9 +40,12 @@ class PhoneFieldWorkflowTest extends TestCase
 
         $this->assertTrue($countrySelect->isHtmlAllowed());
         $this->assertNull($helperText->getValue($field));
-        $this->assertSame('fi-phone-country-select fi-fixed-positioning-context', $countrySelect->getExtraAttributes()['class']);
-        $this->assertSame('bottom', $countrySelect->getPosition());
-        $this->assertStringContainsString('.fi-phone-country-flag', file_get_contents(resource_path('css/filament/admin/theme.css')));
+        $this->assertSame('fi-phone-country-select', $countrySelect->getExtraAttributes()['class']);
+        $this->assertSame('top', $countrySelect->getPosition());
+        $theme = file_get_contents(resource_path('css/filament/admin/theme.css'));
+
+        $this->assertStringContainsString('.fi-phone-country-flag', $theme);
+        $this->assertStringContainsString('max-height: 11rem', $theme);
     }
 
     public function test_customer_can_be_created_with_a_saudi_number(): void
