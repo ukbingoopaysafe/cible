@@ -2043,10 +2043,11 @@ td.record-code-cell {
     text-align: right !important;
 }
 
-/* Country phone select: keep the menu compact above modal footers and align flag images with labels. */
-.fi-phone-country-select .fi-select-input-dropdown {
-    z-index: 1000;
-    max-height: 11rem !important;
+/* Country phone select: use viewport positioning in clipped modals and allow the full list to scroll. */
+.fi-phone-country-select .fi-dropdown-panel {
+    z-index: 1000 !important;
+    max-height: min(18rem, calc(100vh - 8rem)) !important;
+    overflow-y: auto !important;
 }
 
 .fi-phone-country-flag {
