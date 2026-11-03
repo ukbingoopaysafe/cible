@@ -28,6 +28,8 @@ final class PhoneField
             ->hiddenLabel()
             ->options(PhoneCountries::options())
             ->allowHtml()
+            ->extraAttributes(['class' => 'fi-phone-country-select fi-fixed-positioning-context'])
+            ->position('bottom')
             ->default(PhoneCountries::DEFAULT)
             ->selectablePlaceholder(false)
             ->searchable()

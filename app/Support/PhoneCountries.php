@@ -70,7 +70,7 @@ final class PhoneCountries
 
     private static function flagImage(string $country): string
     {
-        return '<img src="https://flagcdn.com/24x18/'.strtolower($country).'.png" alt="" aria-hidden="true">';
+        return '<img class="fi-phone-country-flag" src="https://flagcdn.com/24x18/'.strtolower($country).'.png" alt="" aria-hidden="true">';
     }
 
     public static function isSupported(?string $country): bool

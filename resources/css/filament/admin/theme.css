@@ -2043,6 +2043,22 @@ td.record-code-cell {
     text-align: right !important;
 }
 
+/* Country phone select: keep its floating list outside modal clipping and align flag images with labels. */
+.fi-phone-country-select .fi-select-input-dropdown {
+    z-index: 1000;
+}
+
+.fi-phone-country-flag {
+    display: inline-block;
+    width: 1.125rem;
+    height: 0.875rem;
+    margin-inline-end: 0.5rem;
+    vertical-align: middle;
+    object-fit: cover;
+    border-radius: 0.125rem;
+    box-shadow: 0 0 0 1px rgb(15 23 42 / 12%);
+}
+
 /* Table Filters Dropdown Viewport Fit & Internal Scroll */
 .fi-ta-filters-dropdown .fi-dropdown-panel,
 .fi-dropdown-panel:has(.fi-ta-filters) {
