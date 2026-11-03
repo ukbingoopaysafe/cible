@@ -7,22 +7,15 @@ use App\Models\RentalActivity;
 use App\Models\ResaleActivity;
 use App\Models\User;
 use App\Services\BrokerService;
-use App\Services\CustomerPhoneNormalizer;
-use Closure;
 use Filament\Actions\Action;
-use Filament\Forms\Components\Checkbox;
-use Filament\Forms\Components\Component;
+use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Textarea;
-use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Validation\ValidationException;
-use Propaganistas\LaravelPhone\PhoneNumber;
 
 /** @extends resource<Model> */
 abstract class BrokerResource extends Resource
@@ -69,18 +62,30 @@ abstract class BrokerResource extends Resource
     public static function table(Table $table): Table
     {
         return $table
+            ->searchPlaceholder('بحث بالاسم أو الهاتف...')
             ->columns([
                 TextColumn::make('name')->label('اسم الوسيط')->searchable()->sortable(),
-                TextColumn::make('phone_e164')->label('الهاتف الموحد')->searchable()->placeholder('—'),
-                TextColumn::make('phone_country')->label('الدولة')->placeholder('—'),
+                TextColumn::make('phone_e164')->label('الهاتف')->searchable()->placeholder('—'),
+                TextColumn::make('phone_country')->label('الدولة')->placeholder('—')->toggleable(),
                 TextColumn::make('requests_count')->label('عدد الطلبات')->sortable(),
-                TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable(),
+                TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(),
             ])
             ->recordActions([
+                static::getBrokerActionsGroup(),
+            ]);
+    }
+
+    public static function getBrokerActionsGroup(): ActionGroup
+    {
+        $categoryGroups = [
+            'broker-profile' => ActionGroup::make([
                 Action::make('editBroker')
-                    ->label('تعديل بيانات الوسيط')
+                    ->label('تعديل الوسيط')
                     ->icon('heroicon-o-pencil-square')
-                    ->schema(static::formFields(editing: true))
+                    ->modalHeading('تعديل بيانات الوسيط')
+                    ->modalDescription('حدّث اسم الوسيط أو رقم هاتفه الموحد.')
+                    ->modalSubmitActionLabel('حفظ التعديلات')
+                    ->schema(BrokerFormSchema::fields(editing: true))
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
                         'phone' => $record->phone_e164,
@@ -105,6 +110,12 @@ abstract class BrokerResource extends Resource
                         );
                     })
                     ->successNotificationTitle('تم تحديث بيانات الوسيط'),
+            ])
+                ->label('بيانات الوسيط')
+                ->icon('heroicon-o-user')
+                ->dropdown(false),
+
+            'broker-delete' => ActionGroup::make([
                 Action::make('deleteBroker')
                     ->label('حذف الوسيط نهائيًا')
                     ->color('danger')
@@ -112,7 +123,14 @@ abstract class BrokerResource extends Resource
                     ->visible(fn (Model $record): bool => static::canDelete($record))
                     ->modalHeading('تأكيد حذف الوسيط نهائيًا')
                     ->modalDescription(fn (Model $record): string => "سيتم حذف {$record->name} نهائيًا. الطلبات المرتبطة: {$record->requests()->count()}، أنشطة التواصل مع الوسيط: ".static::activityCount($record).'. لا يمكن التراجع عن هذا الإجراء؛ تُحفظ بيانات الوسيط التاريخية على الطلبات المغلقة.')
-                    ->schema([Textarea::make('reason')->label('سبب الحذف')->required()->maxLength(2000)])
+                    ->modalSubmitActionLabel('حذف الوسيط')
+                    ->schema([
+                        Textarea::make('reason')
+                            ->label('سبب الحذف')
+                            ->required()
+                            ->maxLength(2000)
+                            ->helperText('سيُسجَّل سبب الحذف في سجل التدقيق.'),
+                    ])
                     ->requiresConfirmation()
                     ->action(function (Model $record, array $data): void {
                         $actor = auth()->user();
@@ -120,7 +138,32 @@ abstract class BrokerResource extends Resource
                         app(BrokerService::class)->delete($actor, static::department(), (int) $record->getKey(), $data['reason']);
                     })
                     ->successNotificationTitle('تم حذف الوسيط وتسجيل العملية'),
-            ]);
+            ])
+                ->label('الحذف')
+                ->icon('heroicon-o-trash')
+                ->dropdown(false),
+        ];
+
+        // The admin theme attaches the category heading to its actions, so
+        // headings stay correct when a whole category is hidden.
+        foreach ($categoryGroups as $category => $categoryGroup) {
+            foreach ($categoryGroup->getActions() as $action) {
+                $action->extraAttributes([
+                    'data-action-category' => $category,
+                ]);
+            }
+        }
+
+        return ActionGroup::make(array_values($categoryGroups))
+            ->label('المزيد')
+            ->icon('heroicon-m-ellipsis-vertical')
+            ->iconButton()
+            ->color('gray')
+            ->tooltip('خيارات الوسيط')
+            ->dropdownMaxHeight('18rem')
+            ->dropdownTeleport()
+            ->dropdownFlip()
+            ->extraDropdownAttributes(['class' => 'fi-broker-actions-dropdown']);
     }
 
     private static function activityCount(Model $broker): int
@@ -142,7 +185,10 @@ abstract class BrokerResource extends Resource
     {
         return Action::make('createBroker')
             ->label('إضافة وسيط')
-            ->schema(static::formFields(editing: false))
+            ->modalHeading('إضافة وسيط')
+            ->modalDescription('أضف بيانات الوسيط ورقم التواصل الموحد.')
+            ->modalSubmitActionLabel('إضافة الوسيط')
+            ->schema(BrokerFormSchema::fields())
             ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
@@ -156,49 +202,5 @@ abstract class BrokerResource extends Resource
                 );
             })
             ->successNotificationTitle('تمت إضافة الوسيط');
-    }
-
-    /** @return array<int, Component> */
-    private static function formFields(bool $editing): array
-    {
-        return [
-            TextInput::make('name')->label('اسم الوسيط')->required()->maxLength(255),
-            TextInput::make('phone')
-                ->label('رقم الهاتف')
-                ->tel()
-                ->maxLength(40)
-                ->helperText('يُوحّد النظام الرقم ويتحقق من عدم استخدامه لوسيط آخر في القسم.')
-                ->rules([
-                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
-                        if (blank($value)) {
-                            return;
-                        }
-                        $country = $get('phone_country') ?: 'EG';
-                        try {
-                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
-                        } catch (ValidationException $e) {
-                            $fail(collect($e->errors())->flatten()->first());
-                        }
-                    },
-                ]),
-            TextInput::make('phone_country')
-                ->label('رمز الدولة')
-                ->default('EG')
-                ->length(2)
-                ->helperText('رمز الدولة الدولي، مثل EG لمصر.')
-                ->visible(fn (Get $get): bool => filled($get('phone')))
-                ->required(fn (Get $get): bool => filled($get('phone')))
-                ->dehydrated(fn (Get $get): bool => filled($get('phone')))
-                ->rules([
-                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
-                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
-                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
-                        }
-                    },
-                ]),
-            Checkbox::make('reviewed_similar_names')
-                ->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا وسيط مختلف.')
-                ->helperText($editing ? 'يظهر التنبيه عند حفظ اسم قد يتشابه مع وسيط آخر.' : 'يظهر التنبيه عند إضافة اسم قد يتشابه مع وسيط آخر.'),
-        ];
     }
 }

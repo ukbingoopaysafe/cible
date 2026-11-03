@@ -487,6 +487,47 @@ class FilamentUiAccessTest extends TestCase
         $this->assertDatabaseHas('rental_brokers', ['name' => 'وسيط قائمة الواجهة']);
     }
 
+    public function test_manager_can_edit_and_delete_a_broker_through_list_actions(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $broker = app(BrokerService::class)->create($manager, Department::Rental, [
+            'name' => 'وسيط تعديل الواجهة',
+            'phone' => '01012345560',
+            'phone_country' => 'EG',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalBrokers::class)
+            ->callAction(TestAction::make('editBroker')->table($broker), [
+                'name' => 'وسيط معدل من الواجهة',
+                'phone' => '01012345561',
+                'phone_country' => 'EG',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseHas('rental_brokers', [
+            'id' => $broker->id,
+            'name' => 'وسيط معدل من الواجهة',
+            'phone_e164' => '+201012345561',
+        ]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalBrokers::class)
+            ->callAction(TestAction::make('deleteBroker')->table($broker), [
+                'reason' => 'اختبار حذف وسيط من الواجهة',
+            ])
+            ->assertHasNoTableActionErrors();
+
+        $this->assertDatabaseMissing('rental_brokers', ['id' => $broker->id]);
+        $this->assertDatabaseHas('audit_events', [
+            'event_key' => 'broker.deleted',
+            'subject_id' => $broker->id,
+            'actor_user_id' => $manager->id,
+            'reason' => 'اختبار حذف وسيط من الواجهة',
+        ]);
+    }
+
     public function test_manager_can_manage_rental_reference_lists_through_list_actions(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);

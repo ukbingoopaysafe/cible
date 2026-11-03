@@ -26,6 +26,7 @@ use App\Services\CustomerService;
 use App\Support\RecordCode;
 use Carbon\Carbon;
 use Closure;
+use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\Select;
@@ -138,41 +139,20 @@ final class RequestFormSchema
                         ->live(),
                     Select::make('broker_id')
                         ->label('الوسيط')
-                        ->options(fn (): array => $brokerClass::query()->orderBy('name')->pluck('name', 'id')->all())
+                        ->options(fn (): array => $brokerClass::query()
+                            ->orderBy('name')
+                            ->get(['id', 'name', 'phone_e164'])
+                            ->mapWithKeys(fn ($broker): array => [
+                                $broker->id => filled($broker->phone_e164)
+                                    ? "{$broker->name} — {$broker->phone_e164}"
+                                    : $broker->name,
+                            ])
+                            ->all())
                         ->searchable()
                         ->placeholder('اختر وسيطًا إن وجد')
-                        ->createOptionForm([
-                            TextInput::make('name')->label('الاسم')->required()->maxLength(255),
-                            TextInput::make('phone')
-                                ->label('رقم الهاتف')
-                                ->maxLength(40)
-                                ->rules([
-                                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
-                                        if (blank($value)) {
-                                            return;
-                                        }
-                                        $country = $get('phone_country') ?: 'EG';
-                                        try {
-                                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
-                                        } catch (ValidationException $e) {
-                                            $fail(collect($e->errors())->flatten()->first());
-                                        }
-                                    },
-                                ]),
-                            TextInput::make('phone_country')
-                                ->label('رمز الدولة')
-                                ->default('EG')
-                                ->length(2)
-                                ->helperText('مثال: EG لمصر، SA للسعودية.')
-                                ->rules([
-                                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
-                                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
-                                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
-                                        }
-                                    },
-                                ]),
-                            Checkbox::make('reviewed_similar_names')->label('تأكيد: هذا وسيط مختلف رغم تشابه الاسم.'),
-                        ])
+                        ->createOptionForm(BrokerFormSchema::fields())
+                        ->createOptionModalHeading('إضافة وسيط')
+                        ->createOptionAction(fn (Action $action) => $action->modalSubmitActionLabel('إضافة الوسيط'))
                         ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
                             $actor = auth()->user();
                             abort_unless($actor instanceof User, 403);
@@ -398,7 +378,7 @@ final class RequestFormSchema
                         ->copyable()
                         ->copyMessage('تم نسخ رقم هاتف الوسيط')
                         ->url(fn (?Model $record): ?string => $record?->broker?->phone_e164 ? "tel:{$record->broker->phone_e164}" : null)
-                        ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400'])
+                        ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400', 'dir' => 'ltr'])
                         ->visible(fn (?Model $record): bool => filled($record?->broker_id) || filled($record?->broker_name_snapshot)),
                     TextEntry::make('area_location')
                         ->label('المنطقة والمحافظة')

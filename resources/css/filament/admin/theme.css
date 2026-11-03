@@ -2174,6 +2174,15 @@ td.record-code-cell {
     content: "الأرشفة" !important;
 }
 
+/* Broker Record Actions Dropdown */
+.fi-dropdown-panel:has([data-action-category]) .fi-dropdown-list:has([data-action-category="broker-profile"])::before {
+    content: "بيانات الوسيط" !important;
+}
+
+.fi-dropdown-panel:has([data-action-category]) .fi-dropdown-list:has([data-action-category="broker-delete"])::before {
+    content: "الحذف" !important;
+}
+
 .fi-dropdown-panel:has([data-action-category]) .fi-dropdown-list-item {
     height: 2.15rem !important;
     min-height: 2.15rem !important;
