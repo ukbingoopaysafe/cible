@@ -60,7 +60,7 @@ final class PhoneCountries
         $options = [];
 
         foreach ($countries as $code => $country) {
-            $options[$code] = self::flag($code)." {$country['name']} ({$country['dial']})";
+            $options[$code] = self::flagImage($code)." {$country['name']} ({$country['dial']})";
         }
 
         $options[self::OTHER] = '🌐 Other';
@@ -68,12 +68,9 @@ final class PhoneCountries
         return $options;
     }
 
-    private static function flag(string $country): string
+    private static function flagImage(string $country): string
     {
-        return implode('', array_map(
-            fn (string $letter): string => mb_chr(0x1F1A5 + ord($letter), 'UTF-8'),
-            str_split($country),
-        ));
+        return '<img src="https://flagcdn.com/24x18/'.strtolower($country).'.png" alt="" aria-hidden="true">';
     }
 
     public static function isSupported(?string $country): bool

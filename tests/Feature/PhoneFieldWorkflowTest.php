@@ -3,9 +3,9 @@
 namespace Tests\Feature;
 
 use App\Enums\Department;
-use App\Filament\Support\PhoneField;
 use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
 use App\Filament\Resources\RentalCustomers\Pages\ListRentalCustomers;
+use App\Filament\Support\PhoneField;
 use App\Models\User;
 use App\Services\CustomerService;
 use Filament\Actions\Testing\TestAction;
@@ -30,6 +30,16 @@ class PhoneFieldWorkflowTest extends TestCase
 
         $this->assertSame('seller_phone_country', $components[0]->getName());
         $this->assertSame('seller_phone', $components[1]->getName());
+    }
+
+    public function test_phone_field_renders_country_flags_as_trusted_html_without_helper_text(): void
+    {
+        $field = PhoneField::make();
+        $countrySelect = $field->getDefaultChildComponents()[0];
+        $helperText = new \ReflectionProperty($field, 'helperTextSchema');
+
+        $this->assertTrue($countrySelect->isHtmlAllowed());
+        $this->assertNull($helperText->getValue($field));
     }
 
     public function test_customer_can_be_created_with_a_saudi_number(): void

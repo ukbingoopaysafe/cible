@@ -23,11 +23,11 @@ final class PhoneField
         bool $required = true,
         string $phoneField = 'phone',
         string $countryField = 'phone_country',
-    ): FusedGroup
-    {
+    ): FusedGroup {
         $countrySelect = Select::make($countryField)
             ->hiddenLabel()
             ->options(PhoneCountries::options())
+            ->allowHtml()
             ->default(PhoneCountries::DEFAULT)
             ->selectablePlaceholder(false)
             ->searchable()
@@ -80,28 +80,6 @@ final class PhoneField
 
         return FusedGroup::make([$countrySelect, $phoneInput])
             ->label($label)
-            ->columns(['default' => 1, 'sm' => 3])
-            ->helperText(function (Get $get) use ($countryField, $required): string {
-                $country = (string) ($get($countryField) ?: PhoneCountries::DEFAULT);
-
-                if (PhoneCountries::isOther($country)) {
-                    return 'أدخل الرقم بالصيغة الدولية بدءًا من + (مثل +4915112345678).';
-                }
-
-                $parts = [];
-                $example = PhoneCountries::example($country);
-
-                if (filled($example)) {
-                    $parts[] = "مثال: {$example}.";
-                }
-
-                $parts[] = 'عدد الأرقام والصيغة يتبعان الدولة المختارة.';
-
-                if (! $required) {
-                    $parts[] = 'اتركه فارغًا إن لم يتوفر رقم.';
-                }
-
-                return implode(' ', $parts);
-            });
+            ->columns(['default' => 1, 'sm' => 3]);
     }
 }
