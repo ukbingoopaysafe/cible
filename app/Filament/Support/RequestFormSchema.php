@@ -21,11 +21,9 @@ use App\Models\ResaleLeadSource;
 use App\Models\User;
 use App\Services\AreaService;
 use App\Services\BrokerService;
-use App\Services\CustomerPhoneNormalizer;
 use App\Services\CustomerService;
 use App\Support\RecordCode;
 use Carbon\Carbon;
-use Closure;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
@@ -42,8 +40,6 @@ use Filament\Schemas\Schema;
 use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\TextSize;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Validation\ValidationException;
-use Propaganistas\LaravelPhone\PhoneNumber;
 
 final class RequestFormSchema
 {
@@ -91,36 +87,7 @@ final class RequestFormSchema
                         ->placeholder('اختر عميلًا إن كان معروفًا')
                         ->createOptionForm([
                             TextInput::make('name')->label('الاسم')->required()->maxLength(255),
-                            TextInput::make('phone')
-                                ->label('رقم الهاتف')
-                                ->required()
-                                ->maxLength(40)
-                                ->rules([
-                                    fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
-                                        if (blank($value)) {
-                                            return;
-                                        }
-                                        $country = $get('phone_country') ?: 'EG';
-                                        try {
-                                            app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
-                                        } catch (ValidationException $e) {
-                                            $fail(collect($e->errors())->flatten()->first());
-                                        }
-                                    },
-                                ]),
-                            TextInput::make('phone_country')
-                                ->label('رمز الدولة')
-                                ->default('EG')
-                                ->required()
-                                ->length(2)
-                                ->helperText('مثال: EG لمصر، SA للسعودية.')
-                                ->rules([
-                                    fn (): Closure => function (string $attribute, $value, Closure $fail): void {
-                                        if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
-                                            $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
-                                        }
-                                    },
-                                ]),
+                            PhoneField::make('رقم الهاتف', required: true),
                             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
                             Checkbox::make('reviewed_similar_names')->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.'),
                         ])

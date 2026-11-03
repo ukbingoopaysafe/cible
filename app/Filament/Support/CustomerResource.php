@@ -12,11 +12,10 @@ use App\Models\RentalDeal;
 use App\Models\ResaleDeal;
 use App\Models\User;
 use App\Services\AftercareService;
-use App\Services\CustomerPhoneNormalizer;
 use App\Services\CustomerService;
 use App\Services\CustomerSpreadsheetImportService;
+use App\Support\PhoneCountries;
 use App\Support\RecordCode;
-use Closure;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Actions\ExportAction;
@@ -31,18 +30,15 @@ use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Resource;
 use Filament\Schemas\Components\Grid;
-use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Validation\ValidationException;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
 use OpenSpout\Common\Entity\Row;
 use OpenSpout\Writer\XLSX\Writer;
-use Propaganistas\LaravelPhone\PhoneNumber;
 
 /** @extends resource<Model> */
 abstract class CustomerResource extends Resource
@@ -163,8 +159,8 @@ abstract class CustomerResource extends Resource
                     ->visible(fn (Model $record): bool => ! $record->trashed())
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
-                        'phone' => $record->phone_e164,
-                        'phone_country' => $record->phone_country,
+                        'phone' => PhoneCountries::nationalNumber($record->phone_e164, $record->phone_country),
+                        'phone_country' => PhoneCountries::selectable($record->phone_country),
                         'nationality' => $record->nationality,
                     ])
                     ->action(function (Model $record, array $data, Schema $schema): void {
@@ -411,37 +407,8 @@ abstract class CustomerResource extends Resource
                 ->schema([
                     TextInput::make('name')->label('الاسم')->required()->maxLength(255),
                     TextInput::make('nationality')->label('الجنسية')->maxLength(100),
-                    TextInput::make('phone')
-                        ->label('رقم الهاتف')
-                        ->tel()
-                        ->required()
-                        ->maxLength(40)
-                        ->rules([
-                            fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get): void {
-                                if (blank($value)) {
-                                    return;
-                                }
-                                $country = $get('phone_country') ?: 'EG';
-                                try {
-                                    app(CustomerPhoneNormalizer::class)->normalize((string) $value, (string) $country);
-                                } catch (ValidationException $e) {
-                                    $fail(collect($e->errors())->flatten()->first());
-                                }
-                            },
-                        ]),
-                    TextInput::make('phone_country')
-                        ->label('رمز الدولة')
-                        ->default('EG')
-                        ->required()
-                        ->length(2)
-                        ->helperText('مثال: EG لمصر، SA للسعودية.')
-                        ->rules([
-                            fn (): Closure => function (string $attribute, $value, Closure $fail): void {
-                                if (filled($value) && ! PhoneNumber::isValidCountry(strtoupper(trim((string) $value)))) {
-                                    $fail('رمز الدولة المحدد غير صالح (مثال: EG لمصر).');
-                                }
-                            },
-                        ]),
+                    PhoneField::make('رقم الهاتف', required: true)
+                        ->columnSpanFull(),
                     Checkbox::make('reviewed_similar_names')
                         ->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.')
                         ->columnSpanFull(),

@@ -7,6 +7,7 @@ use App\Models\RentalActivity;
 use App\Models\ResaleActivity;
 use App\Models\User;
 use App\Services\BrokerService;
+use App\Support\PhoneCountries;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Textarea;
@@ -66,7 +67,9 @@ abstract class BrokerResource extends Resource
             ->columns([
                 TextColumn::make('name')->label('اسم الوسيط')->searchable()->sortable(),
                 TextColumn::make('phone_e164')->label('الهاتف')->searchable()->placeholder('—'),
-                TextColumn::make('phone_country')->label('الدولة')->placeholder('—')->toggleable(),
+                TextColumn::make('phone_country')->label('الدولة')->placeholder('—')
+                    ->formatStateUsing(fn (?string $state): ?string => PhoneCountries::display($state))
+                    ->toggleable(),
                 TextColumn::make('requests_count')->label('عدد الطلبات')->sortable(),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(),
             ])
@@ -88,8 +91,8 @@ abstract class BrokerResource extends Resource
                     ->schema(BrokerFormSchema::fields(editing: true))
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
-                        'phone' => $record->phone_e164,
-                        'phone_country' => $record->phone_country,
+                        'phone' => PhoneCountries::nationalNumber($record->phone_e164, $record->phone_country),
+                        'phone_country' => PhoneCountries::selectable($record->phone_country),
                     ])
                     ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
