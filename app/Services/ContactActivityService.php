@@ -36,7 +36,7 @@ class ContactActivityService
         $requestClass = $department === Department::Rental ? RentalRequest::class : ResaleRequest::class;
         $request = $requestClass::query()->with(['customer', 'broker'])->findOrFail($requestId);
         if ($request->status === RequestStatus::Closed) {
-            throw ValidationException::withMessages(['request' => 'لا يمكن تسجيل تواصل جديد على طلب مغلق؛ يُسجل تواصل ما بعد الصفقة في مساره المستقل.']);
+            throw ValidationException::withMessages(['request' => 'لا يمكن تسجيل تواصل جديد على طلب مغلق؛ يُسجل التواصل عبر مسار متابعة العميل المستقل.']);
         }
         $contactParty = $request->contact_party;
         $contact = match ($contactParty) {

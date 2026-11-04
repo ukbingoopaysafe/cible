@@ -4,11 +4,11 @@ namespace App\Filament\Widgets;
 
 use App\Enums\Department;
 use App\Enums\RequestStatus;
-use App\Filament\Resources\RentalAftercares\RentalAftercareResource;
-use App\Filament\Resources\ResaleAftercares\ResaleAftercareResource;
-use App\Models\RentalAftercare;
+use App\Filament\Resources\RentalCustomerFollowUps\RentalCustomerFollowUpResource;
+use App\Filament\Resources\ResaleCustomerFollowUps\ResaleCustomerFollowUpResource;
+use App\Models\RentalCustomerFollowUp;
 use App\Models\RentalRequest;
-use App\Models\ResaleAftercare;
+use App\Models\ResaleCustomerFollowUp;
 use App\Models\ResaleRequest;
 use App\Models\User;
 use Filament\Widgets\StatsOverviewWidget;
@@ -58,8 +58,8 @@ class OperationalRequestsOverview extends StatsOverviewWidget
             }
 
             $requestClass = $department === Department::Rental ? RentalRequest::class : ResaleRequest::class;
-            $aftercareClass = $department === Department::Rental ? RentalAftercare::class : ResaleAftercare::class;
-            $aftercareResource = $department === Department::Rental ? RentalAftercareResource::class : ResaleAftercareResource::class;
+            $customerFollowUpClass = $department === Department::Rental ? RentalCustomerFollowUp::class : ResaleCustomerFollowUp::class;
+            $customerFollowUpResource = $department === Department::Rental ? RentalCustomerFollowUpResource::class : ResaleCustomerFollowUpResource::class;
             $baseQuery = $requestClass::query();
             $activeQuery = (clone $baseQuery)->where('status', RequestStatus::Active->value);
             $now = now();
@@ -74,13 +74,13 @@ class OperationalRequestsOverview extends StatsOverviewWidget
                 ->color('info');
             $stats[] = Stat::make($department->label().' • متوقفة مؤقتًا', (clone $baseQuery)->where('status', RequestStatus::Paused->value)->count())
                 ->color('gray');
-            $aftercareQuery = $aftercareClass::query();
-            $stats[] = Stat::make($department->label().' • ما بعد الصفقة (متأخر)', (clone $aftercareQuery)->where('next_follow_up_at', '<', $now)->count())
+            $customerFollowUpQuery = $customerFollowUpClass::query();
+            $stats[] = Stat::make($department->label().' • متابعة العميل (متأخرة)', (clone $customerFollowUpQuery)->where('next_follow_up_at', '<', $now)->count())
                 ->color('danger')
-                ->url($aftercareResource::getUrl().'?tableFilters[urgency][value]=overdue');
-            $stats[] = Stat::make($department->label().' • ما بعد الصفقة (اليوم)', (clone $aftercareQuery)->whereBetween('next_follow_up_at', [$now, $now->copy()->endOfDay()])->count())
+                ->url($customerFollowUpResource::getUrl().'?tableFilters[urgency][value]=overdue');
+            $stats[] = Stat::make($department->label().' • متابعة العميل (اليوم)', (clone $customerFollowUpQuery)->whereBetween('next_follow_up_at', [$now, $now->copy()->endOfDay()])->count())
                 ->color('warning')
-                ->url($aftercareResource::getUrl().'?tableFilters[urgency][value]=today');
+                ->url($customerFollowUpResource::getUrl().'?tableFilters[urgency][value]=today');
         }
 
         return $stats;

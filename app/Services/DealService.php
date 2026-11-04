@@ -112,7 +112,7 @@ class DealService
                 $deal->commissions()->create($commission);
             }
 
-            app(AftercareService::class)->startForDeal($actor, $department, $deal);
+            app(CustomerFollowUpService::class)->startForDeal($actor, $department, $deal);
 
             AuditEvent::query()->create([
                 'actor_user_id' => $actor->id,

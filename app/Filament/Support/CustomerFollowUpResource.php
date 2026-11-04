@@ -9,7 +9,7 @@ use App\Models\RentalDeal;
 use App\Models\ResaleCustomer;
 use App\Models\ResaleDeal;
 use App\Models\User;
-use App\Services\AftercareService;
+use App\Services\CustomerFollowUpService;
 use App\Support\RecordCode;
 use Carbon\Carbon;
 use Filament\Actions\Action;
@@ -24,7 +24,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-abstract class AftercareResource extends Resource
+abstract class CustomerFollowUpResource extends Resource
 {
     abstract public static function department(): Department;
 
@@ -88,7 +88,7 @@ abstract class AftercareResource extends Resource
     {
         return $table
             ->headerActions([
-                self::startAftercareHeaderAction(),
+                self::startCustomerFollowUpHeaderAction(),
             ])
             ->columns([
                 TextColumn::make('customer_code')
@@ -225,7 +225,7 @@ abstract class AftercareResource extends Resource
                     ->modalCancelActionLabel('إغلاق')
                     ->action(fn () => null),
 
-                Action::make('recordActivity')
+                Action::make('recordCustomerFollowUpActivity')
                     ->label('تسجيل تواصل')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
                     ->color('primary')
@@ -274,19 +274,19 @@ abstract class AftercareResource extends Resource
                     ->action(function (Model $record, array $data): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
-                        app(AftercareService::class)->recordActivity($actor, static::department(), (int) $record->customer_id, $data);
+                        app(CustomerFollowUpService::class)->recordActivity($actor, static::department(), (int) $record->customer_id, $data);
                     })
                     ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
 
                 ActionGroup::make([
-                    Action::make('aftercareHistory')
-                        ->label('سجل المتابعات')
+                    Action::make('customerFollowUpHistory')
+                        ->label('سجل متابعة العميل')
                         ->icon('heroicon-o-clock')
                         ->modalHeading(fn (Model $record): string => "سجل متابعة العميل: {$record->customer?->name}")
                         ->modalSubmitAction(false)
                         ->modalCancelActionLabel('إغلاق')
-                        ->modalContent(fn (Model $record) => view('filament.modals.aftercare-history', [
-                            'aftercare' => $record->load(['owner', 'activities.actor', 'activities.deal']),
+                        ->modalContent(fn (Model $record) => view('filament.modals.customer-follow-up-history', [
+                            'customerFollowUp' => $record->load(['owner', 'activities.actor', 'activities.deal']),
                         ])),
 
                     Action::make('reassignOwner')
@@ -313,10 +313,10 @@ abstract class AftercareResource extends Resource
             ->defaultSort('next_follow_up_at', 'asc');
     }
 
-    public static function startAftercareHeaderAction(): Action
+    public static function startCustomerFollowUpHeaderAction(): Action
     {
-        return Action::make('startAftercare')
-            ->label('بدء متابعة عميل')
+        return Action::make('startCustomerFollowUp')
+            ->label('بدء متابعة العميل')
             ->icon('heroicon-o-plus-circle')
             ->schema([
                 Select::make('customer_id')
@@ -326,7 +326,7 @@ abstract class AftercareResource extends Resource
 
                         return $customerClass::query()
                             ->whereHas('deals')
-                            ->whereDoesntHave('aftercare')
+                            ->whereDoesntHave('customerFollowUp')
                             ->pluck('name', 'id')
                             ->all();
                     })
@@ -337,7 +337,7 @@ abstract class AftercareResource extends Resource
             ->action(function (array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                app(AftercareService::class)->startForCustomer($actor, static::department(), (int) $data['customer_id']);
+                app(CustomerFollowUpService::class)->startForCustomer($actor, static::department(), (int) $data['customer_id']);
             })
             ->successNotificationTitle('تم بدء سجل المتابعة بنجاح');
     }

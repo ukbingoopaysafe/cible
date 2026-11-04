@@ -628,7 +628,7 @@ class RequestService
             if ($deal) {
                 $deal->customer_id = $customerId;
                 $deal->save();
-                app(AftercareService::class)->startForDeal($actor, $department, $deal);
+                app(CustomerFollowUpService::class)->startForDeal($actor, $department, $deal);
             }
 
             AuditEvent::query()->create([

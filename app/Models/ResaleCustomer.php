@@ -20,8 +20,8 @@ class ResaleCustomer extends Model
         return $this->hasMany(ResaleRequest::class, 'customer_id');
     }
 
-    public function aftercare(): HasOne
+    public function customerFollowUp(): HasOne
     {
-        return $this->hasOne(ResaleAftercare::class, 'customer_id');
+        return $this->hasOne(ResaleCustomerFollowUp::class, 'customer_id');
     }
 }

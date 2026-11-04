@@ -12,7 +12,7 @@ use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
 use App\Models\RentalDeal;
 use App\Models\ResaleDeal;
 use App\Models\User;
-use App\Services\AftercareService;
+use App\Services\CustomerFollowUpService;
 use App\Services\CustomerService;
 use App\Services\CustomerSpreadsheetImportService;
 use App\Support\RecordCode;
@@ -54,7 +54,7 @@ abstract class CustomerResource extends Resource
         $actor = auth()->user();
 
         return parent::getEloquentQuery()
-            ->with(['aftercare.owner', 'phoneNumbers'])
+            ->with(['customerFollowUp.owner', 'phoneNumbers'])
             ->withCount('requests')
             ->withCount(['contactChangeRequests as pending_contact_change_requests_count' => fn (Builder $query): Builder => $query->where('status', ContactChangeRequestStatus::Pending->value)])
             ->when(
@@ -126,8 +126,8 @@ abstract class CustomerResource extends Resource
                     ->toggleable(),
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requests_count')->label('الطلبات')->sortable()->toggleable(),
-                TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('aftercare.next_follow_up_at')->label('متابعة ما بعد الصفقة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('customerFollowUp.owner.name')->label('مسؤول المتابعة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('customerFollowUp.next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('deleted_at')->label('الحالة')->badge()
                     ->state(fn (Model $record): string => $record->trashed() ? 'مؤرشف' : 'نشط')
@@ -231,14 +231,14 @@ abstract class CustomerResource extends Resource
                 ->icon('heroicon-o-user')
                 ->dropdown(false),
 
-            'aftercare' => ActionGroup::make([
-                Action::make('startAftercare')
-                    ->label('بدء ما بعد الصفقة')
+            'customer-follow-up' => ActionGroup::make([
+                Action::make('startCustomerFollowUp')
+                    ->label('بدء متابعة العميل')
                     ->icon('heroicon-o-heart')
                     ->action(function (Model $record): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
-                        app(AftercareService::class)->startForCustomer($actor, static::department(), (int) $record->getKey());
+                        app(CustomerFollowUpService::class)->startForCustomer($actor, static::department(), (int) $record->getKey());
                     })
                     ->visible(function (Model $record): bool {
                         if ($record->trashed()) {
@@ -246,13 +246,13 @@ abstract class CustomerResource extends Resource
                         }
                         $dealClass = static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class;
 
-                        return $record->aftercare === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
+                        return $record->customerFollowUp === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
                     })
-                    ->successNotificationTitle('تم بدء سجل ما بعد الصفقة'),
-                Action::make('recordAftercareActivity')
-                    ->label('تسجيل تواصل ما بعد الصفقة')
+                    ->successNotificationTitle('تم بدء سجل متابعة العميل'),
+                Action::make('recordCustomerFollowUpActivity')
+                    ->label('تسجيل تواصل')
                     ->icon('heroicon-o-chat-bubble-left-ellipsis')
-                    ->modalHeading('تسجيل تواصل ما بعد الصفقة')
+                    ->modalHeading('تسجيل تواصل')
                     ->modalDescription('سيُسجَّل التواصل ويُحدَّث موعد المتابعة القادمة لهذا العميل.')
                     ->modalSubmitActionLabel('تسجيل التواصل')
                     ->schema([
@@ -272,23 +272,23 @@ abstract class CustomerResource extends Resource
                     ->action(function (Model $record, array $data): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
-                        app(AftercareService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
+                        app(CustomerFollowUpService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
                     })
-                    ->visible(fn (Model $record): bool => ! $record->trashed() && $record->aftercare !== null)
+                    ->visible(fn (Model $record): bool => ! $record->trashed() && $record->customerFollowUp !== null)
                     ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
-                Action::make('aftercareHistory')
-                    ->label('سجل ما بعد الصفقة')
+                Action::make('customerFollowUpHistory')
+                    ->label('سجل متابعة العميل')
                     ->icon('heroicon-o-clock')
-                    ->modalHeading(fn (Model $record): string => "سجل ما بعد الصفقة: {$record->name}")
+                    ->modalHeading(fn (Model $record): string => "سجل متابعة العميل: {$record->name}")
                     ->modalDescription('ملخص المتابعة وآخر التفاعلات المسجلة مع العميل.')
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('إغلاق')
-                    ->modalContent(fn (Model $record) => view('filament.modals.aftercare-history', [
-                        'aftercare' => $record->aftercare?->load(['owner', 'activities.actor', 'activities.deal']),
+                    ->modalContent(fn (Model $record) => view('filament.modals.customer-follow-up-history', [
+                        'customerFollowUp' => $record->customerFollowUp?->load(['owner', 'activities.actor', 'activities.deal']),
                     ]))
-                    ->visible(fn (Model $record): bool => $record->aftercare !== null),
+                    ->visible(fn (Model $record): bool => $record->customerFollowUp !== null),
             ])
-                ->label('ما بعد الصفقة')
+                ->label('متابعة العميل')
                 ->icon('heroicon-o-heart')
                 ->dropdown(false),
 

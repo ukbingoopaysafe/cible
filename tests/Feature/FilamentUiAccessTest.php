@@ -6,7 +6,7 @@ use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
-use App\Filament\Resources\RentalAftercares\Pages\ListRentalAftercares;
+use App\Filament\Resources\RentalCustomerFollowUps\Pages\ListRentalCustomerFollowUps;
 use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
 use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
 use App\Filament\Resources\RentalCloseReasons\Pages\ListRentalCloseReasons;
@@ -23,7 +23,7 @@ use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\ResaleRequests\Pages\ViewResaleRequest;
 use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Filament\Widgets\OperationalRequestsOverview;
-use App\Models\RentalAftercare;
+use App\Models\RentalCustomerFollowUp;
 use App\Models\RentalArea;
 use App\Models\RentalCustomer;
 use App\Models\RentalRecommendation;
@@ -65,7 +65,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/rental-requests/create',
             "/admin/rental-requests/{$rentalRequest->id}",
             "/admin/rental-requests/{$rentalRequest->id}/edit",
-            '/admin/rental-aftercares',
+            '/admin/rental-customer-follow-ups',
             '/admin/resale-customers',
             '/admin/resale-brokers',
             '/admin/resale-areas',
@@ -76,7 +76,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/resale-requests/create',
             "/admin/resale-requests/{$resaleRequest->id}",
             "/admin/resale-requests/{$resaleRequest->id}/edit",
-            '/admin/resale-aftercares',
+            '/admin/resale-customer-follow-ups',
         ];
 
         foreach ($paths as $path) {
@@ -101,7 +101,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/rental-requests/create',
             "/admin/rental-requests/{$request->id}",
             "/admin/rental-requests/{$request->id}/edit",
-            '/admin/rental-aftercares',
+            '/admin/rental-customer-follow-ups',
         ] as $path) {
             $this->actingAs($employee)->get($path)->assertOk();
         }
@@ -119,7 +119,7 @@ class FilamentUiAccessTest extends TestCase
             '/admin/resale-audit-events',
             '/admin/resale-requests',
             '/admin/resale-requests/create',
-            '/admin/resale-aftercares',
+            '/admin/resale-customer-follow-ups',
         ] as $path) {
             $this->actingAs($employee)->get($path)->assertForbidden();
         }
@@ -270,7 +270,7 @@ class FilamentUiAccessTest extends TestCase
         ]);
     }
 
-    public function test_manager_can_create_a_rental_deal_and_aftercare_through_the_request_action(): void
+    public function test_manager_can_create_a_rental_deal_and_customer_follow_up_through_the_request_action(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
@@ -313,12 +313,12 @@ class FilamentUiAccessTest extends TestCase
         ]);
     }
 
-    public function test_manager_can_record_an_aftercare_activity_through_the_customer_action(): void
+    public function test_manager_can_record_a_customer_follow_up_activity_through_the_customer_action(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
         $customer = app(CustomerService::class)->create($manager, Department::Rental, [
-            'name' => 'عميل ما بعد الصفقة',
+            'name' => 'عميل المتابعة',
             'phone' => '01012345556',
             'phone_country' => 'EG',
         ]);
@@ -339,7 +339,7 @@ class FilamentUiAccessTest extends TestCase
 
         Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
-            ->callAction(TestAction::make('recordAftercareActivity')->table($customer), [
+            ->callAction(TestAction::make('recordCustomerFollowUpActivity')->table($customer), [
                 'channel' => 'whatsapp',
                 'occurred_at' => now()->subMinute()->toDateTimeString(),
                 'result' => 'تم الاطمئنان على العميل',
@@ -348,7 +348,7 @@ class FilamentUiAccessTest extends TestCase
             ->assertHasNoTableActionErrors();
 
         $this->assertDatabaseHas('rental_aftercare_activities', [
-            'aftercare_id' => RentalAftercare::query()->where('customer_id', $customer->id)->sole()->id,
+            'aftercare_id' => RentalCustomerFollowUp::query()->where('customer_id', $customer->id)->sole()->id,
             'channel' => 'whatsapp',
             'result' => 'تم الاطمئنان على العميل',
         ]);
@@ -975,12 +975,12 @@ class FilamentUiAccessTest extends TestCase
             ->assertCanNotSeeTableRecords([$managerRequest]);
     }
 
-    public function test_manager_can_manage_aftercare_resource(): void
+    public function test_manager_can_manage_customer_follow_up_resource(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
         $customer = app(CustomerService::class)->create($manager, Department::Rental, [
-            'name' => 'عميل صفحة ما بعد الصفقة',
+            'name' => 'عميل صفحة المتابعة',
             'phone' => '01012345599',
             'phone_country' => 'EG',
         ]);
@@ -999,23 +999,23 @@ class FilamentUiAccessTest extends TestCase
             'payment_schedule' => 'monthly',
         ]);
 
-        $aftercare = RentalAftercare::query()->where('customer_id', $customer->id)->sole();
+        $customerFollowUp = RentalCustomerFollowUp::query()->where('customer_id', $customer->id)->sole();
 
         Livewire::actingAs($manager)
-            ->test(ListRentalAftercares::class)
-            ->assertCanSeeTableRecords([$aftercare])
-            ->callAction(TestAction::make('recordActivity')->table($aftercare), [
+            ->test(ListRentalCustomerFollowUps::class)
+            ->assertCanSeeTableRecords([$customerFollowUp])
+            ->callAction(TestAction::make('recordCustomerFollowUpActivity')->table($customerFollowUp), [
                 'channel' => 'phone',
                 'occurred_at' => now()->subMinute()->toDateTimeString(),
-                'result' => 'متابعة دورية عبر صفحة ما بعد الصفقة',
+                'result' => 'متابعة دورية عبر صفحة متابعة العميل',
                 'next_follow_up_at' => now()->addMonths(2)->toDateTimeString(),
             ])
             ->assertHasNoTableActionErrors();
 
         $this->assertDatabaseHas('rental_aftercare_activities', [
-            'aftercare_id' => $aftercare->id,
+            'aftercare_id' => $customerFollowUp->id,
             'channel' => 'phone',
-            'result' => 'متابعة دورية عبر صفحة ما بعد الصفقة',
+            'result' => 'متابعة دورية عبر صفحة متابعة العميل',
         ]);
     }
 }

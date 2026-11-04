@@ -22,14 +22,14 @@ class CustomerActionsMenuStructureTest extends TestCase
         $this->assertSame('بيانات العميل', $subGroups[0]->getLabel());
         $this->assertFalse($subGroups[0]->hasDropdown(), 'Subgroup should not create nested dropdown.');
         $this->assertSame(
-            ['editCustomer', 'createCustomerRequest'],
+            ['viewContactPhoneNumbers', 'editCustomer', 'createCustomerRequest'],
             array_map(fn ($action) => $action->getName(), $subGroups[0]->getActions()),
         );
 
-        $this->assertSame('ما بعد الصفقة', $subGroups[1]->getLabel());
+        $this->assertSame('متابعة العميل', $subGroups[1]->getLabel());
         $this->assertFalse($subGroups[1]->hasDropdown());
         $this->assertSame(
-            ['startAftercare', 'recordAftercareActivity', 'aftercareHistory'],
+            ['startCustomerFollowUp', 'recordCustomerFollowUpActivity', 'customerFollowUpHistory'],
             array_map(fn ($action) => $action->getName(), $subGroups[1]->getActions()),
         );
 
@@ -41,7 +41,7 @@ class CustomerActionsMenuStructureTest extends TestCase
         );
 
         $flatActions = $group->getFlatActions();
-        $this->assertCount(7, $flatActions, 'Expected exactly 7 flat actions in the dropdown group.');
+        $this->assertCount(8, $flatActions, 'Expected exactly 8 flat actions in the dropdown group.');
 
         $categories = array_map(
             fn ($action): ?string => $action->getExtraAttributes()['data-action-category'] ?? null,
@@ -50,7 +50,7 @@ class CustomerActionsMenuStructureTest extends TestCase
 
         $this->assertNotContains(null, $categories, 'Every customer action must declare its category heading.');
         $this->assertSame(
-            ['profile', 'aftercare', 'archive'],
+            ['profile', 'customer-follow-up', 'archive'],
             array_values(array_unique($categories)),
             'Customer action categories must remain grouped in dropdown order.',
         );

@@ -20,8 +20,8 @@ class RentalCustomer extends Model
         return $this->hasMany(RentalRequest::class, 'customer_id');
     }
 
-    public function aftercare(): HasOne
+    public function customerFollowUp(): HasOne
     {
-        return $this->hasOne(RentalAftercare::class, 'customer_id');
+        return $this->hasOne(RentalCustomerFollowUp::class, 'customer_id');
     }
 }

@@ -1,22 +1,22 @@
 <div class="space-y-4">
-    @if (! $aftercare)
+    @if (! $customerFollowUp)
         <p class="rounded-xl border border-dashed border-gray-200 p-4 text-sm text-gray-600 dark:border-gray-700 dark:text-gray-300">
-            لا يوجد سجل ما بعد الصفقة لهذا العميل.
+            لا يوجد سجل متابعة لهذا العميل.
         </p>
     @else
         <div class="grid gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm dark:border-gray-700 dark:bg-gray-900 sm:grid-cols-2">
             <div>
-                <span class="block text-xs font-semibold text-gray-500 dark:text-gray-400">المسؤول</span>
-                <span class="mt-1 block font-semibold text-gray-900 dark:text-white">{{ $aftercare->owner?->name ?? '—' }}</span>
+                <span class="block text-xs font-semibold text-gray-500 dark:text-gray-400">مسؤول المتابعة</span>
+                <span class="mt-1 block font-semibold text-gray-900 dark:text-white">{{ $customerFollowUp->owner?->name ?? '—' }}</span>
             </div>
             <div>
                 <span class="block text-xs font-semibold text-gray-500 dark:text-gray-400">المتابعة القادمة</span>
-                <span class="mt-1 block font-semibold text-gray-900 dark:text-white">{{ $aftercare->next_follow_up_at?->format('d/m/Y H:i') ?? 'غير محددة' }}</span>
+                <span class="mt-1 block font-semibold text-gray-900 dark:text-white">{{ $customerFollowUp->next_follow_up_at?->format('d/m/Y H:i') ?? 'غير محددة' }}</span>
             </div>
         </div>
 
         <div class="space-y-3">
-            @forelse ($aftercare->activities as $activity)
+            @forelse ($customerFollowUp->activities as $activity)
                 <article class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                     <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                         <strong>{{ $activity->channel->label() }}</strong>

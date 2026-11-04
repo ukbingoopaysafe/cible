@@ -5,12 +5,12 @@ namespace App\Services;
 use App\Enums\ContactActivityChannel;
 use App\Enums\Department;
 use App\Models\AuditEvent;
-use App\Models\RentalAftercare;
-use App\Models\RentalAftercareActivity;
+use App\Models\RentalCustomerFollowUp;
+use App\Models\RentalCustomerFollowUpActivity;
 use App\Models\RentalCustomer;
 use App\Models\RentalDeal;
-use App\Models\ResaleAftercare;
-use App\Models\ResaleAftercareActivity;
+use App\Models\ResaleCustomerFollowUp;
+use App\Models\ResaleCustomerFollowUpActivity;
 use App\Models\ResaleCustomer;
 use App\Models\ResaleDeal;
 use App\Models\User;
@@ -22,7 +22,7 @@ use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
-class AftercareService
+class CustomerFollowUpService
 {
     public function startForDeal(User $actor, Department $department, Model $deal): ?Model
     {
@@ -31,7 +31,7 @@ class AftercareService
             return null;
         }
 
-        $profileClass = $department === Department::Rental ? RentalAftercare::class : ResaleAftercare::class;
+        $profileClass = $department === Department::Rental ? RentalCustomerFollowUp::class : ResaleCustomerFollowUp::class;
 
         $profile = $profileClass::query()->firstOrCreate(
             ['customer_id' => $deal->customer_id],
@@ -39,7 +39,7 @@ class AftercareService
         );
 
         if ($profile->wasRecentlyCreated) {
-            $this->recordAudit($actor, $department, 'aftercare.started', $profile, ['customer_id' => $deal->customer_id, 'owner_user_id' => $profile->owner_user_id]);
+            $this->recordAudit($actor, $department, 'customer_follow_up.started', $profile, ['customer_id' => $deal->customer_id, 'owner_user_id' => $profile->owner_user_id]);
         }
 
         return $profile;
@@ -50,11 +50,11 @@ class AftercareService
         $this->authorize($actor, $department);
         $customerClass = $department === Department::Rental ? RentalCustomer::class : ResaleCustomer::class;
         $dealClass = $department === Department::Rental ? RentalDeal::class : ResaleDeal::class;
-        $profileClass = $department === Department::Rental ? RentalAftercare::class : ResaleAftercare::class;
+        $profileClass = $department === Department::Rental ? RentalCustomerFollowUp::class : ResaleCustomerFollowUp::class;
         $customer = $customerClass::query()->findOrFail($customerId);
 
         if (! $dealClass::query()->where('customer_id', $customer->id)->exists()) {
-            throw ValidationException::withMessages(['customer' => 'لا يمكن بدء ما بعد الصفقة قبل وجود صفقة ناجحة مرتبطة بهذا العميل.']);
+            throw ValidationException::withMessages(['customer' => 'لا يمكن بدء متابعة العميل قبل وجود صفقة ناجحة مرتبطة بهذا العميل.']);
         }
 
         $profile = $profileClass::query()->firstOrCreate(
@@ -62,7 +62,7 @@ class AftercareService
             ['owner_user_id' => $actor->id],
         );
         if ($profile->wasRecentlyCreated) {
-            $this->recordAudit($actor, $department, 'aftercare.started', $profile, ['customer_id' => $customer->id, 'owner_user_id' => $profile->owner_user_id]);
+            $this->recordAudit($actor, $department, 'customer_follow_up.started', $profile, ['customer_id' => $customer->id, 'owner_user_id' => $profile->owner_user_id]);
         }
 
         return $profile;
@@ -72,8 +72,8 @@ class AftercareService
     public function recordActivity(User $actor, Department $department, int $customerId, array $data): Model
     {
         $this->authorize($actor, $department);
-        $activityClass = $department === Department::Rental ? RentalAftercareActivity::class : ResaleAftercareActivity::class;
-        $profileClass = $department === Department::Rental ? RentalAftercare::class : ResaleAftercare::class;
+        $activityClass = $department === Department::Rental ? RentalCustomerFollowUpActivity::class : ResaleCustomerFollowUpActivity::class;
+        $profileClass = $department === Department::Rental ? RentalCustomerFollowUp::class : ResaleCustomerFollowUp::class;
         $dealTable = $department === Department::Rental ? 'rental_deals' : 'resale_deals';
         $data = Validator::make($data, [
             'deal_id' => ['nullable', 'integer', Rule::exists($dealTable, 'id')],
@@ -104,7 +104,7 @@ class AftercareService
 
             $profile->next_follow_up_at = $data['next_follow_up_at'] ?? null;
             $profile->save();
-            $this->recordAudit($actor, $department, 'aftercare.activity.recorded', $activity, [
+            $this->recordAudit($actor, $department, 'customer_follow_up.activity.recorded', $activity, [
                 'customer_id' => $customerId,
                 'next_follow_up_at' => $profile->next_follow_up_at?->toIso8601String(),
             ]);
@@ -113,11 +113,11 @@ class AftercareService
         });
     }
 
-    /** @return Collection<int, RentalAftercareActivity|ResaleAftercareActivity> */
+    /** @return Collection<int, RentalCustomerFollowUpActivity|ResaleCustomerFollowUpActivity> */
     public function history(User $actor, Department $department, int $customerId): Collection
     {
         $this->authorize($actor, $department);
-        $profileClass = $department === Department::Rental ? RentalAftercare::class : ResaleAftercare::class;
+        $profileClass = $department === Department::Rental ? RentalCustomerFollowUp::class : ResaleCustomerFollowUp::class;
 
         return $profileClass::query()->where('customer_id', $customerId)->firstOrFail()
             ->activities()->with(['actor', 'deal'])->orderByDesc('occurred_at')->orderByDesc('id')->get();

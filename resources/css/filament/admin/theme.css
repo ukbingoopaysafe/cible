@@ -2183,8 +2183,8 @@ td.record-code-cell {
     content: "بيانات العميل" !important;
 }
 
-.fi-dropdown-panel:has([data-action-category]) .fi-dropdown-list:has([data-action-category="aftercare"])::before {
-    content: "ما بعد الصفقة" !important;
+.fi-dropdown-panel:has([data-action-category]) .fi-dropdown-list:has([data-action-category="customer-follow-up"])::before {
+    content: "متابعة العميل" !important;
 }
 
 .fi-dropdown-panel:has([data-action-category]) .fi-dropdown-list:has([data-action-category="archive"])::before {

@@ -8,7 +8,7 @@ use App\Models\RentalArea;
 use App\Models\RentalLeadSource;
 use App\Models\ResaleArea;
 use App\Models\User;
-use App\Services\AftercareService;
+use App\Services\CustomerFollowUpService;
 use App\Services\ContactActivityService;
 use App\Services\CustomerService;
 use App\Services\DealService;
@@ -81,7 +81,7 @@ class RequestLifecycleTest extends TestCase
         ]);
     }
 
-    public function test_successful_closed_request_creates_one_deal_and_aftercare_profile(): void
+    public function test_successful_closed_request_creates_one_deal_and_customer_follow_up_record(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customer = app(CustomerService::class)->create($manager, Department::Rental, [
@@ -149,18 +149,18 @@ class RequestLifecycleTest extends TestCase
             'owner_user_id' => $manager->id,
         ]);
 
-        $nextAftercareFollowUp = now()->addWeek()->toDateTimeString();
+        $nextCustomerFollowUpAt = now()->addWeek()->toDateTimeString();
 
-        app(AftercareService::class)->recordActivity($manager, Department::Rental, $customer->id, [
+        app(CustomerFollowUpService::class)->recordActivity($manager, Department::Rental, $customer->id, [
             'deal_id' => $deal->id,
             'channel' => 'whatsapp',
             'occurred_at' => now()->subMinute()->toDateTimeString(),
             'result' => 'تم الاطمئنان على العميل',
-            'next_follow_up_at' => $nextAftercareFollowUp,
+            'next_follow_up_at' => $nextCustomerFollowUpAt,
         ]);
         $this->assertDatabaseHas('rental_aftercare', [
             'customer_id' => $customer->id,
-            'next_follow_up_at' => $nextAftercareFollowUp,
+            'next_follow_up_at' => $nextCustomerFollowUpAt,
         ]);
         $this->assertDatabaseCount('rental_aftercare_activities', 1);
 
@@ -219,7 +219,7 @@ class RequestLifecycleTest extends TestCase
         $this->assertNull($request->lead_source_other);
     }
 
-    public function test_successful_resale_deal_starts_independent_aftercare(): void
+    public function test_successful_resale_deal_starts_independent_customer_follow_up(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customer = app(CustomerService::class)->create($manager, Department::Resale, [
@@ -250,7 +250,7 @@ class RequestLifecycleTest extends TestCase
         $this->assertDatabaseCount('rental_deals', 0);
     }
 
-    public function test_customer_ledgers_deals_and_aftercare_remain_independent_between_departments(): void
+    public function test_customer_ledgers_deals_and_customer_follow_ups_remain_independent_between_departments(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customers = app(CustomerService::class);
@@ -296,7 +296,7 @@ class RequestLifecycleTest extends TestCase
             'seller_name' => 'بائع مستقل',
         ]);
 
-        app(AftercareService::class)->recordActivity($manager, Department::Rental, $rentalCustomer->id, [
+        app(CustomerFollowUpService::class)->recordActivity($manager, Department::Rental, $rentalCustomer->id, [
             'deal_id' => $rentalDeal->id,
             'channel' => 'phone',
             'occurred_at' => now()->subMinute()->toDateTimeString(),
