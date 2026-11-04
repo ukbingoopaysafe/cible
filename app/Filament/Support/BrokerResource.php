@@ -3,6 +3,7 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Enums\ContactChangeRequestStatus;
 use App\Models\RentalActivity;
 use App\Models\ResaleActivity;
 use App\Models\User;
@@ -11,6 +12,7 @@ use App\Support\PhoneCountries;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
 use Filament\Forms\Components\Textarea;
+use Filament\Forms\Components\Hidden;
 use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
@@ -31,6 +33,7 @@ abstract class BrokerResource extends Resource
         return parent::getEloquentQuery()
             ->with('phoneNumbers')
             ->withCount('requests')
+            ->withCount(['contactChangeRequests as pending_contact_change_requests_count' => fn (Builder $query): Builder => $query->where('status', ContactChangeRequestStatus::Pending->value)])
             ->when(
                 ! $actor instanceof User || ! $actor->canWorkInDepartment(static::department()),
                 fn (Builder $query): Builder => $query->whereRaw('1 = 0'),
@@ -67,7 +70,11 @@ abstract class BrokerResource extends Resource
         return $table
             ->searchPlaceholder('بحث بالاسم أو الهاتف...')
             ->columns([
-                TextColumn::make('name')->label('اسم الوسيط')->searchable()->sortable(),
+                TextColumn::make('name')
+                    ->label('اسم الوسيط')
+                    ->description(fn (Model $record): ?string => (int) ($record->pending_contact_change_requests_count ?? 0) > 0 ? 'طلب تعديل بانتظار المدير' : null)
+                    ->searchable()
+                    ->sortable(),
                 TextColumn::make('primary_phone')
                     ->label('الهاتف الأساسي')
                     ->state(fn (Model $record): ?string => $record->primaryPhone()?->phone_e164)
@@ -113,13 +120,24 @@ abstract class BrokerResource extends Resource
                     ->modalHeading('تعديل بيانات الوسيط')
                     ->modalDescription('حدّث اسم الوسيط وأرقام هاتفه. أول رقم في القائمة هو الأساسي تلقائيًا.')
                     ->modalSubmitActionLabel('حفظ التعديلات')
-                    ->schema(BrokerFormSchema::fields(static::department(), editing: true))
+                    ->disabled(fn (Model $record): bool => ! (auth()->user()?->is_company_manager ?? false)
+                        && (int) ($record->pending_contact_change_requests_count ?? 0) > 0)
+                    ->tooltip(fn (Model $record): ?string => ! (auth()->user()?->is_company_manager ?? false)
+                        && (int) ($record->pending_contact_change_requests_count ?? 0) > 0 ? 'يوجد طلب تعديل بانتظار قرار المدير.' : null)
+                    ->schema(array_merge(
+                        [Hidden::make('record_snapshot')->dehydrated()],
+                        BrokerFormSchema::fields(static::department(), editing: true),
+                    ))
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
+                        'record_snapshot' => json_encode(app(BrokerService::class)->auditValues($record), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                     ] + ContactPhonesField::fromContact($record))
                     ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
+                        $snapshot = json_decode((string) ($data['record_snapshot'] ?? ''), true);
+                        $expectedSnapshot = is_array($snapshot) ? $snapshot : null;
+                        unset($data['record_snapshot']);
                         $data = ContactPhonesField::toServiceData($data);
                         $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                         unset($data['reviewed_similar_names']);
@@ -131,12 +149,13 @@ abstract class BrokerResource extends Resource
                                 (int) $record->getKey(),
                                 $data,
                                 $reviewed,
+                                $expectedSnapshot,
                             ),
                             $schema,
                             'تعذر تحديث بيانات الوسيط'
                         );
                     })
-                    ->successNotificationTitle('تم تحديث بيانات الوسيط'),
+                    ->successNotificationTitle(fn (): string => auth()->user()?->is_company_manager ? 'تم تحديث بيانات الوسيط' : 'تم إرسال طلب التعديل للمدير'),
             ])
                 ->label('بيانات الوسيط')
                 ->icon('heroicon-o-user')

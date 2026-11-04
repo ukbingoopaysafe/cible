@@ -3,6 +3,7 @@
 namespace App\Filament\Support;
 
 use App\Enums\ContactActivityChannel;
+use App\Enums\ContactChangeRequestStatus;
 use App\Enums\Department;
 use App\Exports\RentalCustomerExporter;
 use App\Exports\ResaleCustomerExporter;
@@ -23,6 +24,7 @@ use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\Component;
 use Filament\Forms\Components\DateTimePicker;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -54,6 +56,7 @@ abstract class CustomerResource extends Resource
         return parent::getEloquentQuery()
             ->with(['aftercare.owner', 'phoneNumbers'])
             ->withCount('requests')
+            ->withCount(['contactChangeRequests as pending_contact_change_requests_count' => fn (Builder $query): Builder => $query->where('status', ContactChangeRequestStatus::Pending->value)])
             ->when(
                 ! $actor instanceof User || ! $actor->canWorkInDepartment(static::department()),
                 fn (Builder $query): Builder => $query->whereRaw('1 = 0'),
@@ -103,7 +106,12 @@ abstract class CustomerResource extends Resource
                     ->extraCellAttributes(['class' => 'record-code-cell whitespace-nowrap'])
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction))
                     ->searchable(query: fn (Builder $query, string $search): Builder => RecordCode::applySearch($query, $search, static::department(), RecordCode::TYPE_CUSTOMER)),
-                TextColumn::make('name')->label('الاسم')->searchable()->sortable()->toggleable(),
+                TextColumn::make('name')
+                    ->label('الاسم')
+                    ->description(fn (Model $record): ?string => (int) ($record->pending_contact_change_requests_count ?? 0) > 0 ? 'طلب تعديل بانتظار المدير' : null)
+                    ->searchable()
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('primary_phone')
                     ->label('الهاتف الأساسي')
                     ->state(fn (Model $record): ?string => $record->primaryPhone()?->phone_e164)
@@ -177,16 +185,24 @@ abstract class CustomerResource extends Resource
                 Action::make('editCustomer')
                     ->label('تعديل العميل')
                     ->icon('heroicon-o-pencil-square')
-                    ->schema(static::formFields())
+                    ->schema(static::formFields(editing: true))
                     ->modalSubmitActionLabel('حفظ التعديلات')
+                    ->disabled(fn (Model $record): bool => ! (auth()->user()?->is_company_manager ?? false)
+                        && (int) ($record->pending_contact_change_requests_count ?? 0) > 0)
+                    ->tooltip(fn (Model $record): ?string => ! (auth()->user()?->is_company_manager ?? false)
+                        && (int) ($record->pending_contact_change_requests_count ?? 0) > 0 ? 'يوجد طلب تعديل بانتظار قرار المدير.' : null)
                     ->visible(fn (Model $record): bool => ! $record->trashed())
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
                         'nationality' => $record->nationality,
+                        'record_snapshot' => json_encode(app(CustomerService::class)->auditValues($record), JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE),
                     ] + ContactPhonesField::fromContact($record))
                     ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
+                        $snapshot = json_decode((string) ($data['record_snapshot'] ?? ''), true);
+                        $expectedSnapshot = is_array($snapshot) ? $snapshot : null;
+                        unset($data['record_snapshot']);
                         $data = ContactPhonesField::toServiceData($data);
                         $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                         unset($data['reviewed_similar_names']);
@@ -198,12 +214,13 @@ abstract class CustomerResource extends Resource
                                 (int) $record->getKey(),
                                 $data,
                                 $reviewed,
+                                $expectedSnapshot,
                             ),
                             $schema,
                             'تعذر تحديث بيانات العميل'
                         );
                     })
-                    ->successNotificationTitle('تم حفظ التعديلات'),
+                    ->successNotificationTitle(fn (): string => auth()->user()?->is_company_manager ? 'تم حفظ التعديلات' : 'تم إرسال طلب التعديل للمدير'),
                 Action::make('createCustomerRequest')
                     ->label(static::department() === Department::Rental ? 'إنشاء طلب إيجار' : 'إنشاء طلب إعادة بيع')
                     ->icon('heroicon-o-plus-circle')
@@ -423,9 +440,9 @@ abstract class CustomerResource extends Resource
     }
 
     /** @return array<int, Component> */
-    private static function formFields(): array
+    private static function formFields(bool $editing = false): array
     {
-        return [
+        $fields = [
             Grid::make(['default' => 1, 'sm' => 2])
                 ->schema([
                     TextInput::make('name')
@@ -448,6 +465,12 @@ abstract class CustomerResource extends Resource
                 ))
                 ->columnSpanFull(),
         ];
+
+        if ($editing) {
+            array_unshift($fields, Hidden::make('record_snapshot')->dehydrated());
+        }
+
+        return $fields;
     }
 
     private static function hasValidWhatsAppPhone(?string $phone): bool

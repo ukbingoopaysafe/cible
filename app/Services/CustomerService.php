@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\Department;
+use App\Models\ContactChangeRequest;
 use App\Models\RentalCustomer;
 use App\Models\ResaleCustomer;
 use App\Models\AuditEvent;
@@ -32,6 +33,27 @@ class CustomerService
 
         return $this->findSimilarNames($customerClass, $name)
             ->contains(fn (Model $customer): bool => $ignoreCustomerId === null || (int) $customer->getKey() !== $ignoreCustomerId);
+    }
+
+    /** @return list<string> */
+    public function similarNameLabels(Department $department, string $name, ?int $ignoreCustomerId = null): array
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return [];
+        }
+
+        $customerClass = match ($department) {
+            Department::Rental => RentalCustomer::class,
+            Department::Resale => ResaleCustomer::class,
+        };
+
+        return $this->findSimilarNames($customerClass, $name)
+            ->reject(fn (Model $customer): bool => $ignoreCustomerId !== null && (int) $customer->getKey() === $ignoreCustomerId)
+            ->map(fn (Model $customer): string => "#{$customer->getKey()} {$customer->name}")
+            ->values()
+            ->all();
     }
 
     /**
@@ -79,7 +101,7 @@ class CustomerService
         return DB::transaction(function () use ($customer, $phones, $actor, $department): Model {
             $customer->save();
             $this->contactPhoneNumbers->replaceFor($customer, $phones);
-            $this->recordAudit($actor, $department, 'customer.created', $customer, null, $this->customerAuditValues($customer));
+            $this->recordAudit($actor, $department, 'customer.created', $customer, null, $this->auditValues($customer));
 
             return $customer;
         });
@@ -88,7 +110,14 @@ class CustomerService
     /**
      * @param array{name: string, phones?: array, phone?: string|null, phone_country?: string|null, nationality?: string|null} $attributes
      */
-    public function update(User $actor, Department $department, int $customerId, array $attributes, bool $reviewedSimilarNames = false): Model
+    public function update(
+        User $actor,
+        Department $department,
+        int $customerId,
+        array $attributes,
+        bool $reviewedSimilarNames = false,
+        ?array $expectedSnapshot = null,
+    ): Model|ContactChangeRequest
     {
         if (! $actor->canWorkInDepartment($department)) {
             throw new AuthorizationException('لا تملك صلاحية الوصول إلى هذا القسم.');
@@ -99,7 +128,17 @@ class CustomerService
             Department::Resale => ResaleCustomer::class,
         };
         $customer = $customerClass::query()->findOrFail($customerId);
-        $before = $this->customerAuditValues($customer);
+        $before = $this->auditValues($customer);
+        if (! $actor->is_company_manager && $expectedSnapshot === null) {
+            throw ValidationException::withMessages([
+                'request' => 'أغلق النموذج وافتحه مجددًا قبل إرسال طلب التعديل.',
+            ]);
+        }
+        if ($expectedSnapshot !== null && $before !== $expectedSnapshot) {
+            throw ValidationException::withMessages([
+                'request' => 'تغيرت بيانات العميل أثناء تحرير النموذج. أغلقه وافتحه مجددًا لمراجعة أحدث البيانات.',
+            ]);
+        }
         $attributes = Validator::make($attributes, [
             'name' => ['required', 'string', 'max:255'],
             'phones' => ['sometimes', 'array'],
@@ -126,13 +165,39 @@ class CustomerService
             ]);
         }
 
-        $customer->name = $attributes['name'];
-        $customer->nationality = $attributes['nationality'] ?? null;
+        $after = [
+            'name' => $attributes['name'],
+            'phones' => $this->auditPhoneRows($phones),
+            'nationality' => $attributes['nationality'] ?? null,
+        ];
 
-        return DB::transaction(function () use ($customer, $phones, $before, $actor, $department): Model {
+        if ($before === $after) {
+            if (! $actor->is_company_manager) {
+                throw ValidationException::withMessages([
+                    'request' => 'لم تتغير بيانات العميل لإرسال طلب تعديل.',
+                ]);
+            }
+
+            return $customer;
+        }
+
+        if (! $actor->is_company_manager) {
+            return app(ContactChangeApprovalService::class)->submit(
+                $actor,
+                $department,
+                $customer,
+                $expectedSnapshot ?? $before,
+                $after,
+                $reviewedSimilarNames,
+            );
+        }
+
+        return DB::transaction(function () use ($customer, $phones, $before, $after, $actor, $department): Model {
+            $customer->name = $after['name'];
+            $customer->nationality = $after['nationality'];
             $customer->save();
             $this->contactPhoneNumbers->replaceFor($customer, $phones);
-            $after = $this->customerAuditValues($customer);
+            $after = $this->auditValues($customer);
             $changedBefore = $changedAfter = [];
             foreach ($after as $key => $value) {
                 if (($before[$key] ?? null) !== ($value ?? null)) {
@@ -162,13 +227,19 @@ class CustomerService
                 return;
             }
 
+            if (app(ContactChangeApprovalService::class)->hasPendingFor($customer)) {
+                throw ValidationException::withMessages([
+                    'customer' => 'لا يمكن أرشفة العميل قبل حسم طلب تعديل بياناته المعلق.',
+                ]);
+            }
+
             if ($customer->requests()->where('status', '!=', 'closed')->exists()) {
                 throw ValidationException::withMessages([
                     'customer' => 'أغلق طلبات العميل أو أعد تعيينها قبل أرشفة العميل.',
                 ]);
             }
 
-            $before = $this->customerAuditValues($customer);
+            $before = $this->auditValues($customer);
             $customer->delete();
             $this->recordAudit($actor, $department, 'customer.archived', $customer, $before, [
                 'archived' => true,
@@ -200,18 +271,31 @@ class CustomerService
     }
 
     /** @return array<string, mixed> */
-    private function customerAuditValues(Model $customer): array
+    public function auditValues(Model $customer): array
     {
         return [
             'name' => $customer->name,
-            'phones' => $customer->phoneNumbers()->get()->map(fn (Model $phone): array => [
+            'phones' => $customer->phoneNumbers()->reorder()->orderBy('sort_order')->orderBy('id')->get()->map(fn (Model $phone): array => [
                 'phone_e164' => $phone->phone_e164,
                 'phone_country' => $phone->phone_country,
-                'is_primary' => $phone->is_primary,
-                'sort_order' => $phone->sort_order,
+                'is_primary' => (bool) $phone->is_primary,
+                'sort_order' => (int) $phone->sort_order,
             ])->all(),
             'nationality' => $customer->nationality,
         ];
+    }
+
+    /** @param list<array{phone_e164: string, phone_country: string, is_primary: bool, sort_order: int, input_key: int|string}> $phones
+     *  @return list<array{phone_e164: string, phone_country: string, is_primary: bool, sort_order: int}>
+     */
+    private function auditPhoneRows(array $phones): array
+    {
+        return array_map(static fn (array $phone): array => [
+            'phone_e164' => $phone['phone_e164'],
+            'phone_country' => $phone['phone_country'],
+            'is_primary' => $phone['is_primary'],
+            'sort_order' => $phone['sort_order'],
+        ], $phones);
     }
 
     /** @param array<string, mixed> $attributes

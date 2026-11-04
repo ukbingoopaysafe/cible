@@ -3,6 +3,7 @@
 namespace App\Models\Concerns;
 
 use App\Models\ContactPhoneNumber;
+use App\Models\ContactChangeRequest;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
@@ -23,6 +24,11 @@ trait HasContactPhoneNumbers
         return $this->morphMany(ContactPhoneNumber::class, 'phoneable')
             ->orderBy('sort_order')
             ->orderBy('id');
+    }
+
+    public function contactChangeRequests(): MorphMany
+    {
+        return $this->morphMany(ContactChangeRequest::class, 'subject');
     }
 
     public function primaryPhoneNumber(): MorphOne

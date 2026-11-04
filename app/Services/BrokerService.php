@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\Department;
+use App\Models\ContactChangeRequest;
 use App\Models\AuditEvent;
 use App\Models\RentalBroker;
 use App\Models\ResaleBroker;
@@ -22,11 +23,29 @@ class BrokerService
     /**
      * @param array{name: string, phones?: array, phone?: string|null, phone_country?: string|null} $data
      */
-    public function update(User $actor, Department $department, int $brokerId, array $data, bool $reviewedSimilarNames = false): Model
+    public function update(
+        User $actor,
+        Department $department,
+        int $brokerId,
+        array $data,
+        bool $reviewedSimilarNames = false,
+        ?array $expectedSnapshot = null,
+    ): Model|ContactChangeRequest
     {
         $this->authorizeDepartment($actor, $department);
         $brokerClass = $this->brokerClass($department);
         $broker = $brokerClass::query()->findOrFail($brokerId);
+        $before = $this->auditValues($broker);
+        if (! $actor->is_company_manager && $expectedSnapshot === null) {
+            throw ValidationException::withMessages([
+                'request' => 'أغلق النموذج وافتحه مجددًا قبل إرسال طلب التعديل.',
+            ]);
+        }
+        if ($expectedSnapshot !== null && $before !== $expectedSnapshot) {
+            throw ValidationException::withMessages([
+                'request' => 'تغيرت بيانات الوسيط أثناء تحرير النموذج. أغلقه وافتحه مجددًا لمراجعة أحدث البيانات.',
+            ]);
+        }
         $attributes = Validator::make($data, [
             'name' => ['required', 'string', 'max:255'],
             'phones' => ['sometimes', 'array'],
@@ -52,13 +71,29 @@ class BrokerService
             ]);
         }
 
-        $before = $this->brokerAuditValues($broker);
         $after = [
             'name' => $attributes['name'],
             'phones' => $this->auditPhoneRows($phones),
         ];
         if ($before === $after) {
+            if (! $actor->is_company_manager) {
+                throw ValidationException::withMessages([
+                    'request' => 'لم تتغير بيانات الوسيط لإرسال طلب تعديل.',
+                ]);
+            }
+
             return $broker;
+        }
+
+        if (! $actor->is_company_manager) {
+            return app(ContactChangeApprovalService::class)->submit(
+                $actor,
+                $department,
+                $broker,
+                $expectedSnapshot ?? $before,
+                $after,
+                $reviewedSimilarNames,
+            );
         }
 
         return DB::transaction(function () use ($broker, $phones, $after, $before, $actor, $department): Model {
@@ -100,7 +135,13 @@ class BrokerService
 
         DB::transaction(function () use ($actor, $department, $brokerId, $brokerClass, $requestClass, $activityClass, $requestForeignKey, $reason): void {
             $broker = $brokerClass::query()->lockForUpdate()->findOrFail($brokerId);
-            $phoneSnapshots = $this->brokerAuditValues($broker)['phones'];
+            if (app(ContactChangeApprovalService::class)->hasPendingFor($broker)) {
+                throw ValidationException::withMessages([
+                    'broker' => 'لا يمكن حذف الوسيط قبل حسم طلب تعديل بياناته المعلق.',
+                ]);
+            }
+
+            $phoneSnapshots = $this->auditValues($broker)['phones'];
             $primaryPhone = collect($phoneSnapshots)->firstWhere('is_primary', true);
             $requests = $requestClass::query()->where('broker_id', $broker->getKey())->lockForUpdate()->get();
             if ($requests->contains(fn (Model $request): bool => $request->status !== RequestStatus::Closed)) {
@@ -180,7 +221,7 @@ class BrokerService
         return DB::transaction(function () use ($broker, $phones, $department, $actor): Model {
             $broker->save();
             $this->contactPhoneNumbers->replaceFor($broker, $phones);
-            $after = $this->brokerAuditValues($broker);
+            $after = $this->auditValues($broker);
 
             AuditEvent::query()->create([
                 'actor_user_id' => $actor->id,
@@ -208,6 +249,22 @@ class BrokerService
 
         return $this->findSimilarNames($actor, $department, $name)
             ->contains(fn (Model $broker): bool => $ignoreBrokerId === null || (int) $broker->getKey() !== $ignoreBrokerId);
+    }
+
+    /** @return list<string> */
+    public function similarNameLabels(User $actor, Department $department, string $name, ?int $ignoreBrokerId = null): array
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return [];
+        }
+
+        return $this->findSimilarNames($actor, $department, $name)
+            ->reject(fn (Model $broker): bool => $ignoreBrokerId !== null && (int) $broker->getKey() === $ignoreBrokerId)
+            ->map(fn (Model $broker): string => "#{$broker->getKey()} {$broker->name}")
+            ->values()
+            ->all();
     }
 
     /** @return Collection<int, Model> */
@@ -246,15 +303,15 @@ class BrokerService
     }
 
     /** @return array{name: string, phones: array<int, array{phone_e164: string, phone_country: string, is_primary: bool, sort_order: int}>} */
-    private function brokerAuditValues(Model $broker): array
+    public function auditValues(Model $broker): array
     {
         return [
             'name' => $broker->name,
-            'phones' => $broker->phoneNumbers()->get()->map(fn (Model $phone): array => [
+            'phones' => $broker->phoneNumbers()->reorder()->orderBy('sort_order')->orderBy('id')->get()->map(fn (Model $phone): array => [
                 'phone_e164' => $phone->phone_e164,
                 'phone_country' => $phone->phone_country,
-                'is_primary' => $phone->is_primary,
-                'sort_order' => $phone->sort_order,
+                'is_primary' => (bool) $phone->is_primary,
+                'sort_order' => (int) $phone->sort_order,
             ])->all(),
         ];
     }
