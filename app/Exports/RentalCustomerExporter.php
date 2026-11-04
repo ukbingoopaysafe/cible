@@ -7,6 +7,8 @@ use App\Models\RentalCustomer;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 
 class RentalCustomerExporter extends Exporter
 {
@@ -18,10 +20,22 @@ class RentalCustomerExporter extends Exporter
     {
         return [
             static::textColumn('name', 'اسم العميل'),
-            static::textColumn('phone_e164', 'رقم الهاتف'),
+            ExportColumn::make('primary_phone')
+                ->label('رقم الهاتف')
+                ->state(fn (Model $record): ?string => $record->primaryPhone()?->phone_e164)
+                ->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
+            ExportColumn::make('additional_phone_numbers')
+                ->label('أرقام الهاتف الإضافية')
+                ->state(fn (Model $record): string => static::additionalPhones($record->phoneNumbers))
+                ->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
             static::textColumn('nationality', 'الجنسية'),
             ExportColumn::make('created_at')->label('تاريخ التسجيل'),
         ];
+    }
+
+    public static function modifyQuery(Builder $query): Builder
+    {
+        return $query->with('phoneNumbers');
     }
 
     public static function getCompletedNotificationBody(Export $export): string

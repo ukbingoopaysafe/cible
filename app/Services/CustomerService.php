@@ -9,14 +9,13 @@ use App\Models\AuditEvent;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\ValidationException;
 
 class CustomerService
 {
-    public function __construct(private readonly CustomerPhoneNormalizer $phoneNormalizer) {}
+    public function __construct(private readonly ContactPhoneNumberService $contactPhoneNumbers) {}
 
     public function hasSimilarNames(Department $department, string $name, ?int $ignoreCustomerId = null): bool
     {
@@ -36,7 +35,7 @@ class CustomerService
     }
 
     /**
-     * @param array{name: string, phone: string, phone_country?: string|null, nationality?: string|null} $attributes
+     * @param array{name: string, phones?: array, phone?: string|null, phone_country?: string|null, nationality?: string|null} $attributes
      */
     public function create(User $actor, Department $department, array $attributes, bool $reviewedSimilarNames = false): Model
     {
@@ -46,7 +45,11 @@ class CustomerService
 
         $attributes = Validator::make($attributes, [
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:40'],
+            'phones' => ['sometimes', 'array'],
+            'phones.*.phone' => ['nullable', 'string', 'max:40'],
+            'phones.*.phone_country' => ['nullable', 'string', 'size:2'],
+            'phones.*.is_primary' => ['nullable', 'boolean'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:40'],
             'phone_country' => ['nullable', 'string', 'size:2'],
             'nationality' => ['nullable', 'string', 'max:100'],
         ])->validate();
@@ -55,21 +58,10 @@ class CustomerService
             throw ValidationException::withMessages(['name' => 'اسم العميل مطلوب.']);
         }
 
-        $phone = $this->phoneNormalizer->normalize(
-            $attributes['phone'],
-            $attributes['phone_country'] ?? null,
-        );
-
         $customerClass = match ($department) {
             Department::Rental => RentalCustomer::class,
             Department::Resale => ResaleCustomer::class,
         };
-
-        if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->exists()) {
-            throw ValidationException::withMessages([
-                'phone' => 'رقم الهاتف مسجل بالفعل في هذا القسم. راجع سجل العميل القائم.',
-            ]);
-        }
 
         $similarCustomers = $this->findSimilarNames($customerClass, $attributes['name']);
         if ($similarCustomers->isNotEmpty() && ! $reviewedSimilarNames) {
@@ -80,31 +72,21 @@ class CustomerService
         }
 
         $customer = new $customerClass;
+        $phones = $this->contactPhoneNumbers->prepareFor($customer, $this->phoneRows($attributes), required: true);
         $customer->name = $attributes['name'];
-        $customer->phone_e164 = $phone['phone_e164'];
-        $customer->phone_country = $phone['phone_country'];
         $customer->nationality = $attributes['nationality'] ?? null;
 
-        try {
-            return DB::transaction(function () use ($customer, $actor, $department): Model {
-                $customer->save();
-                $this->recordAudit($actor, $department, 'customer.created', $customer, null, $this->customerAuditValues($customer));
+        return DB::transaction(function () use ($customer, $phones, $actor, $department): Model {
+            $customer->save();
+            $this->contactPhoneNumbers->replaceFor($customer, $phones);
+            $this->recordAudit($actor, $department, 'customer.created', $customer, null, $this->customerAuditValues($customer));
 
-                return $customer;
-            });
-        } catch (QueryException $exception) {
-            if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->exists()) {
-                throw ValidationException::withMessages([
-                    'phone' => 'رقم الهاتف مسجل بالفعل في هذا القسم. راجع سجل العميل القائم.',
-                ]);
-            }
-
-            throw $exception;
-        }
+            return $customer;
+        });
     }
 
     /**
-     * @param array{name: string, phone: string, phone_country?: string|null, nationality?: string|null} $attributes
+     * @param array{name: string, phones?: array, phone?: string|null, phone_country?: string|null, nationality?: string|null} $attributes
      */
     public function update(User $actor, Department $department, int $customerId, array $attributes, bool $reviewedSimilarNames = false): Model
     {
@@ -120,7 +102,11 @@ class CustomerService
         $before = $this->customerAuditValues($customer);
         $attributes = Validator::make($attributes, [
             'name' => ['required', 'string', 'max:255'],
-            'phone' => ['required', 'string', 'max:40'],
+            'phones' => ['sometimes', 'array'],
+            'phones.*.phone' => ['nullable', 'string', 'max:40'],
+            'phones.*.phone_country' => ['nullable', 'string', 'size:2'],
+            'phones.*.is_primary' => ['nullable', 'boolean'],
+            'phone' => ['sometimes', 'nullable', 'string', 'max:40'],
             'phone_country' => ['nullable', 'string', 'size:2'],
             'nationality' => ['nullable', 'string', 'max:100'],
         ])->validate();
@@ -129,12 +115,7 @@ class CustomerService
             throw ValidationException::withMessages(['name' => 'اسم العميل مطلوب.']);
         }
 
-        $phone = $this->phoneNormalizer->normalize($attributes['phone'], $attributes['phone_country'] ?? null);
-        if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
-            throw ValidationException::withMessages([
-                'phone' => 'رقم الهاتف مسجل بالفعل لعميل آخر في هذا القسم. راجع سجل العميل القائم.',
-            ]);
-        }
+        $phones = $this->contactPhoneNumbers->prepareFor($customer, $this->phoneRows($attributes), required: true);
 
         $similarCustomers = $this->findSimilarNames($customerClass, $attributes['name'])
             ->reject(fn (Model $match): bool => (int) $match->getKey() === $customerId);
@@ -146,36 +127,25 @@ class CustomerService
         }
 
         $customer->name = $attributes['name'];
-        $customer->phone_e164 = $phone['phone_e164'];
-        $customer->phone_country = $phone['phone_country'];
         $customer->nationality = $attributes['nationality'] ?? null;
 
-        try {
-            return DB::transaction(function () use ($customer, $before, $actor, $department): Model {
-                $customer->save();
-                $after = $this->customerAuditValues($customer);
-                $changedBefore = $changedAfter = [];
-                foreach ($after as $key => $value) {
-                    if ((string) ($before[$key] ?? '') !== (string) ($value ?? '')) {
-                        $changedBefore[$key] = $before[$key] ?? null;
-                        $changedAfter[$key] = $value;
-                    }
+        return DB::transaction(function () use ($customer, $phones, $before, $actor, $department): Model {
+            $customer->save();
+            $this->contactPhoneNumbers->replaceFor($customer, $phones);
+            $after = $this->customerAuditValues($customer);
+            $changedBefore = $changedAfter = [];
+            foreach ($after as $key => $value) {
+                if (($before[$key] ?? null) !== ($value ?? null)) {
+                    $changedBefore[$key] = $before[$key] ?? null;
+                    $changedAfter[$key] = $value;
                 }
-                if ($changedAfter !== []) {
-                    $this->recordAudit($actor, $department, 'customer.updated', $customer, $changedBefore, $changedAfter);
-                }
-
-                return $customer;
-            });
-        } catch (QueryException $exception) {
-            if ($customerClass::withTrashed()->where('phone_e164', $phone['phone_e164'])->whereKeyNot($customerId)->exists()) {
-                throw ValidationException::withMessages([
-                    'phone' => 'رقم الهاتف مسجل بالفعل لعميل آخر في هذا القسم. راجع سجل العميل القائم.',
-                ]);
+            }
+            if ($changedAfter !== []) {
+                $this->recordAudit($actor, $department, 'customer.updated', $customer, $changedBefore, $changedAfter);
             }
 
-            throw $exception;
-        }
+            return $customer;
+        });
     }
 
     public function archive(User $actor, Department $department, int $customerId): void
@@ -234,10 +204,30 @@ class CustomerService
     {
         return [
             'name' => $customer->name,
-            'phone_e164' => $customer->phone_e164,
-            'phone_country' => $customer->phone_country,
+            'phones' => $customer->phoneNumbers()->get()->map(fn (Model $phone): array => [
+                'phone_e164' => $phone->phone_e164,
+                'phone_country' => $phone->phone_country,
+                'is_primary' => $phone->is_primary,
+                'sort_order' => $phone->sort_order,
+            ])->all(),
             'nationality' => $customer->nationality,
         ];
+    }
+
+    /** @param array<string, mixed> $attributes
+     *  @return array<int|string, array{phone?: string|null, phone_country?: string|null, is_primary?: bool|string|int|null}>
+     */
+    private function phoneRows(array $attributes): array
+    {
+        if (array_key_exists('phones', $attributes)) {
+            return is_array($attributes['phones']) ? $attributes['phones'] : [];
+        }
+
+        return [[
+            'phone' => $attributes['phone'] ?? null,
+            'phone_country' => $attributes['phone_country'] ?? 'EG',
+            'is_primary' => true,
+        ]];
     }
 
     /** @param array<string, mixed>|null $before @param array<string, mixed> $after */

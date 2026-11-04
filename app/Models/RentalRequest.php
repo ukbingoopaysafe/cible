@@ -37,6 +37,7 @@ class RentalRequest extends Model
             'closed_at' => 'datetime',
             'budget_declared' => 'decimal:2',
             'budget_targeted' => 'decimal:2',
+            'broker_phone_numbers_snapshot' => 'array',
         ];
     }
 

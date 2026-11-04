@@ -53,7 +53,7 @@ abstract class AftercareResource extends Resource
         $actor = auth()->user();
 
         return parent::getEloquentQuery()
-            ->with(['customer', 'owner', 'activities.actor', 'activities.deal'])
+            ->with(['customer.phoneNumbers', 'owner', 'activities.actor', 'activities.deal'])
             ->withCount('activities')
             ->when(
                 ! $actor instanceof User,
@@ -105,9 +105,16 @@ abstract class AftercareResource extends Resource
                     ->sortable()
                     ->weight('bold'),
 
-                TextColumn::make('customer.phone_e164')
-                    ->label('الهاتف')
-                    ->searchable()
+                TextColumn::make('customer_primary_phone')
+                    ->label('الهاتف الأساسي')
+                    ->state(fn (Model $record): ?string => $record->customer?->primaryPhone()?->phone_e164)
+                    ->description(fn (Model $record): ?string => ($count = $record->customer?->phoneNumbers?->where('is_primary', false)->count() ?? 0) > 0
+                        ? "{$count} رقم إضافي"
+                        : null)
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'customer.phoneNumbers',
+                        fn (Builder $phones): Builder => $phones->where('phone_e164', 'like', "%{$search}%"),
+                    ))
                     ->extraCellAttributes(['class' => 'whitespace-nowrap']),
 
                 TextColumn::make('owner.name')
@@ -200,9 +207,23 @@ abstract class AftercareResource extends Resource
                     ->color('success')
                     ->iconButton()
                     ->tooltip('فتح WhatsApp')
-                    ->url(fn (Model $record): string => static::whatsAppUrl($record->customer?->phone_e164))
+                    ->url(fn (Model $record): string => static::whatsAppUrl($record->customer?->primaryPhone()?->phone_e164))
                     ->openUrlInNewTab()
-                    ->visible(fn (Model $record): bool => static::hasValidWhatsAppPhone($record->customer?->phone_e164)),
+                    ->visible(fn (Model $record): bool => static::hasValidWhatsAppPhone($record->customer?->primaryPhone()?->phone_e164)),
+
+                Action::make('viewContactPhoneNumbers')
+                    ->label('أرقام الهاتف')
+                    ->icon('heroicon-o-phone')
+                    ->iconButton()
+                    ->tooltip('عرض كل أرقام الهاتف')
+                    ->modalHeading(fn (Model $record): string => "أرقام الهاتف: {$record->customer?->name}")
+                    ->modalContent(fn (Model $record) => view('filament.modals.contact-phone-numbers', [
+                        'phones' => $record->customer?->phoneNumbers ?? collect(),
+                    ]))
+                    ->visible(fn (Model $record): bool => $record->customer?->phoneNumbers?->isNotEmpty() ?? false)
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('إغلاق')
+                    ->action(fn () => null),
 
                 Action::make('recordActivity')
                     ->label('تسجيل تواصل')

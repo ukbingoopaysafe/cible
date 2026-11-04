@@ -12,6 +12,7 @@ use App\Models\ResaleRequest;
 use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Exporter;
 use Filament\Actions\Exports\Models\Export;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
 class ResaleRequestExporter extends Exporter
@@ -24,9 +25,17 @@ class ResaleRequestExporter extends Exporter
     {
         return [
             static::textColumn('customer.name', 'العميل'),
-            static::textColumn('customer.phone_e164', 'هاتف العميل'),
+            ExportColumn::make('customer_primary_phone')
+                ->label('هاتف العميل')
+                ->state(fn (Model $record): ?string => $record->customer?->primaryPhone()?->phone_e164)
+                ->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
+            ExportColumn::make('customer_additional_phones')
+                ->label('أرقام هاتف العميل الإضافية')
+                ->state(fn (Model $record): string => static::additionalPhones($record->customer?->phoneNumbers ?? []))
+                ->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
             ExportColumn::make('broker')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
-            ExportColumn::make('broker_phone')->label('هاتف الوسيط')->state(fn (Model $record): ?string => $record->broker?->phone_e164 ?? $record->broker_phone_snapshot)->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
+            ExportColumn::make('broker_phone')->label('هاتف الوسيط')->state(fn (Model $record): ?string => static::primaryBrokerPhone($record))->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
+            ExportColumn::make('broker_additional_phones')->label('أرقام هاتف الوسيط الإضافية')->state(fn (Model $record): string => static::additionalPhones(static::brokerPhoneRecords($record)))->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
             static::textColumn('owner.name', 'المسؤول'),
             static::textColumn('leadSource.name', 'مصدر الوصول'),
             static::textColumn('lead_source_other', 'تفصيل مصدر الوصول'),
@@ -65,6 +74,11 @@ class ResaleRequestExporter extends Exporter
             ExportColumn::make('closed_at')->label('تاريخ الإغلاق'),
             ExportColumn::make('created_at')->label('تاريخ إنشاء الطلب'),
         ];
+    }
+
+    public static function modifyQuery(Builder $query): Builder
+    {
+        return $query->with(['customer.phoneNumbers', 'broker.phoneNumbers']);
     }
 
     public static function getCompletedNotificationBody(Export $export): string

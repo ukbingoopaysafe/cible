@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\HasContactPhoneNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class RentalBroker extends Model
 {
-    protected $fillable = ['name', 'phone_e164', 'phone_country'];
+    use HasContactPhoneNumbers;
+
+    protected $fillable = ['name'];
 
     public function requests(): HasMany
     {

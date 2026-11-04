@@ -84,7 +84,7 @@ abstract class SectionRequestResource extends Resource
             return $query->whereRaw('1 = 0');
         }
 
-        return $query->with(['customer', 'broker', 'area', 'owner', 'leadSource', 'closeReason', 'deal.commissions'])
+        return $query->with(['customer.phoneNumbers', 'broker.phoneNumbers', 'area', 'owner', 'leadSource', 'closeReason', 'deal.commissions'])
             ->withCount('activities')
             ->withCount(['recommendations', 'viewings'])
             ->withCount(['reassignments as pending_reassignment_count' => fn (Builder $relationQuery) => $relationQuery->where('status', 'pending')]);
@@ -246,21 +246,53 @@ abstract class SectionRequestResource extends Resource
                 TextColumn::make('customer.name')
                     ->label('العميل')
                     ->placeholder('غير معروف')
-                    ->description(fn (Model $record): ?Htmlable => static::formatPhoneForDisplay($record->customer?->phone_e164))
                     ->searchable(query: function (Builder $query, string $search): Builder {
                         return $query->whereHas('customer', function (Builder $q) use ($search): void {
                             $q->where('name', 'like', "%{$search}%")
-                                ->orWhere('phone_e164', 'like', "%{$search}%");
+                                ->orWhereHas('phoneNumbers', fn (Builder $phones): Builder => $phones->where('phone_e164', 'like', "%{$search}%"));
                         });
                     })
                     ->toggleable(),
-                TextColumn::make('customer.phone_e164')
+                TextColumn::make('customer_primary_phone')
                     ->label('هاتف العميل')
+                    ->state(fn (Model $record): ?string => $record->customer?->primaryPhone()?->phone_e164)
                     ->formatStateUsing(fn (?string $state): ?Htmlable => static::formatPhoneForDisplay($state))
                     ->placeholder('—')
-                    ->searchable()
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'customer.phoneNumbers',
+                        fn (Builder $phones): Builder => $phones->where('phone_e164', 'like', "%{$search}%"),
+                    ))
                     ->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('broker.name')->label('الوسيط')->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)->placeholder('—')->searchable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('broker.name')
+                    ->label('الوسيط')
+                    ->state(fn (Model $record): ?string => $record->broker?->name ?? $record->broker_name_snapshot)
+                    ->description(fn (Model $record): ?Htmlable => static::formatPhoneForDisplay(
+                        $record->broker
+                            ? $record->broker->primaryPhone()?->phone_e164
+                            : $record->broker_phone_snapshot,
+                    ))
+                    ->placeholder('—')
+                    ->searchable(query: function (Builder $query, string $search): Builder {
+                        return $query->where(function (Builder $query) use ($search): void {
+                            $query->whereHas('broker', function (Builder $broker) use ($search): void {
+                                $broker->where('name', 'like', "%{$search}%")
+                                    ->orWhereHas('phoneNumbers', fn (Builder $phones): Builder => $phones->where('phone_e164', 'like', "%{$search}%"));
+                            })
+                                ->orWhere('broker_name_snapshot', 'like', "%{$search}%")
+                                ->orWhere('broker_phone_numbers_snapshot', 'like', "%{$search}%");
+                        });
+                    })
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('contact_phone_numbers')
+                    ->label('أرقام الاتصال')
+                    ->state(fn (Model $record): ?string => static::hasContactPhoneNumbers($record) ? 'عرض الأرقام' : null)
+                    ->placeholder('—')
+                    ->icon('heroicon-o-phone')
+                    ->color('warning')
+                    ->tooltip('عرض أرقام العميل والوسيط')
+                    ->action(static::contactPhoneNumbersAction())
+                    ->disabledClick(fn (Model $record): bool => ! static::hasContactPhoneNumbers($record))
+                    ->toggleable(),
                 TextColumn::make('area.name')->label('المنطقة')->description(fn (Model $record): string => $record->area?->governorate ?? '')->toggleable(),
                 TextColumn::make('owner.name')->label('المسؤول')
                     ->searchable()
@@ -372,6 +404,48 @@ abstract class SectionRequestResource extends Resource
                 static::getRequestActionsGroup(),
             ])
             ->defaultSort('next_follow_up_at');
+    }
+
+    private static function hasContactPhoneNumbers(Model $record): bool
+    {
+        return $record->customer?->phoneNumbers?->isNotEmpty()
+            || $record->broker?->phoneNumbers?->isNotEmpty()
+            || filled($record->broker_phone_snapshot)
+            || count($record->broker_phone_numbers_snapshot ?? []) > 0;
+    }
+
+    private static function contactPhoneNumbersAction(): Action
+    {
+        return Action::make('viewContactPhoneNumbers')
+            ->label('أرقام الاتصال')
+            ->modalHeading('أرقام الاتصال')
+            ->modalContent(function (Model $record) {
+                $brokerSnapshot = $record->broker_phone_numbers_snapshot ?? [];
+                if ($brokerSnapshot === [] && filled($record->broker_phone_snapshot)) {
+                    $brokerSnapshot = [[
+                        'phone_e164' => $record->broker_phone_snapshot,
+                        'phone_country' => null,
+                        'is_primary' => true,
+                    ]];
+                }
+
+                return view('filament.modals.request-contact-phone-numbers', [
+                    'sections' => [
+                        [
+                            'label' => 'العميل — '.($record->customer?->name ?? 'غير معروف'),
+                            'phones' => $record->customer?->phoneNumbers ?? collect(),
+                        ],
+                        [
+                            'label' => 'الوسيط — '.($record->broker?->name ?? $record->broker_name_snapshot ?? 'غير معروف'),
+                            'phones' => $record->broker?->phoneNumbers ?? collect($brokerSnapshot),
+                        ],
+                    ],
+                ]);
+            })
+            ->visible(fn (Model $record): bool => static::hasContactPhoneNumbers($record))
+            ->modalSubmitAction(false)
+            ->modalCancelActionLabel('إغلاق')
+            ->action(fn () => null);
     }
 
     public static function getRequestActionsGroup(): ActionGroup

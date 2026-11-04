@@ -14,7 +14,6 @@ use App\Models\User;
 use App\Services\AftercareService;
 use App\Services\CustomerService;
 use App\Services\CustomerSpreadsheetImportService;
-use App\Support\PhoneCountries;
 use App\Support\RecordCode;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -36,6 +35,7 @@ use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\TrashedFilter;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Livewire\Features\SupportFileUploads\TemporaryUploadedFile;
@@ -52,7 +52,7 @@ abstract class CustomerResource extends Resource
         $actor = auth()->user();
 
         return parent::getEloquentQuery()
-            ->with('aftercare.owner')
+            ->with(['aftercare.owner', 'phoneNumbers'])
             ->withCount('requests')
             ->when(
                 ! $actor instanceof User || ! $actor->canWorkInDepartment(static::department()),
@@ -104,7 +104,18 @@ abstract class CustomerResource extends Resource
                     ->sortable(query: fn (Builder $query, string $direction): Builder => $query->orderBy('id', $direction))
                     ->searchable(query: fn (Builder $query, string $search): Builder => RecordCode::applySearch($query, $search, static::department(), RecordCode::TYPE_CUSTOMER)),
                 TextColumn::make('name')->label('الاسم')->searchable()->sortable()->toggleable(),
-                TextColumn::make('phone_e164')->label('الهاتف')->searchable()->toggleable(),
+                TextColumn::make('primary_phone')
+                    ->label('الهاتف الأساسي')
+                    ->state(fn (Model $record): ?string => $record->primaryPhone()?->phone_e164)
+                    ->formatStateUsing(fn (?string $state): ?Htmlable => SectionRequestResource::formatPhoneForDisplay($state))
+                    ->description(fn (Model $record): ?string => ($count = $record->phoneNumbers->where('is_primary', false)->count()) > 0
+                        ? "{$count} رقم إضافي"
+                        : null)
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'phoneNumbers',
+                        fn (Builder $phones): Builder => $phones->where('phone_e164', 'like', "%{$search}%"),
+                    ))
+                    ->toggleable(),
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requests_count')->label('الطلبات')->sortable()->toggleable(),
                 TextColumn::make('aftercare.owner.name')->label('مسؤول ما بعد الصفقة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
@@ -128,9 +139,9 @@ abstract class CustomerResource extends Resource
                     ->color('success')
                     ->iconButton()
                     ->tooltip('فتح WhatsApp')
-                    ->url(fn (Model $record): string => static::whatsAppUrl($record->phone_e164))
+                    ->url(fn (Model $record): string => static::whatsAppUrl($record->primaryPhone()?->phone_e164))
                     ->openUrlInNewTab()
-                    ->visible(fn (Model $record): bool => ! $record->trashed() && static::hasValidWhatsAppPhone($record->phone_e164)),
+                    ->visible(fn (Model $record): bool => ! $record->trashed() && static::hasValidWhatsAppPhone($record->primaryPhone()?->phone_e164)),
                 Action::make('viewCustomerRequests')
                     ->label('طلبات العميل')
                     ->icon('heroicon-o-clipboard-document-list')
@@ -153,6 +164,16 @@ abstract class CustomerResource extends Resource
     {
         $categoryGroups = [
             'profile' => ActionGroup::make([
+                Action::make('viewContactPhoneNumbers')
+                    ->label('أرقام الهاتف')
+                    ->icon('heroicon-o-phone')
+                    ->modalHeading(fn (Model $record): string => "أرقام الهاتف: {$record->name}")
+                    ->modalContent(fn (Model $record) => view('filament.modals.contact-phone-numbers', [
+                        'phones' => $record->phoneNumbers,
+                    ]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('إغلاق')
+                    ->action(fn () => null),
                 Action::make('editCustomer')
                     ->label('تعديل العميل')
                     ->icon('heroicon-o-pencil-square')
@@ -161,13 +182,12 @@ abstract class CustomerResource extends Resource
                     ->visible(fn (Model $record): bool => ! $record->trashed())
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
-                        'phone' => PhoneCountries::nationalNumber($record->phone_e164, $record->phone_country),
-                        'phone_country' => PhoneCountries::selectable($record->phone_country),
                         'nationality' => $record->nationality,
-                    ])
+                    ] + ContactPhonesField::fromContact($record))
                     ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
+                        $data = ContactPhonesField::toServiceData($data);
                         $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                         unset($data['reviewed_similar_names']);
 
@@ -389,6 +409,7 @@ abstract class CustomerResource extends Resource
             ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
+                $data = ContactPhonesField::toServiceData($data);
                 $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                 unset($data['reviewed_similar_names']);
 
@@ -416,17 +437,16 @@ abstract class CustomerResource extends Resource
                             $set('reviewed_similar_names', false);
                         }),
                     TextInput::make('nationality')->label('الجنسية')->maxLength(100),
-                    PhoneField::make('رقم الهاتف', required: true)
-                        ->columnSpanFull(),
-                    Checkbox::make('reviewed_similar_names')
-                        ->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.')
-                        ->visible(fn (Get $get, ?Model $record = null): bool => app(CustomerService::class)->hasSimilarNames(
-                            static::department(),
-                            (string) $get('name'),
-                            $record ? (int) $record->getKey() : null,
-                        ))
-                        ->columnSpanFull(),
                 ]),
+            ContactPhonesField::make(required: true),
+            Checkbox::make('reviewed_similar_names')
+                ->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.')
+                ->visible(fn (Get $get, ?Model $record = null): bool => app(CustomerService::class)->hasSimilarNames(
+                    static::department(),
+                    (string) $get('name'),
+                    $record ? (int) $record->getKey() : null,
+                ))
+                ->columnSpanFull(),
         ];
     }
 

@@ -95,7 +95,7 @@ final class RequestFormSchema
                                 ->afterStateUpdated(function (Set $set): void {
                                     $set('reviewed_similar_names', false);
                                 }),
-                            PhoneField::make('رقم الهاتف', required: true),
+                            ContactPhonesField::make(required: true),
                             TextInput::make('nationality')->label('الجنسية')->maxLength(100),
                             Checkbox::make('reviewed_similar_names')
                                 ->label('تأكيد: هذا عميل مختلف رغم تشابه الاسم.')
@@ -109,6 +109,7 @@ final class RequestFormSchema
                             abort_unless($actor instanceof User, 403);
                             $reviewedSimilarNames = (bool) ($data['reviewed_similar_names'] ?? false);
                             unset($data['reviewed_similar_names']);
+                            $data = ContactPhonesField::toServiceData($data);
 
                             return FilamentValidationHandler::run(
                                 fn (): int => (int) app(CustomerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey(),
@@ -120,13 +121,20 @@ final class RequestFormSchema
                     Select::make('broker_id')
                         ->label('الوسيط')
                         ->options(fn (): array => $brokerClass::query()
+                            ->with('phoneNumbers')
                             ->orderBy('name')
-                            ->get(['id', 'name', 'phone_e164'])
-                            ->mapWithKeys(fn ($broker): array => [
-                                $broker->id => filled($broker->phone_e164)
-                                    ? "{$broker->name} — {$broker->phone_e164}"
-                                    : $broker->name,
-                            ])
+                            ->get(['id', 'name'])
+                            ->mapWithKeys(function ($broker): array {
+                                $primaryPhone = $broker->primaryPhone()?->phone_e164;
+                                $additionalCount = $broker->phoneNumbers->where('is_primary', false)->count();
+                                $label = filled($primaryPhone) ? "{$broker->name} — {$primaryPhone}" : $broker->name;
+
+                                if ($additionalCount > 0) {
+                                    $label .= " (+{$additionalCount} أرقام إضافية)";
+                                }
+
+                                return [$broker->id => $label];
+                            })
                             ->all())
                         ->searchable()
                         ->placeholder('اختر وسيطًا إن وجد')
@@ -138,6 +146,7 @@ final class RequestFormSchema
                             abort_unless($actor instanceof User, 403);
                             $reviewedSimilarNames = (bool) ($data['reviewed_similar_names'] ?? false);
                             unset($data['reviewed_similar_names']);
+                            $data = ContactPhonesField::toServiceData($data);
 
                             return FilamentValidationHandler::run(
                                 fn (): int => (int) app(BrokerService::class)->create($actor, $department, $data, $reviewedSimilarNames)->getKey(),
@@ -307,21 +316,22 @@ final class RequestFormSchema
 
                             return $code ? "{$state} ({$code})" : (string) $state;
                         }),
-                    TextEntry::make('customer.phone_e164')
+                    TextEntry::make('customer_primary_phone')
                         ->label('هاتف العميل')
                         ->icon('heroicon-m-phone')
+                        ->state(fn (?Model $record): ?string => $record?->customer?->primaryPhone()?->phone_e164)
                         ->placeholder('—')
                         ->copyable()
                         ->copyMessage('تم نسخ رقم الهاتف')
-                        ->url(fn (?Model $record): ?string => $record?->customer?->phone_e164 ? "tel:{$record->customer->phone_e164}" : null)
+                        ->url(fn (?Model $record): ?string => ($phone = $record?->customer?->primaryPhone()?->phone_e164) ? "tel:{$phone}" : null)
                         ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400']),
                     TextEntry::make('customer_whatsapp')
                         ->label('واتساب العميل')
                         ->icon('heroicon-m-chat-bubble-left-ellipsis')
-                        ->state(fn (?Model $record): ?string => $record?->customer?->phone_e164 ? 'واتساب' : null)
+                        ->state(fn (?Model $record): ?string => $record?->customer?->primaryPhone()?->phone_e164 ? 'واتساب' : null)
                         ->placeholder('—')
                         ->url(function (?Model $record): ?string {
-                            $phone = $record?->customer?->phone_e164;
+                            $phone = $record?->customer?->primaryPhone()?->phone_e164;
                             if (blank($phone)) {
                                 return null;
                             }
@@ -332,7 +342,7 @@ final class RequestFormSchema
                         ->openUrlInNewTab()
                         ->badge()
                         ->color('success')
-                        ->visible(fn (?Model $record): bool => filled($record?->customer?->phone_e164)),
+                        ->visible(fn (?Model $record): bool => filled($record?->customer?->primaryPhone()?->phone_e164)),
                     TextEntry::make('contact_party')
                         ->label('جهة الاتصال')
                         ->badge()
@@ -351,13 +361,14 @@ final class RequestFormSchema
                         ->icon('heroicon-m-briefcase')
                         ->state(fn (?Model $record): ?string => $record?->broker?->name ?? $record?->broker_name_snapshot)
                         ->placeholder('لا يوجد وسيط'),
-                    TextEntry::make('broker.phone_e164')
+                    TextEntry::make('broker_primary_phone')
                         ->label('هاتف الوسيط')
                         ->icon('heroicon-m-phone')
+                        ->state(fn (?Model $record): ?string => self::brokerPrimaryPhone($record))
                         ->placeholder('—')
                         ->copyable()
                         ->copyMessage('تم نسخ رقم هاتف الوسيط')
-                        ->url(fn (?Model $record): ?string => $record?->broker?->phone_e164 ? "tel:{$record->broker->phone_e164}" : null)
+                        ->url(fn (?Model $record): ?string => ($phone = self::brokerPrimaryPhone($record)) ? "tel:{$phone}" : null)
                         ->extraAttributes(['class' => 'font-mono text-primary-600 dark:text-primary-400', 'dir' => 'ltr'])
                         ->visible(fn (?Model $record): bool => filled($record?->broker_id) || filled($record?->broker_name_snapshot)),
                     TextEntry::make('area_location')
@@ -761,6 +772,19 @@ final class RequestFormSchema
             FloorPreference::Top->value => 'أخير',
             FloorPreference::NoPreference->value => 'لا يفرق',
         ];
+    }
+
+    private static function brokerPrimaryPhone(?Model $record): ?string
+    {
+        $broker = $record?->broker;
+        if ($broker) {
+            return $broker->primaryPhone()?->phone_e164;
+        }
+
+        $snapshot = collect($record?->broker_phone_numbers_snapshot ?? [])
+            ->first(fn (mixed $phone): bool => (bool) data_get($phone, 'is_primary'));
+
+        return data_get($snapshot, 'phone_e164') ?: $record?->broker_phone_snapshot;
     }
 
     private static function enumValue(mixed $state): ?string

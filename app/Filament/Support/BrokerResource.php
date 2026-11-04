@@ -28,6 +28,7 @@ abstract class BrokerResource extends Resource
         $actor = auth()->user();
 
         return parent::getEloquentQuery()
+            ->with('phoneNumbers')
             ->withCount('requests')
             ->when(
                 ! $actor instanceof User || ! $actor->canWorkInDepartment(static::department()),
@@ -66,9 +67,21 @@ abstract class BrokerResource extends Resource
             ->searchPlaceholder('بحث بالاسم أو الهاتف...')
             ->columns([
                 TextColumn::make('name')->label('اسم الوسيط')->searchable()->sortable(),
-                TextColumn::make('phone_e164')->label('الهاتف')->searchable()->placeholder('—'),
-                TextColumn::make('phone_country')->label('الدولة')->placeholder('—')
-                    ->formatStateUsing(fn (?string $state): ?string => PhoneCountries::display($state))
+                TextColumn::make('primary_phone')
+                    ->label('الهاتف الأساسي')
+                    ->state(fn (Model $record): ?string => $record->primaryPhone()?->phone_e164)
+                    ->description(fn (Model $record): ?string => ($count = $record->phoneNumbers->where('is_primary', false)->count()) > 0
+                        ? "{$count} رقم إضافي"
+                        : null)
+                    ->searchable(query: fn (Builder $query, string $search): Builder => $query->whereHas(
+                        'phoneNumbers',
+                        fn (Builder $phones): Builder => $phones->where('phone_e164', 'like', "%{$search}%"),
+                    ))
+                    ->placeholder('—'),
+                TextColumn::make('primary_phone_country')
+                    ->label('الدولة')
+                    ->state(fn (Model $record): ?string => PhoneCountries::display($record->primaryPhone()?->phone_country))
+                    ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('requests_count')->label('عدد الطلبات')->sortable(),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(),
@@ -82,21 +95,30 @@ abstract class BrokerResource extends Resource
     {
         $categoryGroups = [
             'broker-profile' => ActionGroup::make([
+                Action::make('viewContactPhoneNumbers')
+                    ->label('أرقام الهاتف')
+                    ->icon('heroicon-o-phone')
+                    ->modalHeading(fn (Model $record): string => "أرقام الهاتف: {$record->name}")
+                    ->modalContent(fn (Model $record) => view('filament.modals.contact-phone-numbers', [
+                        'phones' => $record->phoneNumbers,
+                    ]))
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('إغلاق')
+                    ->action(fn () => null),
                 Action::make('editBroker')
                     ->label('تعديل الوسيط')
                     ->icon('heroicon-o-pencil-square')
                     ->modalHeading('تعديل بيانات الوسيط')
-                    ->modalDescription('حدّث اسم الوسيط أو رقم هاتفه الموحد.')
+                    ->modalDescription('حدّث اسم الوسيط وأرقام هاتفه. أول رقم في القائمة هو الأساسي تلقائيًا.')
                     ->modalSubmitActionLabel('حفظ التعديلات')
                     ->schema(BrokerFormSchema::fields(editing: true))
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
-                        'phone' => PhoneCountries::nationalNumber($record->phone_e164, $record->phone_country),
-                        'phone_country' => PhoneCountries::selectable($record->phone_country),
-                    ])
+                    ] + ContactPhonesField::fromContact($record))
                     ->action(function (Model $record, array $data, Schema $schema): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
+                        $data = ContactPhonesField::toServiceData($data);
                         $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                         unset($data['reviewed_similar_names']);
 
@@ -189,12 +211,13 @@ abstract class BrokerResource extends Resource
         return Action::make('createBroker')
             ->label('إضافة وسيط')
             ->modalHeading('إضافة وسيط')
-            ->modalDescription('أضف بيانات الوسيط ورقم التواصل الموحد.')
+            ->modalDescription('أضف بيانات الوسيط وأرقامه. أول رقم في القائمة هو الأساسي تلقائيًا.')
             ->modalSubmitActionLabel('إضافة الوسيط')
             ->schema(BrokerFormSchema::fields())
             ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
+                $data = ContactPhonesField::toServiceData($data);
                 $reviewed = (bool) ($data['reviewed_similar_names'] ?? false);
                 unset($data['reviewed_similar_names']);
 
@@ -206,4 +229,5 @@ abstract class BrokerResource extends Resource
             })
             ->successNotificationTitle('تمت إضافة الوسيط');
     }
+
 }

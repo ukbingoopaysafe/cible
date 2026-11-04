@@ -180,6 +180,7 @@ abstract class AuditEventResource extends Resource
             'name' => 'الاسم',
             'phone_e164' => 'الهاتف',
             'phone_country' => 'رمز الدولة',
+            'phones' => 'أرقام الهاتف',
             'owner_user_id' => 'معرّف المسؤول',
             'target_user_id' => 'معرّف المسؤول المستهدف',
             'requested_by' => 'معرّف مقدم الطلب',
@@ -217,6 +218,27 @@ abstract class AuditEventResource extends Resource
 
     private static function formatValue(string $key, mixed $value): string
     {
+        if ($key === 'phones' && is_array($value)) {
+            return collect($value)
+                ->map(function (mixed $phone): string {
+                    $number = (string) data_get($phone, 'phone_e164', '');
+                    if ($number === '') {
+                        return '';
+                    }
+
+                    $label = data_get($phone, 'is_primary') ? 'أساسي' : 'إضافي';
+                    $country = data_get($phone, 'phone_country');
+
+                    if (filled($country)) {
+                        $label .= ' — '.\App\Support\PhoneCountries::display((string) $country);
+                    }
+
+                    return "{$label}: {$number}";
+                })
+                ->filter()
+                ->implode('؛ ');
+        }
+
         if (is_bool($value)) {
             return $value ? 'نعم' : 'لا';
         }

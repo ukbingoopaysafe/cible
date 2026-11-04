@@ -77,8 +77,11 @@ class CustomerSpreadsheetImportService
                 try {
                     $this->customers->create($actor, $department, [
                         'name' => $values[0],
-                        'phone' => $values[1],
-                        'phone_country' => $values[2] !== '' ? $values[2] : 'EG',
+                        'phones' => [[
+                            'phone' => $values[1],
+                            'phone_country' => $values[2] !== '' ? $values[2] : 'EG',
+                            'is_primary' => true,
+                        ]],
                         'nationality' => $values[3] !== '' ? $values[3] : null,
                     ]);
                     $successful++;

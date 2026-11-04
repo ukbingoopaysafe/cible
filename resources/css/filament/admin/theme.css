@@ -2034,9 +2034,8 @@ td.record-code-cell {
 
 /* Customer Phone LTR Display Isolation */
 .fi-ta-cell-customer\.name .fi-ta-text-description,
-.fi-ta-cell-customer\.phone_e164 .fi-ta-text-item,
-.fi-ta-cell-phone_e164 .fi-ta-text-item,
-.fi-ta-cell-phone-e164 .fi-ta-text-item {
+.fi-ta-cell-customer_primary_phone .fi-ta-text-item,
+.fi-ta-cell-primary_phone .fi-ta-text-item {
     direction: ltr !important;
     unicode-bidi: isolate !important;
     /* Keep the number LTR while hugging the RTL column header edge. */
@@ -2363,6 +2362,46 @@ td.record-code-cell {
 
 .fi-in-text-item {
     font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+/* Keep repeated contact phone fields close to the original single-field layout. */
+.fi-contact-phones {
+    gap: 0.5rem !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-items {
+    gap: 0.5rem !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-item {
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-item-header {
+    padding: 0 0 0.25rem !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-item-header-label {
+    font-size: 0.8125rem !important;
+    color: #64748b !important;
+}
+
+.dark .fi-contact-phones .fi-fo-repeater-item-header-label {
+    color: #94a3b8 !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-item-has-header > .fi-fo-repeater-item-content {
+    border-top: 0 !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-item-content {
+    padding: 0 !important;
+}
+
+.fi-contact-phones .fi-fo-repeater-add {
+    justify-content: flex-start !important;
 }
 
 

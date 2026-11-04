@@ -20,7 +20,7 @@ final class BrokerFormSchema
                         ->required()
                         ->maxLength(255)
                         ->columnSpanFull(),
-                    PhoneField::make('رقم الهاتف', required: false)
+                    ContactPhonesField::make(required: false)
                         ->columnSpanFull(),
                     Checkbox::make('reviewed_similar_names')
                         ->label('راجعت تنبيه تشابه الاسم وأؤكد أن هذا وسيط مختلف.')

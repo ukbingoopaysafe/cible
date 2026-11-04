@@ -30,6 +30,7 @@ class ResaleRequest extends Model
             'area_max' => 'decimal:2',
             'budget_declared' => 'decimal:2',
             'budget_targeted' => 'decimal:2',
+            'broker_phone_numbers_snapshot' => 'array',
         ];
     }
 
