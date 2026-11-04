@@ -15,6 +15,7 @@ use Filament\Resources\Resource;
 use Filament\Schemas\Schema;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
+use Illuminate\Contracts\Support\Htmlable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
@@ -70,6 +71,7 @@ abstract class BrokerResource extends Resource
                 TextColumn::make('primary_phone')
                     ->label('الهاتف الأساسي')
                     ->state(fn (Model $record): ?string => $record->primaryPhone()?->phone_e164)
+                    ->formatStateUsing(fn (?string $state): ?Htmlable => SectionRequestResource::formatPhoneForDisplay($state))
                     ->description(fn (Model $record): ?string => ($count = $record->phoneNumbers->where('is_primary', false)->count()) > 0
                         ? "{$count} رقم إضافي"
                         : null)
