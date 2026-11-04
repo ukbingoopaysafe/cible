@@ -14,10 +14,10 @@ class RecordCode
     public static function prefix(Department $department, string $type): string
     {
         return match ([$department, $type]) {
-            [Department::Rental, self::TYPE_REQUEST] => 'RN-',
-            [Department::Resale, self::TYPE_REQUEST] => 'RS-',
-            [Department::Rental, self::TYPE_CUSTOMER] => 'RC-',
-            [Department::Resale, self::TYPE_CUSTOMER] => 'SC-',
+            [Department::Rental, self::TYPE_REQUEST] => 'Rr-',
+            [Department::Resale, self::TYPE_REQUEST] => 'Sr-',
+            [Department::Rental, self::TYPE_CUSTOMER] => 'Rc-',
+            [Department::Resale, self::TYPE_CUSTOMER] => 'Sc-',
             default => throw new InvalidArgumentException("Invalid department or record type: {$department->value}, {$type}"),
         };
     }
@@ -27,7 +27,7 @@ class RecordCode
      */
     public static function allPrefixes(): array
     {
-        return ['RN-', 'RS-', 'RC-', 'SC-'];
+        return ['Rc-', 'Rr-', 'Sc-', 'Sr-'];
     }
 
     /**
@@ -66,8 +66,8 @@ class RecordCode
      * Parses a search query into an ID for the given department and type.
      *
      * Returns:
-     * - positive int if search query matches the expected prefix (e.g. RN-01) or is pure digits.
-     * - false if search query has an explicit alien prefix (e.g. RS-000012 in Rental).
+     * - positive int if search query matches the expected prefix (e.g. Rr-01) or is pure digits.
+     * - false if search query has an explicit alien prefix (e.g. Sr-000012 in Rental).
      * - null if search query does not look like a code or ID (e.g. names/words).
      */
     public static function parseId(string $query, Department $department, string $type): int|false|null
@@ -80,12 +80,12 @@ class RecordCode
         $upper = strtoupper($query);
 
         foreach (self::otherPrefixes($department, $type) as $alien) {
-            if (str_starts_with($upper, $alien)) {
+            if (str_starts_with($upper, strtoupper($alien))) {
                 return false;
             }
         }
 
-        $expectedPrefix = self::prefix($department, $type);
+        $expectedPrefix = strtoupper(self::prefix($department, $type));
         if (str_starts_with($upper, $expectedPrefix)) {
             $numPart = substr($upper, strlen($expectedPrefix));
             if (ctype_digit($numPart) && (int) $numPart > 0) {
