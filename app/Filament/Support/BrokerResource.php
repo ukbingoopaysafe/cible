@@ -111,7 +111,7 @@ abstract class BrokerResource extends Resource
                     ->modalHeading('تعديل بيانات الوسيط')
                     ->modalDescription('حدّث اسم الوسيط وأرقام هاتفه. أول رقم في القائمة هو الأساسي تلقائيًا.')
                     ->modalSubmitActionLabel('حفظ التعديلات')
-                    ->schema(BrokerFormSchema::fields(editing: true))
+                    ->schema(BrokerFormSchema::fields(static::department(), editing: true))
                     ->fillForm(fn (Model $record): array => [
                         'name' => $record->name,
                     ] + ContactPhonesField::fromContact($record))
@@ -213,7 +213,7 @@ abstract class BrokerResource extends Resource
             ->modalHeading('إضافة وسيط')
             ->modalDescription('أضف بيانات الوسيط وأرقامه. أول رقم في القائمة هو الأساسي تلقائيًا.')
             ->modalSubmitActionLabel('إضافة الوسيط')
-            ->schema(BrokerFormSchema::fields())
+            ->schema(BrokerFormSchema::fields(static::department()))
             ->action(function (array $data, Schema $schema): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);

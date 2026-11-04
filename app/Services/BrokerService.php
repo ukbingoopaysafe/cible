@@ -198,6 +198,18 @@ class BrokerService
         });
     }
 
+    public function hasSimilarNames(User $actor, Department $department, string $name, ?int $ignoreBrokerId = null): bool
+    {
+        $name = trim($name);
+
+        if ($name === '') {
+            return false;
+        }
+
+        return $this->findSimilarNames($actor, $department, $name)
+            ->contains(fn (Model $broker): bool => $ignoreBrokerId === null || (int) $broker->getKey() !== $ignoreBrokerId);
+    }
+
     /** @return Collection<int, Model> */
     public function findSimilarNames(User $actor, Department $department, string $name): Collection
     {

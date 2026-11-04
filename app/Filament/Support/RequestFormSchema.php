@@ -138,7 +138,7 @@ final class RequestFormSchema
                             ->all())
                         ->searchable()
                         ->placeholder('اختر وسيطًا إن وجد')
-                        ->createOptionForm(BrokerFormSchema::fields())
+                        ->createOptionForm(BrokerFormSchema::fields($department))
                         ->createOptionModalHeading('إضافة وسيط')
                         ->createOptionAction(fn (Action $action) => $action->modalSubmitActionLabel('إضافة الوسيط'))
                         ->createOptionUsing(function (array $data, Schema $schema) use ($department): int {
