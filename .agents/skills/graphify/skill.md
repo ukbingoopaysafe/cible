@@ -17,6 +17,7 @@ Turn any folder of files into a navigable knowledge graph with community detecti
 /graphify <url1> <url2> ...                           # clone multiple repos, build each, merge into one cross-repo graph
 /graphify <path> --mode deep                          # thorough extraction, richer INFERRED edges
 /graphify <path> --update                             # incremental - re-extract only new/changed files
+/graphify <path> --force                              # full rebuild allowing graph shrink (e.g. after deleting files)
 /graphify <path> --directed                            # build directed graph (preserves edge direction: source→target)
 /graphify <path> --whisper-model medium                # use a larger Whisper model for better transcription accuracy
 /graphify <path> --cluster-only                       # rerun clustering on existing graph
@@ -46,6 +47,10 @@ Turn any folder of files into a navigable knowledge graph with community detecti
 
 Drop any folder of code, docs, papers, images, or video into graphify and get a queryable knowledge graph. Persistent across sessions, honest audit trail (EXTRACTED/INFERRED/AMBIGUOUS), community detection surfaces cross-document connections you wouldn't think to ask about.
 
+**When a graph is worth building:** this applies when you are choosing a tool yourself; if the user invoked `/graphify`, follow that request as asked. AST extraction of code is fast and free, but semantic extraction of docs, papers and images runs the model over every file, which can cost minutes and tens of thousands of tokens.
+
+If a graph already exists, query it. With no graph, one targeted lookup ("where is X defined", "what calls Y" in an ordinary-sized codebase) is faster and free with a plain text search such as `grep` and `Read`: search directly instead of running the steps below, and mention that a graph can be built if the user wants one. Build one when you expect many questions against this corpus, the corpus is large or unfamiliar, the question needs links text search cannot see (doc to code, across documents), or it is structural (communities, bridges, import cycles).
+
 ## What You Must Do When Invoked
 
 If the user invoked `/graphify --help` or `/graphify -h` (with no other arguments), print the contents of the `## Usage` section above verbatim and stop. Do not run any commands, do not detect files, do not default the path to `.`. Just print the Usage block and return.
@@ -56,7 +61,7 @@ If no path was given, use `.` (current directory). Do not ask the user for a pat
 
 If the path argument starts with `https://github.com/` or `http://github.com/`, treat it as a GitHub URL - run Step 0 before anything else, then continue with the resolved local path.
 
-Follow these steps in order. Do not skip steps.
+Follow these steps in order unless the fast path above applies.
 
 ### Step 0 - GitHub repos and multi-path merge (only if a URL or several paths)
 
@@ -267,31 +272,32 @@ Load files from `graphify-out/.graphify_uncached.txt`. Split into chunks bounded
 
 Both bounds matter. The line bound is not only about the 2000-line Read cap: a subagent holding 25 files splits its attention across all of them and skims the dense ones, and a 590-line plan can come back with zero nodes that way. Bounding content as well as file count is what keeps a chunk's coverage honest (#2225).
 
-**Step B2 - Dispatch ALL subagents in a single message**
+**Step B2 - Dispatch ALL subagents in a single message (Codex)**
 
-Call the Agent tool multiple times IN THE SAME RESPONSE - one call per chunk. This is the only way they run in parallel. If you make one Agent call, wait, then make another, you are doing it sequentially and defeating the purpose.
+> **Codex platform:** Uses `spawn_agent` + `wait_agent` + `close_agent` instead of the Agent tool.
+> Requires `multi_agent = true` under `[features]` in `~/.codex/config.toml`.
+> If `spawn_agent` is unavailable, tell the user to add that config and restart Codex.
 
-**IMPORTANT - subagent type:** Always use `subagent_type="general-purpose"`. Do NOT use `Explore` - it is read-only and cannot write chunk files to disk, which silently drops extraction results. General-purpose has Write and Bash access which the subagent needs.
+Call `spawn_agent` once per chunk — ALL in the same response so they run in parallel. Build the message by wrapping the extraction prompt in task-delegation framing:
 
-Concrete example for 3 chunks:
 ```
-[Agent tool call 1: files 1-15, subagent_type="general-purpose"]
-[Agent tool call 2: files 16-30, subagent_type="general-purpose"]
-[Agent tool call 3: files 31-45, subagent_type="general-purpose"]
+spawn_agent(agent_type="worker", message="Your task is to perform the following. Follow the instructions below exactly.\n\n<agent-instructions>\n[extraction prompt, with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, DEEP_MODE substituted]\n</agent-instructions>\n\nExecute this now. Output ONLY the structured JSON response.")
 ```
-All three in one message. Not three separate messages.
 
-Each subagent receives this exact prompt (substitute FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, DEEP_MODE, and CHUNK_PATH).
-
-CHUNK_PATH must be an **absolute** path — derive it before dispatching:
-```bash
-PROJECT_ROOT=$(pwd)  # cwd — where Part C globs graphify-out/ (NOT .graphify_root/scan dir, #1392)
-# Then for chunk N: CHUNK_PATH="${PROJECT_ROOT}/graphify-out/.graphify_chunk_0N.json"
+After all agents are dispatched, collect results sequentially in memory:
 ```
+result = wait_agent(handle); close_agent(handle)   # repeat per handle
+```
+
+Collect each result in memory and associate it with the chunk number used for dispatch. Validate that every result is a JSON object with list-valued `nodes` and `edges`; `hyperedges` may be omitted or a list. Empty lists are valid extraction results.
+
+If any subagent fails, returns no result or invalid JSON, or a result cannot be persisted and read back from its expected chunk file, print the affected chunk numbers and stop before Step B3. Do not merge partial results, save cache, or continue to Part C; leave the existing graph and semantic cache untouched.
+
+Only after every result validates, write each result to its matching `graphify-out/.graphify_chunk_NN.json` file, using JSON serialization and the trusted chunk number. Preserve its `nodes`, `edges`, `hyperedges`, `input_tokens`, and `output_tokens` values. Verify that every expected chunk file exists and parses as JSON before continuing. Do not aggregate results or write `graphify-out/.graphify_semantic_new.json` in B2 — shared Step B3 performs the merge and cache update.
 
 Subagent prompt template:
 
-See `references/extraction-spec.md` for the exact subagent prompt (JSON schema, node-ID rules, confidence rubric, frontmatter, hyperedge, and vision rules). Load it only here, only when at least one chunk holds a doc, paper, or image; a pure-code corpus has skipped Part B and never reads it. Pass each subagent that prompt verbatim with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, DEEP_MODE, and CHUNK_PATH substituted, and have it write the result to CHUNK_PATH.
+See `references/extraction-spec.md` for the compact subagent prompt (rules, node-ID format, confidence rubric, hyperedge and vision rules, JSON schema). Load it only here, only when at least one chunk holds a doc, paper, or image; a pure-code corpus has skipped Part B and never reads it. Pass each agent that prompt verbatim with FILE_LIST, CHUNK_NUM, TOTAL_CHUNKS, and DEEP_MODE substituted, and have it return the JSON inline.
 
 **Step B3 - Collect, cache, and merge**
 
@@ -464,7 +470,7 @@ print(f'Merged: {total} nodes, {edges} edges ({len(ast[\"nodes\"])} AST + {len(s
 
 ### Step 4 - Build graph, cluster, analyze, generate outputs
 
-**Before starting:** the code blocks below pass `directed=IS_DIRECTED` to `build_from_json()`. Replace `IS_DIRECTED` with `True` if `--directed` was given (builds a `DiGraph` preserving edge direction source→target), otherwise `False` (the default undirected `Graph`). Substitute it the same way you substitute `INPUT_PATH` — do not leave the literal `IS_DIRECTED` in the code.
+**Before starting:** the code blocks below pass `directed=IS_DIRECTED` to `build_from_json()` and `force=IS_FORCE` to `to_json()`. Replace `IS_DIRECTED` with `True` if `--directed` was given (builds a `DiGraph` preserving edge direction source→target), otherwise `False` (the default undirected `Graph`). Replace `IS_FORCE` with `True` if `--force` was given (permits intentional shrink, e.g. after deleting files), otherwise `False`. Substitute them the same way you substitute `INPUT_PATH` — do not leave literal `IS_DIRECTED` or `IS_FORCE` in the code.
 
 ```bash
 mkdir -p graphify-out
@@ -502,7 +508,7 @@ questions = suggest_questions(G, communities, labels)
 # nothing) when the new graph is smaller than the existing graph.json. Only write
 # GRAPH_REPORT.md + the analysis sidecar when the graph was actually written, so
 # they never describe a graph that graph.json doesn't contain (#1392).
-wrote = to_json(G, communities, 'graphify-out/graph.json')
+wrote = to_json(G, communities, 'graphify-out/graph.json', force=IS_FORCE)
 if not wrote:
     print('ERROR: refused to shrink graphify-out/graph.json (existing graph has more nodes; #479).')
     print('If this shrink is intentional (you deleted files), re-run a full build with --force.')
