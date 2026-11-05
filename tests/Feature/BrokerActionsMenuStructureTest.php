@@ -22,7 +22,7 @@ class BrokerActionsMenuStructureTest extends TestCase
         $this->assertSame('بيانات الوسيط', $subGroups[0]->getLabel());
         $this->assertFalse($subGroups[0]->hasDropdown(), 'Subgroup should not create nested dropdown.');
         $this->assertSame(
-            ['editBroker'],
+            ['viewContactPhoneNumbers', 'editBroker'],
             array_map(fn ($action) => $action->getName(), $subGroups[0]->getActions()),
         );
 
@@ -34,7 +34,7 @@ class BrokerActionsMenuStructureTest extends TestCase
         );
 
         $flatActions = $group->getFlatActions();
-        $this->assertCount(2, $flatActions, 'Expected exactly 2 flat actions in the dropdown group.');
+        $this->assertCount(3, $flatActions, 'Expected phone viewing, editing, and deletion actions in the dropdown group.');
 
         $categories = array_map(
             fn ($action): ?string => $action->getExtraAttributes()['data-action-category'] ?? null,

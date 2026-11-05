@@ -68,8 +68,6 @@ class RecordCodeSearchTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customer = RentalCustomer::query()->forceCreate([
             'name' => 'عميل تجريبي',
-            'phone_e164' => '+201011111111',
-            'phone_country' => 'EG',
         ]);
         $area = RentalArea::query()->create(['name' => 'منطقة إيجار', 'governorate' => 'القاهرة']);
         $targetRequest = RentalRequest::query()->forceCreate([
@@ -125,8 +123,6 @@ class RecordCodeSearchTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customer = ResaleCustomer::query()->forceCreate([
             'name' => 'عميل بيع',
-            'phone_e164' => '+201022222222',
-            'phone_country' => 'EG',
         ]);
         $area = ResaleArea::query()->create(['name' => 'منطقة بيع', 'governorate' => 'القاهرة']);
         $targetRequest = ResaleRequest::query()->forceCreate([
@@ -171,14 +167,10 @@ class RecordCodeSearchTest extends TestCase
         $targetCustomer = RentalCustomer::query()->forceCreate([
             'id' => 45,
             'name' => 'عميل إيجار',
-            'phone_e164' => '+201033333333',
-            'phone_country' => 'EG',
         ]);
         $otherCustomer = RentalCustomer::query()->forceCreate([
             'id' => 77,
             'name' => 'عميل آخر',
-            'phone_e164' => '+201044444444',
-            'phone_country' => 'EG',
         ]);
 
         $this->actingAs($manager);

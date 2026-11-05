@@ -88,8 +88,6 @@ class RequestTableSemanticUxTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customer = RentalCustomer::query()->forceCreate([
             'name' => 'عميل تجريبي',
-            'phone_e164' => '+2010' . fake()->numerify('########'),
-            'phone_country' => 'EG',
         ]);
         $area = RentalArea::query()->firstOrCreate(
             ['governorate' => 'القاهرة', 'name' => 'منطقة تجريبية للتاريخ']
@@ -163,8 +161,6 @@ class RequestTableSemanticUxTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $customer = ResaleCustomer::query()->forceCreate([
             'name' => 'عميل بيع تجريبي',
-            'phone_e164' => '+2010' . fake()->numerify('########'),
-            'phone_country' => 'EG',
         ]);
         $area = ResaleArea::query()->firstOrCreate(
             ['governorate' => 'الجيزة', 'name' => 'منطقة بيع تجريبية']

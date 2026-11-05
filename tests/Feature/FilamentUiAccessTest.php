@@ -23,6 +23,7 @@ use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\ResaleRequests\Pages\ViewResaleRequest;
 use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Filament\Widgets\OperationalRequestsOverview;
+use App\Models\RentalBroker;
 use App\Models\RentalCustomerFollowUp;
 use App\Models\RentalArea;
 use App\Models\RentalCustomer;
@@ -468,8 +469,10 @@ class FilamentUiAccessTest extends TestCase
             ->test(ListRentalCustomers::class)
             ->callAction(TestAction::make('createCustomer'), [
                 'name' => 'عميل قائمة الواجهة',
-                'phone' => '01012345557',
-                'phone_country' => 'EG',
+                'phones' => [[
+                    'phone' => '01012345557',
+                    'phone_country' => 'EG',
+                ]],
             ])
             ->assertHasNoActionErrors();
 
@@ -479,8 +482,10 @@ class FilamentUiAccessTest extends TestCase
             ->test(ListRentalBrokers::class)
             ->callAction(TestAction::make('createBroker'), [
                 'name' => 'وسيط قائمة الواجهة',
-                'phone' => '01012345558',
-                'phone_country' => 'EG',
+                'phones' => [[
+                    'phone' => '01012345558',
+                    'phone_country' => 'EG',
+                ]],
             ])
             ->assertHasNoActionErrors();
 
@@ -493,24 +498,27 @@ class FilamentUiAccessTest extends TestCase
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
         $broker = app(BrokerService::class)->create($manager, Department::Rental, [
             'name' => 'وسيط تعديل الواجهة',
-            'phone' => '01012345560',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345560',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
 
         Livewire::actingAs($manager)
             ->test(ListRentalBrokers::class)
             ->callAction(TestAction::make('editBroker')->table($broker), [
                 'name' => 'وسيط معدل من الواجهة',
-                'phone' => '01012345561',
-                'phone_country' => 'EG',
+                'phones' => [[
+                    'phone' => '01012345561',
+                    'phone_country' => 'EG',
+                ]],
             ])
             ->assertHasNoTableActionErrors();
 
-        $this->assertDatabaseHas('rental_brokers', [
-            'id' => $broker->id,
-            'name' => 'وسيط معدل من الواجهة',
-            'phone_e164' => '+201012345561',
-        ]);
+        $updatedBroker = RentalBroker::query()->findOrFail($broker->id);
+        $this->assertSame('وسيط معدل من الواجهة', $updatedBroker->name);
+        $this->assertSame('+201012345561', $updatedBroker->primaryPhone()?->phone_e164);
 
         Livewire::actingAs($manager)
             ->test(ListRentalBrokers::class)

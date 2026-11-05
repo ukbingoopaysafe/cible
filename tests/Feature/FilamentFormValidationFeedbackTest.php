@@ -20,14 +20,19 @@ class FilamentFormValidationFeedbackTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
 
-        Livewire::actingAs($manager)
+        $livewire = Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
             ->callAction(RentalCustomerResource::createCustomerAction()->getName(), [
                 'name' => 'عميل اختبار',
-                'phone' => '01011111111',
-                'phone_country' => 'Ej',
+                'phones' => [[
+                    'phone' => '01011111111',
+                    'phone_country' => 'Ej',
+                ]],
             ])
-            ->assertHasActionErrors(['phone_country']);
+            ->assertHasActionErrors();
+
+        $this->assertTrue(collect($livewire->instance()->getErrorBag()->keys())
+            ->contains(fn (string $key): bool => str_ends_with($key, '.phone_country')));
     }
 
     public function test_customer_creation_action_fails_validation_with_incomplete_phone(): void
@@ -35,14 +40,19 @@ class FilamentFormValidationFeedbackTest extends TestCase
         $manager = User::factory()->create(['is_company_manager' => true]);
         $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
 
-        Livewire::actingAs($manager)
+        $livewire = Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
             ->callAction(RentalCustomerResource::createCustomerAction()->getName(), [
                 'name' => 'عميل اختبار',
-                'phone' => '010111111',
-                'phone_country' => 'EG',
+                'phones' => [[
+                    'phone' => '010111111',
+                    'phone_country' => 'EG',
+                ]],
             ])
-            ->assertHasActionErrors(['phone']);
+            ->assertHasActionErrors();
+
+        $this->assertTrue(collect($livewire->instance()->getErrorBag()->keys())
+            ->contains(fn (string $key): bool => str_ends_with($key, '.phone')));
     }
 
     public function test_customer_creation_action_fails_validation_with_duplicate_phone(): void
@@ -52,16 +62,21 @@ class FilamentFormValidationFeedbackTest extends TestCase
 
         app(CustomerService::class)->create($manager, Department::Rental, [
             'name' => 'عميل أول',
-            'phone' => '01012345678',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
 
         Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
             ->callAction(RentalCustomerResource::createCustomerAction()->getName(), [
                 'name' => 'عميل مكرر الهاتف',
-                'phone' => '01012345678',
-                'phone_country' => 'EG',
+                'phones' => [[
+                    'phone' => '01012345678',
+                    'phone_country' => 'EG',
+                ]],
             ])
             ->assertHasActionErrors();
     }

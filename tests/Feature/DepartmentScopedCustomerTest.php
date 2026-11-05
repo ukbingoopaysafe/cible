@@ -20,13 +20,19 @@ class DepartmentScopedCustomerTest extends TestCase
 
         $rentalCustomer = $service->create($manager, Department::Rental, [
             'name' => 'عميل الإيجار',
-            'phone' => '01012345678',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
         $resaleCustomer = $service->create($manager, Department::Resale, [
             'name' => 'عميل إعادة البيع',
-            'phone' => '01012345678',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
 
         $this->assertNotSame($rentalCustomer::class, $resaleCustomer::class);
@@ -34,8 +40,8 @@ class DepartmentScopedCustomerTest extends TestCase
         $this->assertSame('resale_customers', $resaleCustomer->getTable());
         $this->assertDatabaseCount('rental_customers', 1);
         $this->assertDatabaseCount('resale_customers', 1);
-        $this->assertSame('+201012345678', $rentalCustomer->phone_e164);
-        $this->assertSame($rentalCustomer->phone_e164, $resaleCustomer->phone_e164);
+        $this->assertSame('+201012345678', $rentalCustomer->primaryPhone()?->phone_e164);
+        $this->assertSame($rentalCustomer->primaryPhone()?->phone_e164, $resaleCustomer->primaryPhone()?->phone_e164);
         $this->assertDatabaseHas('audit_events', [
             'subject_type' => $rentalCustomer::class,
             'subject_id' => $rentalCustomer->getKey(),
@@ -52,7 +58,14 @@ class DepartmentScopedCustomerTest extends TestCase
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
         $service = app(CustomerService::class);
-        $data = ['name' => 'عميل', 'phone' => '01012345678', 'phone_country' => 'EG'];
+        $data = [
+            'name' => 'عميل',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
+        ];
         $service->create($manager, Department::Rental, $data);
 
         try {

@@ -21,24 +21,33 @@ class BrokerWorkflowTest extends TestCase
         $service = app(BrokerService::class);
         $rentalBroker = $service->create($manager, Department::Rental, [
             'name' => 'محمد أحمد',
-            'phone' => '01012345678',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
         $resaleBroker = $service->create($manager, Department::Resale, [
             'name' => 'محمد أحمد',
-            'phone' => '01012345678',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
 
-        $this->assertSame('+201012345678', $rentalBroker->phone_e164);
+        $this->assertSame('+201012345678', $rentalBroker->primaryPhone()?->phone_e164);
         $this->assertSame('rental_brokers', $rentalBroker->getTable());
         $this->assertSame('resale_brokers', $resaleBroker->getTable());
 
         try {
             $service->create($manager, Department::Rental, [
                 'name' => 'محمد احمد',
-                'phone' => '01011112222',
-                'phone_country' => 'EG',
+                'phones' => [[
+                    'phone' => '01011112222',
+                    'phone_country' => 'EG',
+                    'is_primary' => true,
+                ]],
             ]);
             $this->fail('Similar broker names must be reviewed before creation.');
         } catch (ValidationException) {
@@ -47,8 +56,11 @@ class BrokerWorkflowTest extends TestCase
 
         $reviewed = $service->create($manager, Department::Rental, [
             'name' => 'محمد احمد',
-            'phone' => '01011112222',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01011112222',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ], reviewedSimilarNames: true);
         $this->assertDatabaseHas('audit_events', [
             'event_key' => 'broker.created',

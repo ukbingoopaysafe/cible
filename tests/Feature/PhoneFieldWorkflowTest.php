@@ -6,6 +6,8 @@ use App\Enums\Department;
 use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
 use App\Filament\Resources\RentalCustomers\Pages\ListRentalCustomers;
 use App\Filament\Support\PhoneField;
+use App\Models\RentalBroker;
+use App\Models\RentalCustomer;
 use App\Models\User;
 use App\Services\CustomerService;
 use Filament\Actions\Testing\TestAction;
@@ -45,7 +47,7 @@ class PhoneFieldWorkflowTest extends TestCase
         $theme = file_get_contents(resource_path('css/filament/admin/theme.css'));
 
         $this->assertStringContainsString('.fi-phone-country-flag', $theme);
-        $this->assertStringContainsString('.fi-phone-country-select .fi-dropdown-panel', $theme);
+        $this->assertStringContainsString('.fi-phone-country-dropdown', $theme);
         $this->assertStringContainsString('max-height: min(18rem, calc(100vh - 8rem))', $theme);
     }
 
@@ -55,16 +57,16 @@ class PhoneFieldWorkflowTest extends TestCase
             ->test(ListRentalCustomers::class)
             ->callAction(TestAction::make('createCustomer'), [
                 'name' => 'عميل سعودي',
-                'phone' => '0512345678',
-                'phone_country' => 'SA',
+                'phones' => [[
+                    'phone' => '0512345678',
+                    'phone_country' => 'SA',
+                ]],
             ])
             ->assertHasNoActionErrors();
 
-        $this->assertDatabaseHas('rental_customers', [
-            'name' => 'عميل سعودي',
-            'phone_e164' => '+966512345678',
-            'phone_country' => 'SA',
-        ]);
+        $customer = RentalCustomer::query()->where('name', 'عميل سعودي')->firstOrFail();
+        $this->assertSame('+966512345678', $customer->primaryPhone()?->phone_e164);
+        $this->assertSame('SA', $customer->primaryPhone()?->phone_country);
     }
 
     public function test_customer_can_be_created_with_an_other_international_number(): void
@@ -73,16 +75,16 @@ class PhoneFieldWorkflowTest extends TestCase
             ->test(ListRentalCustomers::class)
             ->callAction(TestAction::make('createCustomer'), [
                 'name' => 'عميل ألماني',
-                'phone' => '+4915112345678',
-                'phone_country' => 'ZZ',
+                'phones' => [[
+                    'phone' => '+4915112345678',
+                    'phone_country' => 'ZZ',
+                ]],
             ])
             ->assertHasNoActionErrors();
 
-        $this->assertDatabaseHas('rental_customers', [
-            'name' => 'عميل ألماني',
-            'phone_e164' => '+4915112345678',
-            'phone_country' => 'DE',
-        ]);
+        $customer = RentalCustomer::query()->where('name', 'عميل ألماني')->firstOrFail();
+        $this->assertSame('+4915112345678', $customer->primaryPhone()?->phone_e164);
+        $this->assertSame('DE', $customer->primaryPhone()?->phone_country);
     }
 
     public function test_broker_can_be_created_without_a_phone_number(): void
@@ -94,11 +96,8 @@ class PhoneFieldWorkflowTest extends TestCase
             ])
             ->assertHasNoActionErrors();
 
-        $this->assertDatabaseHas('rental_brokers', [
-            'name' => 'وسيط بدون هاتف',
-            'phone_e164' => null,
-            'phone_country' => null,
-        ]);
+        $broker = RentalBroker::query()->where('name', 'وسيط بدون هاتف')->firstOrFail();
+        $this->assertFalse($broker->phoneNumbers()->exists());
     }
 
     public function test_customer_edit_form_shows_the_national_number_for_the_stored_country(): void
@@ -106,17 +105,24 @@ class PhoneFieldWorkflowTest extends TestCase
         $manager = $this->manager();
         $customer = app(CustomerService::class)->create($manager, Department::Rental, [
             'name' => 'عميل تعديل الهاتف',
-            'phone' => '01012345678',
-            'phone_country' => 'EG',
+            'phones' => [[
+                'phone' => '01012345678',
+                'phone_country' => 'EG',
+                'is_primary' => true,
+            ]],
         ]);
 
         Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
             ->mountAction(TestAction::make('editCustomer')->table($customer))
-            ->assertSchemaStateSet([
-                'phone' => '01012345678',
-                'phone_country' => 'EG',
-            ]);
+            ->assertSchemaStateSet(function (array $state): array {
+                $phones = array_values($state['phones']);
+                $this->assertCount(1, $phones);
+                $this->assertSame('01012345678', $phones[0]['phone']);
+                $this->assertSame('EG', $phones[0]['phone_country']);
+
+                return [];
+            });
     }
 
     public function test_customer_edit_form_keeps_other_numbers_in_international_format(): void
@@ -124,17 +130,24 @@ class PhoneFieldWorkflowTest extends TestCase
         $manager = $this->manager();
         $customer = app(CustomerService::class)->create($manager, Department::Rental, [
             'name' => 'عميل تعديل دولي',
-            'phone' => '+4915112345678',
-            'phone_country' => 'ZZ',
+            'phones' => [[
+                'phone' => '+4915112345678',
+                'phone_country' => 'ZZ',
+                'is_primary' => true,
+            ]],
         ]);
 
         Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
             ->mountAction(TestAction::make('editCustomer')->table($customer))
-            ->assertSchemaStateSet([
-                'phone' => '+4915112345678',
-                'phone_country' => 'ZZ',
-            ]);
+            ->assertSchemaStateSet(function (array $state): array {
+                $phones = array_values($state['phones']);
+                $this->assertCount(1, $phones);
+                $this->assertSame('+4915112345678', $phones[0]['phone']);
+                $this->assertSame('ZZ', $phones[0]['phone_country']);
+
+                return [];
+            });
     }
 
     private function manager(): User
