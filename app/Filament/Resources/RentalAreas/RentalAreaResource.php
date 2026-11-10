@@ -81,7 +81,7 @@ class RentalAreaResource extends Resource
         return $table->columns([
             TextColumn::make('governorate')->label('المحافظة')->sortable(),
             TextColumn::make('name')->label('المنطقة')->searchable()->sortable(),
-            TextColumn::make('created_at')->label('تاريخ الإضافة')->dateTime('d/m/Y H:i')->sortable(),
+            TextColumn::make('created_at')->label('تاريخ الإضافة')->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))->html()->sortable(),
             TextColumn::make('deleted_at')->label('الحالة')->badge()
                 ->formatStateUsing(fn ($state): string => filled($state) ? 'مؤرشفة' : 'نشطة'),
         ])->filters([

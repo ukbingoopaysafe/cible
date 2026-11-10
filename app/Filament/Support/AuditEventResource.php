@@ -60,7 +60,10 @@ abstract class AuditEventResource extends Resource
     {
         return $table
             ->columns([
-                TextColumn::make('created_at')->label('التوقيت')->dateTime('d/m/Y H:i:s')->sortable(),
+                TextColumn::make('created_at')->label('التوقيت')
+                    ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                    ->html()
+                    ->sortable(),
                 TextColumn::make('actor.name')->label('المنفذ')->searchable(),
                 TextColumn::make('event_key')->label('العملية')->badge()->formatStateUsing(fn (string $state): string => self::eventLabel($state)),
                 TextColumn::make('subject_id')->label('السجل')->formatStateUsing(fn (int|string $state, AuditEvent $record): string => self::subjectLabel($record) . " #{$state}"),
@@ -205,6 +208,10 @@ abstract class AuditEventResource extends Resource
             'stage' => 'المرحلة',
             'outcome' => 'النتيجة',
             'next_follow_up_at' => 'موعد المتابعة',
+            'occurred_at' => 'وقت التواصل',
+            'scheduled_at' => 'موعد المعاينة',
+            'inspected_at' => 'وقت الفحص',
+            'closed_at' => 'تاريخ الإغلاق',
             'is_active' => 'مفعل',
             'department_access' => 'صلاحية القسم',
             'email_changed' => 'تغيير البريد الإلكتروني',
@@ -231,6 +238,35 @@ abstract class AuditEventResource extends Resource
 
     private static function formatValue(string $key, mixed $value): string
     {
+        if ($key === 'deal_date' && is_scalar($value)) {
+            $presenter = app(\App\Support\DateTimePresenter::class);
+
+            try {
+                return $presenter->bidiText($presenter->formatDate((string) $value));
+            } catch (\InvalidArgumentException) {
+                return (string) $value;
+            }
+        }
+
+        if (in_array($key, ['next_follow_up_at', 'occurred_at', 'scheduled_at', 'inspected_at', 'closed_at', 'created_at', 'updated_at'], true) && is_scalar($value)) {
+            $presenter = app(\App\Support\DateTimePresenter::class);
+            $dateTimeValue = (string) $value;
+
+            if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/D', $dateTimeValue) === 1) {
+                try {
+                    $dateTimeValue = new \DateTimeImmutable($dateTimeValue);
+                } catch (\Throwable) {
+                    return (string) $value;
+                }
+            }
+
+            try {
+                return $presenter->bidiText($presenter->formatDateTime($dateTimeValue));
+            } catch (\InvalidArgumentException) {
+                return (string) $value;
+            }
+        }
+
         if ($key === 'phones' && is_array($value)) {
             return collect($value)
                 ->map(function (mixed $phone): string {

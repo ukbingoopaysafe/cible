@@ -4,7 +4,7 @@
             <div class="flex flex-wrap items-center justify-between gap-2">
                 <strong>{{ $activity->channel->label() }}</strong>
                 <time datetime="{{ $activity->occurred_at->toIso8601String() }}">
-                    {{ $activity->occurred_at->timezone(config('app.timezone'))->format('d/m/Y H:i') }}
+                    <bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($activity->occurred_at) }}</bdi>
                 </time>
             </div>
             <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">

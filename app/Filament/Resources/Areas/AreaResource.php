@@ -98,7 +98,8 @@ class AreaResource extends Resource
                 ->color(fn ($state): string => filled($state) ? 'warning' : 'success'),
             TextColumn::make('created_at')
                 ->label('تاريخ الإضافة')
-                ->dateTime('d/m/Y H:i')
+                ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                ->html()
                 ->sortable(),
         ])->filters([
             SelectFilter::make('governorate')

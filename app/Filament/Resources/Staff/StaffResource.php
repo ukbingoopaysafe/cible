@@ -120,7 +120,8 @@ class StaffResource extends Resource
                 ->icon(fn (User $record): string => $record->hasMultiFactorAuthentication() ? 'heroicon-m-check-badge' : 'heroicon-m-x-circle'),
             TextColumn::make('created_at')
                 ->label('تاريخ الإنشاء')
-                ->dateTime('d/m/Y H:i')
+                ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                ->html()
                 ->sortable(),
         ])->filters([
             SelectFilter::make('is_company_manager')

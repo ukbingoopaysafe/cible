@@ -59,7 +59,7 @@ class RentalRequestExporter extends Exporter
                 RequestOutcome::Unsuccessful->value => 'غير ناجح',
                 default => '',
             }),
-            ExportColumn::make('next_follow_up_at')->label('موعد المتابعة القادم'),
+            static::timestampColumn('next_follow_up_at', 'موعد المتابعة القادم'),
             ExportColumn::make('unit_type')->label('نوع الوحدة')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) {
                 RequestUnitType::Apartment->value => 'شقة', RequestUnitType::Studio->value => 'استوديو', RequestUnitType::Villa->value => 'فيلا', RequestUnitType::Other->value => 'أخرى', default => '',
             }),
@@ -84,9 +84,14 @@ class RentalRequestExporter extends Exporter
             static::textColumn('notes', 'ملاحظات'),
             static::textColumn('outcome_reason_other', 'تصنيف سبب الإغلاق'),
             static::textColumn('outcome_notes', 'سبب الإغلاق المكتوب'),
-            ExportColumn::make('closed_at')->label('تاريخ الإغلاق'),
-            ExportColumn::make('created_at')->label('تاريخ إنشاء الطلب'),
+            static::timestampColumn('closed_at', 'تاريخ الإغلاق'),
+            static::timestampColumn('created_at', 'تاريخ إنشاء الطلب'),
         ];
+    }
+
+    protected static function dateTimeExportColumns(): array
+    {
+        return ['next_follow_up_at', 'closed_at', 'created_at'];
     }
 
     public static function modifyQuery(Builder $query): Builder

@@ -45,6 +45,10 @@ class AdminPanelProvider extends PanelProvider
                 PanelsRenderHook::BODY_END,
                 fn (): \Illuminate\Contracts\Support\Htmlable => view('filament.admin.phone-country-dropdown'),
             )
+            ->renderHook(
+                PanelsRenderHook::BODY_END,
+                fn (): \Illuminate\Contracts\Support\Htmlable => view('filament.admin.date-time-picker-portal'),
+            )
             ->login()
             ->defaultAvatarProvider(DefaultAvatarProvider::class)
             ->profile(EditProfile::class, isSimple: false)

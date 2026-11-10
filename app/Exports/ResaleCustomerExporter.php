@@ -29,8 +29,13 @@ class ResaleCustomerExporter extends Exporter
                 ->state(fn (Model $record): string => static::additionalPhones($record->phoneNumbers))
                 ->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
             static::textColumn('nationality', 'الجنسية'),
-            ExportColumn::make('created_at')->label('تاريخ التسجيل'),
+            static::timestampColumn('created_at', 'تاريخ التسجيل'),
         ];
+    }
+
+    protected static function dateTimeExportColumns(): array
+    {
+        return ['created_at'];
     }
 
     public static function modifyQuery(Builder $query): Builder

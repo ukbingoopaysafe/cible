@@ -233,7 +233,8 @@ abstract class SectionRequestResource extends Resource
                     ->label('تصدير')
                     ->exporter(static::department() === Department::Rental ? RentalRequestExporter::class : ResaleRequestExporter::class)
                     ->formats([ExportFormat::Xlsx])
-                    ->columnMapping(false),
+                    ->columnMapping(false)
+                    ->options(fn (): array => ['cible_datetime_locale' => app(\App\Support\DateTimeLocale::class)->getRegionalTag()]),
             ])
             ->columns([
                 TextColumn::make('code')
@@ -324,7 +325,10 @@ abstract class SectionRequestResource extends Resource
                     ->toggleable(),
                 TextColumn::make('next_follow_up_at')
                     ->label('المتابعة القادمة')
-                    ->dateTime('d/m/Y H:i')
+                    ->formatStateUsing(fn ($state) => $state ? app(\App\Support\DateTimePresenter::class)->bidi(
+                        app(\App\Support\DateTimePresenter::class)->formatDateTime($state),
+                    ) : null)
+                    ->html()
                     ->placeholder('—')
                     ->badge()
                     ->color(fn (Model $record): string => static::getFollowUpColor($record))
@@ -648,7 +652,7 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-chat-bubble-left-right')
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->exists())
             ->schema([
-                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => $item->scheduled_at->format('d/m/Y H:i').' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
+                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDateTime($item->scheduled_at)).' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
                 Select::make('result')->label('النتيجة')->options(['interested' => 'مهتم', 'not_interested' => 'غير مهتم', 'second_viewing' => 'يرغب بمعاينة أخرى', 'negotiating' => 'بدأ التفاوض', 'cancelled' => 'أُلغيت'])->required(),
                 Textarea::make('customer_feedback')->label('رأي العميل')->rows(3)->maxLength(10000),
                 Textarea::make('rejection_reason')->label('سبب عدم الاهتمام')->rows(2)->maxLength(10000),
@@ -1103,7 +1107,9 @@ abstract class SectionRequestResource extends Resource
             ->label('عرض الصفقة')
             ->icon('heroicon-o-eye')
             ->schema([
-                Placeholder::make('deal_date')->label('تاريخ الصفقة')->content(fn (Model $record): string => $record->deal?->deal_date?->format('d/m/Y') ?? '—'),
+                Placeholder::make('deal_date')->label('تاريخ الصفقة')->content(fn (Model $record) => $record->deal?->deal_date
+                    ? app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDate($record->deal->deal_date))
+                    : '—'),
                 Placeholder::make('deal_value')->label('القيمة الإجمالية')->content(fn (Model $record): string => $record->deal ? number_format((float) $record->deal->agreed_total_value, 2).' '.$record->deal->currency : '—'),
                 Placeholder::make('deal_unit')->label('الوحدة')->content(fn (Model $record): string => implode(' — ', array_filter([$record->deal?->unit_type, $record->deal?->unit_area ? $record->deal->unit_area.' م²' : null, $record->deal?->unit_location, $record->deal?->unit_code ? 'كود '.$record->deal->unit_code : null])) ?: '—'),
                 Placeholder::make('deal_contact')->label('ممثل التواصل / المندوب')->content(fn (Model $record): string => implode(' / ', array_filter([$record->deal?->contact_representative, $record->deal?->field_agent_name])) ?: '—'),

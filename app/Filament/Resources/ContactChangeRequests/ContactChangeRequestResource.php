@@ -145,7 +145,8 @@ class ContactChangeRequestResource extends Resource
             ->columns([
                 TextColumn::make('created_at')
                     ->label('تاريخ الطلب')
-                    ->dateTime('d/m/Y H:i')
+                    ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                    ->html()
                     ->sortable(),
                 TextColumn::make('department')
                     ->label('القسم')

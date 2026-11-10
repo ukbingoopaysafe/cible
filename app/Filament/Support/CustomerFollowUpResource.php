@@ -132,20 +132,22 @@ abstract class CustomerFollowUpResource extends Resource
 
                 TextColumn::make('next_follow_up_at')
                     ->label('المتابعة القادمة')
-                    ->formatStateUsing(function ($state): string {
+                    ->formatStateUsing(function ($state) {
                         if (! $state) {
                             return '—';
                         }
                         $date = Carbon::parse($state);
+                        $presenter = app(\App\Support\DateTimePresenter::class);
+                        $formatted = $presenter->formatRelativeDateTime($state, now());
                         if ($date->isPast()) {
-                            return 'متأخرة • '.$date->format('d/m/Y H:i');
-                        }
-                        if ($date->isToday()) {
-                            return 'اليوم • '.$date->format('H:i');
+                            return new \Illuminate\Support\HtmlString(
+                                e('متأخرة • ').$presenter->bidi($formatted)->toHtml(),
+                            );
                         }
 
-                        return $date->format('d/m/Y H:i');
+                        return $presenter->bidi($formatted);
                     })
+                    ->html()
                     ->badge()
                     ->color(function ($state): string {
                         if (! $state) {
@@ -165,7 +167,8 @@ abstract class CustomerFollowUpResource extends Resource
 
                 TextColumn::make('created_at')
                     ->label('تاريخ البدء')
-                    ->dateTime('d/m/Y')
+                    ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDate($state)))
+                    ->html()
                     ->sortable()
                     ->toggleable(isToggledHiddenByDefault: true),
             ])
@@ -238,7 +241,7 @@ abstract class CustomerFollowUpResource extends Resource
                                 ->where('customer_id', $record->customer_id)
                                 ->orderByDesc('deal_date')
                                 ->get()
-                                ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])
+                                ->mapWithKeys(fn (Model $deal): array => [$deal->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDate($deal->deal_date)).' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])
                                 ->all())
                             ->searchable(),
                         Select::make('channel')

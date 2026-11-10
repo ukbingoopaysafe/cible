@@ -96,7 +96,8 @@ abstract class CustomerResource extends Resource
                     ->label('تصدير')
                     ->exporter(static::department() === Department::Rental ? RentalCustomerExporter::class : ResaleCustomerExporter::class)
                     ->formats([ExportFormat::Xlsx])
-                    ->columnMapping(false),
+                    ->columnMapping(false)
+                    ->options(fn (): array => ['cible_datetime_locale' => app(\App\Support\DateTimeLocale::class)->getRegionalTag()]),
             ])
             ->columns([
                 TextColumn::make('code')
@@ -127,8 +128,8 @@ abstract class CustomerResource extends Resource
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requests_count')->label('الطلبات')->sortable()->toggleable(),
                 TextColumn::make('customerFollowUp.owner.name')->label('مسؤول المتابعة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('customerFollowUp.next_follow_up_at')->label('المتابعة القادمة')->dateTime('d/m/Y H:i')->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('customerFollowUp.next_follow_up_at')->label('المتابعة القادمة')->formatStateUsing(fn ($state) => $state ? app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)) : null)->html()->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('created_at')->label('تاريخ التسجيل')->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))->html()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('deleted_at')->label('الحالة')->badge()
                     ->state(fn (Model $record): string => $record->trashed() ? 'مؤرشف' : 'نشط')
                     ->color(fn (string $state): string => $state === 'مؤرشف' ? 'gray' : 'success')
@@ -260,7 +261,7 @@ abstract class CustomerResource extends Resource
                             ->schema([
                                 Select::make('deal_id')->label('الصفقة المرتبطة')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
                                     ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
-                                    ->mapWithKeys(fn (Model $deal): array => [$deal->id => $deal->deal_date->format('d/m/Y').' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
+                                ->mapWithKeys(fn (Model $deal): array => [$deal->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDate($deal->deal_date)).' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
                                 Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
                                 DateTimePicker::make('occurred_at')->label('وقت التواصل')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
                                 DateTimePicker::make('next_follow_up_at')->label('المتابعة القادمة')->native(false)->seconds(false)->minDate(now()->addMinute()),

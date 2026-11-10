@@ -21,7 +21,7 @@
                     <div class="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
                         <strong>الفحص الميداني</strong>
                         @foreach ($recommendation->inspections->sortByDesc('inspected_at') as $inspection)
-                            <p class="mt-1">{{ $inspection->inspected_at->format('d/m/Y H:i') }} — {{ $inspection->field_representative_name }} — {{ ['matches' => 'مطابقة للصور', 'partly_matches' => 'مطابقة جزئيًا', 'does_not_match' => 'غير مطابقة'][$inspection->photo_match] ?? $inspection->photo_match }}</p>
+                            <p class="mt-1"><bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($inspection->inspected_at) }}</bdi> — {{ $inspection->field_representative_name }} — {{ ['matches' => 'مطابقة للصور', 'partly_matches' => 'مطابقة جزئيًا', 'does_not_match' => 'غير مطابقة'][$inspection->photo_match] ?? $inspection->photo_match }}</p>
                             @if ($inspection->observed_defects)<p class="text-gray-600 dark:text-gray-300">العيوب: {{ $inspection->observed_defects }}</p>@endif
                             @if ($inspection->notes)<p class="text-gray-600 dark:text-gray-300">{{ $inspection->notes }}</p>@endif
                         @endforeach
@@ -39,7 +39,7 @@
         <h3 class="mb-3 text-base font-semibold">معاينات العميل</h3>
         @forelse ($record->viewings()->with('recommendation')->orderByDesc('scheduled_at')->get() as $viewing)
             <article class="mb-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                <strong>{{ $viewing->scheduled_at->format('d/m/Y H:i') }}</strong>
+                <strong><bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($viewing->scheduled_at) }}</bdi></strong>
                 @if ($viewing->recommendation) — {{ $viewing->recommendation->unit_code ?: 'وحدة دون كود' }} @endif
                 @if ($viewing->field_representative_name) — المندوب: {{ $viewing->field_representative_name }} @endif
                 <p class="mt-1">النتيجة: {{ ['interested' => 'مهتم', 'not_interested' => 'غير مهتم', 'second_viewing' => 'يرغب بمعاينة أخرى', 'negotiating' => 'بدأ التفاوض', 'cancelled' => 'أُلغيت'][$viewing->result] ?? 'لم تُسجل بعد' }}</p>

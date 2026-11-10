@@ -624,23 +624,26 @@ final class RequestFormSchema
 
                             return 'gray';
                         })
-                        ->formatStateUsing(function ($state, ?Model $record): string {
+                        ->formatStateUsing(function ($state, ?Model $record) {
                             if (! $state) {
                                 return 'غير محدد';
                             }
                             $date = Carbon::parse($state);
-                            $formatted = $date->format('d/m/Y H:i');
+                            $presenter = app(\App\Support\DateTimePresenter::class);
+                            $formatted = $presenter->bidi(
+                                $record?->status === RequestStatus::Active
+                                    ? $presenter->formatRelativeDateTime($state, now())
+                                    : $presenter->formatDateTime($state),
+                            )->toHtml();
                             if ($record?->status === RequestStatus::Active) {
                                 if ($date->isPast()) {
-                                    return "{$formatted} (متأخرة)";
-                                }
-                                if ($date->isToday()) {
-                                    return "{$formatted} (اليوم)";
+                                    return new \Illuminate\Support\HtmlString($formatted . ' (' . e('متأخرة') . ')');
                                 }
                             }
 
-                            return $formatted;
-                        }),
+                            return new \Illuminate\Support\HtmlString($formatted);
+                        })
+                        ->html(),
                 ])
                 ->columns(1),
 
@@ -661,11 +664,13 @@ final class RequestFormSchema
                     TextEntry::make('created_at')
                         ->label('تاريخ التسجيل')
                         ->icon('heroicon-m-calendar')
-                        ->dateTime('d/m/Y H:i'),
+                        ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                        ->html(),
                     TextEntry::make('updated_at')
                         ->label('آخر تحديث')
                         ->icon('heroicon-m-clock')
-                        ->dateTime('d/m/Y H:i'),
+                        ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                        ->html(),
                 ])
                 ->columns(1),
 

@@ -6,9 +6,59 @@ use Filament\Actions\Exports\ExportColumn;
 use Filament\Actions\Exports\Models\Export;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Number;
+use DateTimeImmutable;
+use DateTimeInterface;
+use DateTimeZone;
+use InvalidArgumentException;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\Style;
+use App\Exports\Support\SpreadsheetDateTimeFormat;
 
 trait FormatsSpreadsheetData
 {
+    protected static function timestampColumn(string $name, string $label): ExportColumn
+    {
+        return ExportColumn::make($name)
+            ->label($label)
+            ->formatStateUsing(static fn (mixed $state): ?string => static::canonicalTimestamp($state));
+    }
+
+    /** @return list<string> */
+    protected static function dateTimeExportColumns(): array
+    {
+        return [];
+    }
+
+    public function makeXlsxHeaderRow(array $values, ?Style $style = null): Row
+    {
+        return Row::fromValues($values, $style);
+    }
+
+    public function makeXlsxRow(array $values, ?Style $style = null): Row
+    {
+        $locale = is_string($this->options['cible_datetime_locale'] ?? null)
+            ? $this->options['cible_datetime_locale']
+            : 'ar-EG';
+        $columnStyles = [];
+
+        foreach (array_keys($this->columnMap) as $index => $columnName) {
+            if (! in_array($columnName, static::dateTimeExportColumns(), true)) {
+                continue;
+            }
+
+            $value = $values[$index] ?? null;
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $values[$index] = self::hydrateTimestamp((string) $value);
+            $columnStyles[$index] = (new Style())->setFormat(SpreadsheetDateTimeFormat::dateTime($locale));
+        }
+
+        return Row::fromValuesWithStyles($values, $style, $columnStyles);
+    }
+
     protected static function textColumn(string $name, string $label): ExportColumn
     {
         return ExportColumn::make($name)
@@ -23,6 +73,52 @@ trait FormatsSpreadsheetData
         }
 
         return preg_match('/^[\x00-\x20]*[=+\-@]/u', $value) === 1 ? "'{$value}" : $value;
+    }
+
+    private static function canonicalTimestamp(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $timezone = new DateTimeZone('Africa/Cairo');
+
+        if ($value instanceof DateTimeInterface) {
+            return DateTimeImmutable::createFromInterface($value)
+                ->setTimezone($timezone)
+                ->format('Y-m-d H:i:s');
+        }
+
+        if (! is_string($value)) {
+            throw new InvalidArgumentException('Exported timestamp values must be date/time objects or canonical strings.');
+        }
+
+        foreach (['!Y-m-d H:i:s', '!Y-m-d H:i'] as $format) {
+            $timestamp = DateTimeImmutable::createFromFormat($format, $value, $timezone);
+
+            if ($timestamp !== false && $timestamp->format(substr($format, 1)) === $value) {
+                return $timestamp->format('Y-m-d H:i:s');
+            }
+        }
+
+        throw new InvalidArgumentException('Exported timestamps must use canonical Y-m-d H:i[:s] format.');
+    }
+
+    private static function hydrateTimestamp(string $value): DateTimeImmutable
+    {
+        $timezone = new DateTimeZone('Africa/Cairo');
+        $timestamp = DateTimeImmutable::createFromFormat('!Y-m-d H:i:s', $value, $timezone);
+        $errors = DateTimeImmutable::getLastErrors();
+
+        if (
+            $timestamp === false
+            || $timestamp->format('Y-m-d H:i:s') !== $value
+            || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))
+        ) {
+            throw new InvalidArgumentException('Temporary XLSX timestamps must use canonical Y-m-d H:i:s format.');
+        }
+
+        return $timestamp;
     }
 
     /** @param iterable<mixed> $phones */

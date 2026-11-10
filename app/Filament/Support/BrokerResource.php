@@ -93,7 +93,7 @@ abstract class BrokerResource extends Resource
                     ->placeholder('—')
                     ->toggleable(),
                 TextColumn::make('requests_count')->label('عدد الطلبات')->sortable(),
-                TextColumn::make('created_at')->label('تاريخ التسجيل')->dateTime('d/m/Y H:i')->sortable()->toggleable(),
+                TextColumn::make('created_at')->label('تاريخ التسجيل')->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))->html()->sortable()->toggleable(),
             ])
             ->recordActions([
                 static::getBrokerActionsGroup(),

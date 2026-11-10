@@ -11,7 +11,7 @@
             </div>
             <div>
                 <span class="block text-xs font-semibold text-gray-500 dark:text-gray-400">المتابعة القادمة</span>
-                <span class="mt-1 block font-semibold text-gray-900 dark:text-white">{{ $customerFollowUp->next_follow_up_at?->format('d/m/Y H:i') ?? 'غير محددة' }}</span>
+                <span class="mt-1 block font-semibold text-gray-900 dark:text-white">@if ($customerFollowUp->next_follow_up_at)<bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($customerFollowUp->next_follow_up_at) }}</bdi>@else غير محددة @endif</span>
             </div>
         </div>
 
@@ -20,7 +20,7 @@
                 <article class="rounded-xl border border-gray-200 p-4 dark:border-gray-700">
                     <div class="flex flex-wrap items-center justify-between gap-2 text-sm">
                         <strong>{{ $activity->channel->label() }}</strong>
-                        <span class="text-xs text-gray-500 dark:text-gray-400">{{ $activity->occurred_at->format('d/m/Y H:i') }} · {{ $activity->actor?->name ?? '—' }}</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400"><bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($activity->occurred_at) }}</bdi> · {{ $activity->actor?->name ?? '—' }}</span>
                     </div>
                     @if ($activity->deal)
                         <p class="mt-2 text-sm text-gray-600 dark:text-gray-300">الصفقة: {{ number_format((float) $activity->deal->agreed_total_value, 2) }} {{ $activity->deal->currency }}</p>
@@ -33,7 +33,7 @@
                         <p class="mt-2 whitespace-pre-line text-sm"><strong>إحالة أو فرصة:</strong> {{ $activity->referral_details }}</p>
                     @endif
                     @if ($activity->next_follow_up_at)
-                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300"><strong>المتابعة القادمة:</strong> {{ $activity->next_follow_up_at->format('d/m/Y H:i') }}</p>
+                        <p class="mt-2 text-sm text-gray-600 dark:text-gray-300"><strong>المتابعة القادمة:</strong> <bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($activity->next_follow_up_at) }}</bdi></p>
                     @endif
                 </article>
             @empty

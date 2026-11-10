@@ -56,7 +56,7 @@ abstract class LeadSourceResource extends Resource
                 TextColumn::make('name')->label('مصدر الوصول')->searchable(),
                 IconColumn::make('is_other')->label('قيمة خاصة')->boolean(),
                 IconColumn::make('is_active')->label('متاح للاختيار')->boolean(),
-                TextColumn::make('updated_at')->label('آخر تحديث')->dateTime('d/m/Y H:i')->since(),
+                TextColumn::make('updated_at')->label('آخر تحديث')->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatRelativeDateTime($state, now())))->html(),
             ])
             ->recordActions([
                 Action::make('deactivate')

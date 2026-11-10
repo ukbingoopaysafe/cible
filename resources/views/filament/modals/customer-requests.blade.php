@@ -34,7 +34,7 @@
                                 <a class="font-semibold text-primary-600 hover:underline" href="{{ $requestResource::getUrl('view', ['record' => $request]) }}">
                                     <span dir="ltr">{{ \App\Support\RecordCode::request($requestResource::department(), $request->getKey()) }}</span>
                                 </a>
-                                <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400">{{ $request->created_at?->format('d/m/Y') }}</span>
+                                <span class="mt-0.5 block text-xs text-gray-500 dark:text-gray-400"><bdi dir="ltr" class="bidi-isolate">{{ $request->created_at ? app(\App\Support\DateTimePresenter::class)->formatDate($request->created_at) : '' }}</bdi></span>
                             </td>
                             <td class="px-3 py-2">{{ $request->area?->governorate }} — {{ $request->area?->name }}</td>
                             <td class="px-3 py-2">
@@ -43,7 +43,7 @@
                             <td class="px-3 py-2">
                                 <span class="fi-badge fi-size-sm fi-color-{{ $statusColor }}">{{ $statusLabel }}</span>
                             </td>
-                            <td class="whitespace-nowrap px-3 py-2">{{ $request->next_follow_up_at?->format('d/m/Y H:i') ?? '—' }}</td>
+                            <td class="whitespace-nowrap px-3 py-2">@if ($request->next_follow_up_at)<bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($request->next_follow_up_at) }}</bdi>@else — @endif</td>
                             <td class="px-3 py-2">{{ $request->owner?->name ?? '—' }}</td>
                         </tr>
                     @endforeach
