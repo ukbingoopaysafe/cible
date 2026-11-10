@@ -59,18 +59,18 @@ class RecommendationWorkflowTest extends TestCase
         ]);
 
         $service->recordViewingResult($manager, Department::Rental, $viewing->id, [
-            'result' => 'not_interested',
+            'result' => 'unsuitable',
             'customer_feedback' => 'الموقع بعيد عن العمل',
             'rejection_reason' => 'الموقع غير مناسب',
         ]);
 
         $this->assertDatabaseHas('rental_viewings', [
             'id' => $viewing->id,
-            'result' => 'not_interested',
+            'result' => 'unsuitable',
             'rejection_reason' => 'الموقع غير مناسب',
         ]);
         $audit = \App\Models\AuditEvent::query()->where('event_key', 'viewing.result_recorded')->firstOrFail();
-        $this->assertSame('not_interested', $audit->after_values['to']);
+        $this->assertSame('unsuitable', $audit->after_values['to']);
         $this->assertArrayNotHasKey('customer_feedback', $audit->after_values);
         $this->assertArrayNotHasKey('rejection_reason', $audit->after_values);
     }

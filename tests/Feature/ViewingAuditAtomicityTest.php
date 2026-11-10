@@ -51,7 +51,7 @@ class ViewingAuditAtomicityTest extends TestCase
 
         try {
             app(RecommendationService::class)->recordViewingResult($employee, Department::Rental, (int) $viewing->getKey(), [
-                'result' => 'interested',
+                'result' => 'awaiting_customer_reply',
             ]);
             $this->fail('The audit insert should fail after the audit table is removed.');
         } catch (QueryException) {

@@ -394,7 +394,7 @@ class FilamentUiAccessTest extends TestCase
         $viewing = RentalViewing::query()->sole();
         $page->callAction(TestAction::make('recordViewingResult')->table($request), [
             'viewing_id' => $viewing->id,
-            'result' => 'interested',
+            'result' => 'awaiting_customer_reply',
             'customer_feedback' => 'الوحدة مناسبة للعميل',
         ])->assertHasNoTableActionErrors();
 
@@ -404,7 +404,7 @@ class FilamentUiAccessTest extends TestCase
         ]);
         $this->assertDatabaseHas('rental_viewings', [
             'id' => $viewing->id,
-            'result' => 'interested',
+            'result' => 'awaiting_customer_reply',
         ]);
     }
 

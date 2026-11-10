@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\ContactParty;
 use App\Enums\Department;
 use App\Models\AuditEvent;
 use App\Models\RentalFieldInspection;
@@ -127,11 +128,36 @@ class RecommendationService
         $this->authorize($actor, $department);
         $viewing = $this->viewingClass($department)::query()->findOrFail($viewingId);
         $this->ensureOpen($viewing->request);
+        $rentalResultOptions = ['reserved', 'unsuitable', 'other_apartment_viewing', 'rented_same_unit', 'awaiting_customer_reply'];
+        $resaleResultOptions = ['interested', 'not_interested', 'second_viewing', 'negotiating', 'cancelled'];
+        $reasonRequiredResult = $department === Department::Rental ? 'unsuitable' : 'not_interested';
         $validated = Validator::make($data, [
-            'result' => ['required', Rule::in(['interested', 'not_interested', 'second_viewing', 'negotiating', 'cancelled'])],
+            'result' => ['required', Rule::in($department === Department::Rental ? $rentalResultOptions : $resaleResultOptions)],
             'customer_feedback' => ['nullable', 'string', 'max:10000'],
-            'rejection_reason' => ['nullable', 'required_if:result,not_interested', 'string', 'max:10000'],
+            'rejection_reason' => ['nullable', "required_if:result,{$reasonRequiredResult}", 'string', 'max:10000'],
         ])->validate();
+        if ($department === Department::Rental && in_array($validated['result'], ['reserved', 'rented_same_unit'], true)) {
+            $request = $viewing->request;
+            $hasKnownCustomerOrBroker = filled($request->customer_id)
+                || ($request->contact_party === ContactParty::Broker && filled($request->broker_id));
+
+            if (! $hasKnownCustomerOrBroker) {
+                throw ValidationException::withMessages(['result' => 'اربط الطلب بعميل معروف أو بوسيط معروف قبل تسجيل «حجز» أو «تم التأجير».']);
+            }
+
+            $hasUnitForRequest = filled($viewing->recommendation_id)
+                && $this->recommendationClass($department)::query()
+                    ->whereKey($viewing->recommendation_id)
+                    ->where('request_id', $viewing->request_id)
+                    ->exists();
+
+            if (! $hasUnitForRequest) {
+                throw ValidationException::withMessages(['viewing_id' => 'اربط المعاينة بوحدة مرشحة تخص هذا الطلب قبل تسجيل «حجز» أو «تم التأجير».']);
+            }
+        }
+        if ($department === Department::Rental && $validated['result'] !== 'unsuitable') {
+            $validated['rejection_reason'] = null;
+        }
         return DB::transaction(function () use ($actor, $department, $viewing, $validated): Model {
             $before = ['result' => $viewing->result];
             $viewing->update($validated);

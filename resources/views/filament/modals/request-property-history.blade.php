@@ -42,9 +42,31 @@
                 <strong><bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($viewing->scheduled_at) }}</bdi></strong>
                 @if ($viewing->recommendation) — {{ $viewing->recommendation->unit_code ?: 'وحدة دون كود' }} @endif
                 @if ($viewing->field_representative_name) — المندوب: {{ $viewing->field_representative_name }} @endif
-                <p class="mt-1">النتيجة: {{ ['interested' => 'مهتم', 'not_interested' => 'غير مهتم', 'second_viewing' => 'يرغب بمعاينة أخرى', 'negotiating' => 'بدأ التفاوض', 'cancelled' => 'أُلغيت'][$viewing->result] ?? 'لم تُسجل بعد' }}</p>
+                @php
+                    $resultLabels = $record instanceof \App\Models\RentalRequest
+                        ? [
+                            'reserved' => 'حجز',
+                            'unsuitable' => 'غير مناسبة',
+                            'other_apartment_viewing' => 'يرغب بمعاينة شقة أخرى',
+                            'rented_same_unit' => 'تم التأجير',
+                            'awaiting_customer_reply' => 'انتظار الرد',
+                            'interested' => 'مهتم',
+                            'not_interested' => 'غير مهتم',
+                            'second_viewing' => 'يرغب بمعاينة أخرى',
+                            'negotiating' => 'بدأ التفاوض',
+                            'cancelled' => 'أُلغيت',
+                        ]
+                        : [
+                            'interested' => 'مهتم',
+                            'not_interested' => 'غير مهتم',
+                            'second_viewing' => 'يرغب بمعاينة أخرى',
+                            'negotiating' => 'بدأ التفاوض',
+                            'cancelled' => 'أُلغيت',
+                        ];
+                @endphp
+                <p class="mt-1">النتيجة: {{ $resultLabels[$viewing->result] ?? 'لم تُسجل بعد' }}</p>
                 @if ($viewing->customer_feedback)<p class="mt-1">رأي العميل: {{ $viewing->customer_feedback }}</p>@endif
-                @if ($viewing->rejection_reason)<p class="mt-1">سبب عدم الاهتمام: {{ $viewing->rejection_reason }}</p>@endif
+                @if ($viewing->rejection_reason)<p class="mt-1">{{ $viewing->result === 'unsuitable' ? 'سبب عدم المناسبة' : 'سبب عدم الاهتمام' }}: {{ $viewing->rejection_reason }}</p>@endif
             </article>
         @empty
             <p class="text-gray-500">لا توجد معاينات مسجلة لهذا الطلب.</p>

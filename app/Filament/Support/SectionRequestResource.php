@@ -653,9 +653,28 @@ abstract class SectionRequestResource extends Resource
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->exists())
             ->schema([
                 Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDateTime($item->scheduled_at)).' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
-                Select::make('result')->label('النتيجة')->options(['interested' => 'مهتم', 'not_interested' => 'غير مهتم', 'second_viewing' => 'يرغب بمعاينة أخرى', 'negotiating' => 'بدأ التفاوض', 'cancelled' => 'أُلغيت'])->required(),
+                Select::make('result')->label('النتيجة')->options(static::department() === Department::Rental
+                    ? [
+                        'reserved' => 'حجز',
+                        'unsuitable' => 'غير مناسبة',
+                        'other_apartment_viewing' => 'يرغب بمعاينة شقة أخرى',
+                        'rented_same_unit' => 'تم التأجير',
+                        'awaiting_customer_reply' => 'انتظار الرد',
+                    ]
+                    : [
+                        'interested' => 'مهتم',
+                        'not_interested' => 'غير مهتم',
+                        'second_viewing' => 'يرغب بمعاينة أخرى',
+                        'negotiating' => 'بدأ التفاوض',
+                        'cancelled' => 'أُلغيت',
+                    ])->live()->required(),
                 Textarea::make('customer_feedback')->label('رأي العميل')->rows(3)->maxLength(10000),
-                Textarea::make('rejection_reason')->label('سبب عدم الاهتمام')->rows(2)->maxLength(10000),
+                Textarea::make('rejection_reason')
+                    ->label(static::department() === Department::Rental ? 'سبب عدم المناسبة' : 'سبب عدم الاهتمام')
+                    ->visible(fn (Get $get): bool => static::department() !== Department::Rental || $get('result') === 'unsuitable')
+                    ->required(fn (Get $get): bool => $get('result') === (static::department() === Department::Rental ? 'unsuitable' : 'not_interested'))
+                    ->rows(2)
+                    ->maxLength(10000),
             ])
             ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();

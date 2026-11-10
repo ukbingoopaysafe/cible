@@ -67,8 +67,8 @@ abstract class AuditEventResource extends Resource
                 TextColumn::make('actor.name')->label('المنفذ')->searchable(),
                 TextColumn::make('event_key')->label('العملية')->badge()->formatStateUsing(fn (string $state): string => self::eventLabel($state)),
                 TextColumn::make('subject_id')->label('السجل')->formatStateUsing(fn (int|string $state, AuditEvent $record): string => self::subjectLabel($record) . " #{$state}"),
-                TextColumn::make('before_values')->label('قبل')->formatStateUsing(fn ($state): string => self::formatValues($state))->wrap()->toggleable(),
-                TextColumn::make('after_values')->label('بعد')->formatStateUsing(fn ($state): string => self::formatValues($state))->wrap()->toggleable(),
+                TextColumn::make('before_values')->label('قبل')->formatStateUsing(fn ($state, AuditEvent $record): string => self::formatValues($state, $record))->wrap()->toggleable(),
+                TextColumn::make('after_values')->label('بعد')->formatStateUsing(fn ($state, AuditEvent $record): string => self::formatValues($state, $record))->wrap()->toggleable(),
                 TextColumn::make('reason')->label('السبب')->placeholder('—')->wrap()->toggleable(),
             ])
             ->filters([
@@ -185,7 +185,7 @@ abstract class AuditEventResource extends Resource
     }
 
     /** @param mixed $values */
-    private static function formatValues(mixed $values): string
+    private static function formatValues(mixed $values, AuditEvent $record): string
     {
         if (! is_array($values) || $values === []) {
             return '—';
@@ -232,12 +232,41 @@ abstract class AuditEventResource extends Resource
         ];
 
         return collect($values)
-            ->map(fn (mixed $value, string $key): string => ($labels[$key] ?? $key) . ': ' . self::formatValue($key, $value))
+            ->map(fn (mixed $value, string $key): string => ($labels[$key] ?? $key) . ': ' . self::formatValue($key, $value, $record))
             ->implode('، ');
     }
 
-    private static function formatValue(string $key, mixed $value): string
+    private static function formatValue(string $key, mixed $value, AuditEvent $record): string
     {
+        if ($record->event_key === 'viewing.result_recorded' && in_array($key, ['from', 'to'], true)) {
+            if (blank($value)) {
+                return 'لم تُسجل بعد';
+            }
+
+            $rentalResultLabels = [
+                'reserved' => 'حجز',
+                'unsuitable' => 'غير مناسبة',
+                'other_apartment_viewing' => 'يرغب بمعاينة شقة أخرى',
+                'rented_same_unit' => 'تم التأجير',
+                'awaiting_customer_reply' => 'انتظار الرد',
+                'interested' => 'مهتم',
+                'not_interested' => 'غير مهتم',
+                'second_viewing' => 'يرغب بمعاينة أخرى',
+                'negotiating' => 'بدأ التفاوض',
+                'cancelled' => 'أُلغيت',
+            ];
+            $resaleResultLabels = [
+                'interested' => 'مهتم',
+                'not_interested' => 'غير مهتم',
+                'second_viewing' => 'يرغب بمعاينة أخرى',
+                'negotiating' => 'بدأ التفاوض',
+                'cancelled' => 'أُلغيت',
+            ];
+            $resultLabels = $record->department === Department::Rental->value ? $rentalResultLabels : $resaleResultLabels;
+
+            return $resultLabels[$value] ?? (string) $value;
+        }
+
         if ($key === 'deal_date' && is_scalar($value)) {
             $presenter = app(\App\Support\DateTimePresenter::class);
 
