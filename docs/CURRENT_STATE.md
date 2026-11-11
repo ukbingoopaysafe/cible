@@ -647,9 +647,10 @@
 
 - أعيدت تسمية إجراء الفحص إلى «فحص الشقة» في الإيجار وإعادة البيع. يتطلب الفحص الجديد جهة تواصل (مالك الوحدة أو وسيط) واسمًا وهاتفًا صالحًا مع اختيار الدولة؛ تُحفظ البيانات المطَبّعة كلقطة في سجل الفحص وتاريخ الطلب. يمكن ربط الفحص بوسيط الطلب نفسه بعد تأكيد الموظف. لا ينشأ كتالوج ملاك أو وحدات ولا يتغير ملف الوسيط.
 - استُبدلت خانة العيوب الجديدة بملاحظات الفحص. بقيت قيم `observed_defects` التاريخية للقراءة فقط تحت «عيوب سابقة». بيانات جهة التواصل لا تدخل metadata التدقيق أو سجلات التطبيق.
-- ملف migration الإضافي والـ rollback الوقائي محفوظان في `database/migrations/2026_11_10_000000_add_contact_snapshots_to_section_field_inspections.php` ضمن تغييرات `main`. لم تُطبق migration على قاعدة الإنتاج؛ يطبقها المالك يدويًا بعد سحب التغييرات على جهاز الإنتاج.
-- نجحت الاختبارات المركزة بالتتابع: `InspectionSnapshotMigrationTest` (3 اختبارات، 34 assertion)، و`RecommendationWorkflowTest` (8، 46)، و`FilamentUiAccessTest` (24، 386)، و`RequestActionsMenuStructureTest` (2، 69).
-- نتيجة المجموعة الكاملة بعد التنفيذ: **175 ناجحة، 3 فاشلة، 1318 assertion**. الإخفاقات الثلاثة هي في `Tests\Unit\AuditEventDateTimeFormattingTest` بسبب `ArgumentCountError` عند تمرير وسيطين إلى `AuditEventResource::formatValue()` التي تتطلب ثلاثة؛ كانت الاختبارات نفسها ضمن إخفاقات خط الأساس قبل هذه الميزة (**164 ناجحة، 3 فاشلة**) ولم يزد عددها.
+- وحّدت مراجعة التنفيذ تسمية فحص الشقة في فلتر التدقيق ورسالة منع المعاينة قبل الفحص؛ أضيفت اختبارات انحدار وتحققت نتيجتا RED ثم GREEN.
+- ملف migration الإضافي والـ rollback الوقائي محفوظان في `database/migrations/2026_11_10_000000_add_contact_snapshots_to_section_field_inspections.php` ضمن تغييرات `main`. لم تُطبق migration على قاعدة الإنتاج. عند النشر، يسحب المالك التغييرات ويطبق migration قبل إتاحة نسخة التطبيق الجديدة؛ إذا تعذر التبديل الذري، يوقف تسجيل الفحوص أثناء الانتقال، ويُبقيه متوقفًا عند الرجوع إلى كود قديم حتى استعادة الكاتب الجديد. لا يشغّل `migrate:rollback` لهذه migration.
+- نجحت الاختبارات المركزة بالتتابع: `InspectionSnapshotMigrationTest` (3 اختبارات، 34 assertion)، و`RecommendationWorkflowTest` (8، 47)، و`FilamentUiAccessTest` (24، 387)، و`RequestActionsMenuStructureTest` (2، 69) — الإجمالي 37 اختبارًا و537 assertion.
+- نتيجة المجموعة الكاملة بعد التنفيذ: **175 ناجحة، 3 فاشلة، 1320 assertion**. الإخفاقات الثلاثة هي في `Tests\Unit\AuditEventDateTimeFormattingTest` بسبب `ArgumentCountError` عند تمرير وسيطين إلى `AuditEventResource::formatValue()` التي تتطلب ثلاثة؛ كانت الاختبارات نفسها ضمن إخفاقات خط الأساس قبل هذه الميزة (**164 ناجحة، 3 فاشلة**) ولم يزد عددها.
 
 
 
