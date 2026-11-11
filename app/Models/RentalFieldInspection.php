@@ -11,4 +11,5 @@ class RentalFieldInspection extends Model
     protected function casts(): array { return ['inspected_at' => 'datetime']; }
     public function recommendation(): BelongsTo { return $this->belongsTo(RentalRecommendation::class, 'recommendation_id'); }
     public function recorder(): BelongsTo { return $this->belongsTo(User::class, 'recorded_by'); }
+    public function linkedBroker(): BelongsTo { return $this->belongsTo(RentalBroker::class, 'linked_broker_id'); }
 }
