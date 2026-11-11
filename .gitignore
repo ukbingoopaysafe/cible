@@ -29,5 +29,6 @@ Homestead.yaml
 Thumbs.db
 scratch/
 /graphify-out/
+/.worktrees/
 .agents/skills/ui-ux-pro-max/scripts/__pycache__/
 
