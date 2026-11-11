@@ -6,10 +6,11 @@ use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
-use App\Filament\Resources\RentalCustomerFollowUps\Pages\ListRentalCustomerFollowUps;
 use App\Filament\Resources\RentalAreas\Pages\ListRentalAreas;
+use App\Filament\Resources\RentalAuditEvents\Pages\ListRentalAuditEvents;
 use App\Filament\Resources\RentalBrokers\Pages\ListRentalBrokers;
 use App\Filament\Resources\RentalCloseReasons\Pages\ListRentalCloseReasons;
+use App\Filament\Resources\RentalCustomerFollowUps\Pages\ListRentalCustomerFollowUps;
 use App\Filament\Resources\RentalCustomers\Pages\ListRentalCustomers;
 use App\Filament\Resources\RentalLeadSources\Pages\ListRentalLeadSources;
 use App\Filament\Resources\RentalRequests\Pages\CreateRentalRequest;
@@ -23,14 +24,18 @@ use App\Filament\Resources\ResaleRequests\Pages\ListResaleRequests;
 use App\Filament\Resources\ResaleRequests\Pages\ViewResaleRequest;
 use App\Filament\Resources\Staff\Pages\ListStaff;
 use App\Filament\Widgets\OperationalRequestsOverview;
-use App\Models\RentalBroker;
-use App\Models\RentalCustomerFollowUp;
 use App\Models\RentalArea;
+use App\Models\RentalBroker;
 use App\Models\RentalCustomer;
+use App\Models\RentalCustomerFollowUp;
+use App\Models\RentalFieldInspection;
 use App\Models\RentalRecommendation;
 use App\Models\RentalRequest;
 use App\Models\RentalViewing;
 use App\Models\ResaleArea;
+use App\Models\ResaleBroker;
+use App\Models\ResaleFieldInspection;
+use App\Models\ResaleRecommendation;
 use App\Models\ResaleRequest;
 use App\Models\ResaleRequestCloseReason;
 use App\Models\User;
@@ -382,7 +387,12 @@ class FilamentUiAccessTest extends TestCase
             'field_representative_name' => 'مندوب الفحص',
             'inspected_at' => now()->subMinute()->toDateTimeString(),
             'photo_match' => 'matches',
-            'observed_defects' => 'لا توجد عيوب ظاهرة',
+            'contact_role' => 'owner',
+            'contact_name' => 'اسم مالك سري',
+            'phone' => '01012345678',
+            'phone_country' => 'EG',
+            'link_request_broker' => false,
+            'notes' => 'ملاحظات الفحص',
         ])->assertHasNoTableActionErrors();
 
         $page->callAction(TestAction::make('scheduleViewing')->table($request), [
@@ -402,10 +412,72 @@ class FilamentUiAccessTest extends TestCase
             'id' => $recommendation->id,
             'status' => 'shared',
         ]);
+        $inspection = RentalFieldInspection::query()->sole();
+        $this->assertSame('owner', $inspection->contact_role);
+        $this->assertSame('اسم مالك سري', $inspection->contact_name);
+        $this->assertSame('+201012345678', $inspection->contact_phone_e164);
         $this->assertDatabaseHas('rental_viewings', [
             'id' => $viewing->id,
             'result' => 'awaiting_customer_reply',
         ]);
+
+        Livewire::actingAs($manager)
+            ->test(ListRentalAuditEvents::class)
+            ->assertSee('تسجيل فحص الشقة')
+            ->assertSee('فحص الشقة #'.$inspection->id)
+            ->assertDontSee('اسم مالك سري')
+            ->assertDontSee('+201012345678');
+    }
+
+    public function test_manager_can_record_resale_inspection_with_contact_and_history_displays_snapshot_and_legacy_defects(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $request = $this->createResaleRequest($manager);
+        $broker = ResaleBroker::query()->create(['name' => 'وسيط إعادة البيع']);
+        $request->forceFill(['broker_id' => $broker->id])->save();
+        $page = Livewire::actingAs($manager)->test(ListResaleRequests::class);
+
+        $page->callAction(TestAction::make('createRecommendation')->table($request), [
+            'unit_code' => 'RESALE-UI-101',
+            'unit_type' => 'شقة',
+            'unit_area' => 120,
+            'location_description' => 'مدينة نصر',
+            'asking_price' => 2500000,
+            'currency' => 'EGP',
+        ])->assertHasNoTableActionErrors();
+
+        $recommendation = ResaleRecommendation::query()->sole();
+        $page->callAction(TestAction::make('changeRecommendationStatus')->table($request), [
+            'recommendation_id' => $recommendation->id,
+            'status' => 'shared',
+        ])->assertHasNoTableActionErrors();
+
+        $page->callAction(TestAction::make('recordFieldInspection')->table($request), [
+            'recommendation_id' => $recommendation->id,
+            'field_representative_name' => 'مندوب إعادة البيع',
+            'inspected_at' => now()->subMinute()->toDateTimeString(),
+            'photo_match' => 'partly_matches',
+            'contact_role' => 'broker',
+            'contact_name' => 'وسيط الوحدة',
+            'phone' => '01012345678',
+            'phone_country' => 'EG',
+            'link_request_broker' => true,
+            'shown_request_broker_id' => $broker->id,
+            'notes' => 'ملاحظات إعادة البيع',
+        ])->assertHasNoTableActionErrors();
+
+        $inspection = ResaleFieldInspection::query()->sole();
+        $this->assertSame($broker->id, $inspection->linked_broker_id);
+        $inspection->forceFill(['observed_defects' => 'عيب تاريخي'])->save();
+        $history = $this->view('filament.modals.request-property-history', ['record' => $request->fresh()]);
+        $history->assertSee('فحص الشقة')
+            ->assertSee('وسيط الوحدة')
+            ->assertSee('وسيط إعادة البيع')
+            ->assertSee('+201012345678')
+            ->assertSee('ملاحظات إعادة البيع')
+            ->assertSee('عيوب سابقة')
+            ->assertSee('عيب تاريخي');
     }
 
     public function test_employee_can_request_and_manager_can_approve_reassignment_through_request_actions(): void

@@ -5,6 +5,8 @@ namespace App\Filament\Support;
 use App\Enums\Department;
 use App\Models\AuditEvent;
 use App\Models\User;
+use App\Support\DateTimePresenter;
+use App\Support\PhoneCountries;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
@@ -12,7 +14,7 @@ use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 
-/** @extends Resource<AuditEvent> */
+/** @extends resource<AuditEvent> */
 abstract class AuditEventResource extends Resource
 {
     protected static ?string $model = AuditEvent::class;
@@ -61,12 +63,12 @@ abstract class AuditEventResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('created_at')->label('التوقيت')
-                    ->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))
+                    ->formatStateUsing(fn ($state) => app(DateTimePresenter::class)->bidi(app(DateTimePresenter::class)->formatDateTime($state)))
                     ->html()
                     ->sortable(),
                 TextColumn::make('actor.name')->label('المنفذ')->searchable(),
                 TextColumn::make('event_key')->label('العملية')->badge()->formatStateUsing(fn (string $state): string => self::eventLabel($state)),
-                TextColumn::make('subject_id')->label('السجل')->formatStateUsing(fn (int|string $state, AuditEvent $record): string => self::subjectLabel($record) . " #{$state}"),
+                TextColumn::make('subject_id')->label('السجل')->formatStateUsing(fn (int|string $state, AuditEvent $record): string => self::subjectLabel($record)." #{$state}"),
                 TextColumn::make('before_values')->label('قبل')->formatStateUsing(fn ($state, AuditEvent $record): string => self::formatValues($state, $record))->wrap()->toggleable(),
                 TextColumn::make('after_values')->label('بعد')->formatStateUsing(fn ($state, AuditEvent $record): string => self::formatValues($state, $record))->wrap()->toggleable(),
                 TextColumn::make('reason')->label('السبب')->placeholder('—')->wrap()->toggleable(),
@@ -154,7 +156,7 @@ abstract class AuditEventResource extends Resource
             'deal.created' => 'إنشاء صفقة',
             'recommendation.created' => 'إضافة ترشيح',
             'recommendation.status_changed' => 'تغيير حالة ترشيح',
-            'field_inspection.recorded' => 'تسجيل فحص ميداني',
+            'field_inspection.recorded' => 'تسجيل فحص الشقة',
             'viewing.scheduled' => 'تحديد معاينة',
             'viewing.result_recorded' => 'تسجيل نتيجة معاينة',
             'aftercare.started' => 'بدء متابعة العميل',
@@ -176,7 +178,7 @@ abstract class AuditEventResource extends Resource
             str_contains($record->subject_type, 'Request') => 'طلب',
             str_contains($record->subject_type, 'Deal') => 'صفقة',
             str_contains($record->subject_type, 'Recommendation') => 'ترشيح',
-            str_contains($record->subject_type, 'FieldInspection') => 'فحص ميداني',
+            str_contains($record->subject_type, 'FieldInspection') => 'فحص الشقة',
             str_contains($record->subject_type, 'Viewing') => 'معاينة',
             str_contains($record->subject_type, 'LeadSource') => 'مصدر وصول',
             str_contains($record->subject_type, 'User') => 'موظف',
@@ -184,7 +186,6 @@ abstract class AuditEventResource extends Resource
         };
     }
 
-    /** @param mixed $values */
     private static function formatValues(mixed $values, AuditEvent $record): string
     {
         if (! is_array($values) || $values === []) {
@@ -229,15 +230,26 @@ abstract class AuditEventResource extends Resource
             'password_changed' => 'تغيير كلمة المرور',
             'photo_match' => 'مطابقة الصور',
             'has_observed_defects' => 'تسجيل عيوب',
+            'contact_role' => 'صفة جهة التواصل',
+            'broker_link_confirmed' => 'تم تأكيد ربط وسيط الطلب',
+            'linked_broker_id' => 'معرّف وسيط الطلب',
         ];
 
         return collect($values)
-            ->map(fn (mixed $value, string $key): string => ($labels[$key] ?? $key) . ': ' . self::formatValue($key, $value, $record))
+            ->map(fn (mixed $value, string $key): string => ($labels[$key] ?? $key).': '.self::formatValue($key, $value, $record))
             ->implode('، ');
     }
 
     private static function formatValue(string $key, mixed $value, AuditEvent $record): string
     {
+        if ($key === 'contact_role') {
+            return match ($value) {
+                'owner' => 'مالك الوحدة',
+                'broker' => 'وسيط',
+                default => (string) $value,
+            };
+        }
+
         if ($record->event_key === 'viewing.result_recorded' && in_array($key, ['from', 'to'], true)) {
             if (blank($value)) {
                 return 'لم تُسجل بعد';
@@ -268,7 +280,7 @@ abstract class AuditEventResource extends Resource
         }
 
         if ($key === 'deal_date' && is_scalar($value)) {
-            $presenter = app(\App\Support\DateTimePresenter::class);
+            $presenter = app(DateTimePresenter::class);
 
             try {
                 return $presenter->bidiText($presenter->formatDate((string) $value));
@@ -278,7 +290,7 @@ abstract class AuditEventResource extends Resource
         }
 
         if (in_array($key, ['next_follow_up_at', 'occurred_at', 'scheduled_at', 'inspected_at', 'closed_at', 'created_at', 'updated_at'], true) && is_scalar($value)) {
-            $presenter = app(\App\Support\DateTimePresenter::class);
+            $presenter = app(DateTimePresenter::class);
             $dateTimeValue = (string) $value;
 
             if (preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/D', $dateTimeValue) === 1) {
@@ -308,7 +320,7 @@ abstract class AuditEventResource extends Resource
                     $country = data_get($phone, 'phone_country');
 
                     if (filled($country)) {
-                        $label .= ' — '.\App\Support\PhoneCountries::display((string) $country);
+                        $label .= ' — '.PhoneCountries::display((string) $country);
                     }
 
                     return "{$label}: {$number}";
@@ -344,10 +356,14 @@ abstract class AuditEventResource extends Resource
             };
         }
         if ($key === 'outcome') {
-            return match ($value) { 'successful' => 'ناجح', 'unsuccessful' => 'غير ناجح', default => (string) $value };
+            return match ($value) {
+                'successful' => 'ناجح', 'unsuccessful' => 'غير ناجح', default => (string) $value
+            };
         }
         if ($key === 'department') {
-            return match ($value) { 'rental' => 'الإيجار', 'resale' => 'إعادة البيع', default => (string) $value };
+            return match ($value) {
+                'rental' => 'الإيجار', 'resale' => 'إعادة البيع', default => (string) $value
+            };
         }
         if ($key === 'result') {
             return match ($value) {

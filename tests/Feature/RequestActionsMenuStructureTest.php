@@ -4,8 +4,8 @@ namespace Tests\Feature;
 
 use App\Filament\Resources\RentalRequests\RentalRequestResource;
 use App\Filament\Resources\ResaleRequests\ResaleRequestResource;
-use App\Filament\Support\SectionRequestResource;
 use Filament\Actions\ActionGroup;
+use Filament\Resources\Pages\ListRecords;
 use Filament\Tables\Table;
 use Tests\TestCase;
 
@@ -103,17 +103,19 @@ class RequestActionsMenuStructureTest extends TestCase
         ];
 
         // Verify on rental requests
-        $rentalTable = RentalRequestResource::table(new Table(new \Filament\Resources\Pages\ListRecords));
+        $rentalTable = RentalRequestResource::table(new Table(new ListRecords));
         $rentalFlat = $rentalTable->getFlatActions();
         foreach ($expectedActionNames as $actionName) {
             $this->assertArrayHasKey($actionName, $rentalFlat, "Action [{$actionName}] missing in Rental table.");
         }
+        $this->assertSame('فحص الشقة', $rentalFlat['recordFieldInspection']->getLabel());
 
         // Verify on resale requests
-        $resaleTable = ResaleRequestResource::table(new Table(new \Filament\Resources\Pages\ListRecords));
+        $resaleTable = ResaleRequestResource::table(new Table(new ListRecords));
         $resaleFlat = $resaleTable->getFlatActions();
         foreach ($expectedActionNames as $actionName) {
             $this->assertArrayHasKey($actionName, $resaleFlat, "Action [{$actionName}] missing in Resale table.");
         }
+        $this->assertSame('فحص الشقة', $resaleFlat['recordFieldInspection']->getLabel());
     }
 }

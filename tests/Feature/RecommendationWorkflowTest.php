@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Enums\Department;
+use App\Filament\Support\AuditEventResource;
 use App\Models\AuditEvent;
 use App\Models\RentalArea;
 use App\Models\RentalBroker;
@@ -16,6 +17,7 @@ use App\Services\RecommendationService;
 use App\Services\RequestService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
+use ReflectionMethod;
 use Tests\TestCase;
 
 class RecommendationWorkflowTest extends TestCase
@@ -155,6 +157,24 @@ class RecommendationWorkflowTest extends TestCase
         } catch (ValidationException) {
             $this->assertDatabaseCount('rental_field_inspections', 0);
         }
+    }
+
+    public function test_inspection_audit_metadata_uses_arabic_labels_and_role_values(): void
+    {
+        $record = new AuditEvent([
+            'event_key' => 'field_inspection.recorded',
+            'department' => Department::Rental->value,
+        ]);
+        $formatter = new ReflectionMethod(AuditEventResource::class, 'formatValues');
+        $formatter->setAccessible(true);
+
+        $formatted = $formatter->invoke(null, [
+            'contact_role' => 'broker',
+            'broker_link_confirmed' => true,
+            'linked_broker_id' => 42,
+        ], $record);
+
+        $this->assertSame('صفة جهة التواصل: وسيط، تم تأكيد ربط وسيط الطلب: نعم، معرّف وسيط الطلب: 42', $formatted);
     }
 
     public function test_inspection_can_link_only_to_the_confirmed_broker_on_its_department_request(): void

@@ -19,15 +19,23 @@
 
                 @if ($recommendation->inspections->isNotEmpty())
                     <div class="mt-3 border-t border-gray-200 pt-3 dark:border-gray-700">
-                        <strong>الفحص الميداني</strong>
+                        <strong>فحص الشقة</strong>
                         @foreach ($recommendation->inspections->sortByDesc('inspected_at') as $inspection)
                             <p class="mt-1"><bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($inspection->inspected_at) }}</bdi> — {{ $inspection->field_representative_name }} — {{ ['matches' => 'مطابقة للصور', 'partly_matches' => 'مطابقة جزئيًا', 'does_not_match' => 'غير مطابقة'][$inspection->photo_match] ?? $inspection->photo_match }}</p>
-                            @if ($inspection->observed_defects)<p class="text-gray-600 dark:text-gray-300">العيوب: {{ $inspection->observed_defects }}</p>@endif
-                            @if ($inspection->notes)<p class="text-gray-600 dark:text-gray-300">{{ $inspection->notes }}</p>@endif
+                            @if ($inspection->contact_name || $inspection->contact_phone_e164)
+                                <p class="text-gray-600 dark:text-gray-300">
+                                    جهة التواصل: {{ ['owner' => 'مالك الوحدة', 'broker' => 'وسيط'][$inspection->contact_role] ?? '' }}
+                                    @if ($inspection->contact_name) — {{ $inspection->contact_name }} @endif
+                                    @if ($inspection->contact_phone_e164) — <bdi dir="ltr" class="bidi-isolate">{{ $inspection->contact_phone_e164 }}</bdi> @endif
+                                </p>
+                            @endif
+                            @if ($inspection->linkedBroker)<p class="text-gray-600 dark:text-gray-300">وسيط الطلب المرتبط: {{ $inspection->linkedBroker->name }}</p>@endif
+                            @if ($inspection->observed_defects)<p class="text-gray-600 dark:text-gray-300">عيوب سابقة: {{ $inspection->observed_defects }}</p>@endif
+                            @if ($inspection->notes)<p class="text-gray-600 dark:text-gray-300">ملاحظات الفحص: {{ $inspection->notes }}</p>@endif
                         @endforeach
                     </div>
                 @else
-                    <p class="mt-3 text-warning-600">لم يُسجل الفحص الميداني بعد.</p>
+                    <p class="mt-3 text-warning-600">لم يُسجل فحص الشقة بعد.</p>
                 @endif
             </article>
         @empty

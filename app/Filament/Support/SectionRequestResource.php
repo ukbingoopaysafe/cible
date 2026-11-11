@@ -27,6 +27,8 @@ use App\Services\ContactActivityService;
 use App\Services\DealService;
 use App\Services\RecommendationService;
 use App\Services\RequestService;
+use App\Support\DateTimeLocale;
+use App\Support\DateTimePresenter;
 use App\Support\RecordCode;
 use Filament\Actions\Action;
 use Filament\Actions\ActionGroup;
@@ -36,6 +38,7 @@ use Filament\Actions\Exports\Enums\ExportFormat;
 use Filament\Actions\ViewAction;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Placeholder;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
@@ -51,9 +54,9 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\SelectFilter;
 use Filament\Tables\Table;
 use Illuminate\Contracts\Support\Htmlable;
-use Illuminate\Support\HtmlString;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\HtmlString;
 
 /** @extends resource<Model> */
 abstract class SectionRequestResource extends Resource
@@ -221,7 +224,7 @@ abstract class SectionRequestResource extends Resource
             return null;
         }
 
-        return new HtmlString('<span dir="ltr" class="inline-block" style="unicode-bidi: isolate; direction: ltr;">' . e($phone) . '</span>');
+        return new HtmlString('<span dir="ltr" class="inline-block" style="unicode-bidi: isolate; direction: ltr;">'.e($phone).'</span>');
     }
 
     public static function table(Table $table): Table
@@ -234,7 +237,7 @@ abstract class SectionRequestResource extends Resource
                     ->exporter(static::department() === Department::Rental ? RentalRequestExporter::class : ResaleRequestExporter::class)
                     ->formats([ExportFormat::Xlsx])
                     ->columnMapping(false)
-                    ->options(fn (): array => ['cible_datetime_locale' => app(\App\Support\DateTimeLocale::class)->getRegionalTag()]),
+                    ->options(fn (): array => ['cible_datetime_locale' => app(DateTimeLocale::class)->getRegionalTag()]),
             ])
             ->columns([
                 TextColumn::make('code')
@@ -325,8 +328,8 @@ abstract class SectionRequestResource extends Resource
                     ->toggleable(),
                 TextColumn::make('next_follow_up_at')
                     ->label('المتابعة القادمة')
-                    ->formatStateUsing(fn ($state) => $state ? app(\App\Support\DateTimePresenter::class)->bidi(
-                        app(\App\Support\DateTimePresenter::class)->formatDateTime($state),
+                    ->formatStateUsing(fn ($state) => $state ? app(DateTimePresenter::class)->bidi(
+                        app(DateTimePresenter::class)->formatDateTime($state),
                     ) : null)
                     ->html()
                     ->placeholder('—')
@@ -603,7 +606,8 @@ abstract class SectionRequestResource extends Resource
     public static function recordFieldInspectionAction(): Action
     {
         return Action::make('recordFieldInspection')
-            ->label('تسجيل فحص ميداني')
+            ->label('فحص الشقة')
+            ->modalHeading('فحص الشقة')
             ->icon('heroicon-o-clipboard-document-check')
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->recommendations()->exists())
             ->schema([
@@ -611,7 +615,24 @@ abstract class SectionRequestResource extends Resource
                 TextInput::make('field_representative_name')->label('المندوب الميداني')->maxLength(160)->required(),
                 DateTimePicker::make('inspected_at')->label('وقت الفحص')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
                 Select::make('photo_match')->label('مدى مطابقة الوحدة للصور')->options(['matches' => 'مطابقة', 'partly_matches' => 'مطابقة جزئيًا', 'does_not_match' => 'غير مطابقة'])->required(),
-                Textarea::make('observed_defects')->label('العيوب الملحوظة')->rows(3)->maxLength(10000),
+                Select::make('contact_role')
+                    ->label('صفة جهة التواصل')
+                    ->options(['owner' => 'مالك الوحدة', 'broker' => 'وسيط'])
+                    ->live()
+                    ->required(),
+                TextInput::make('contact_name')->label('اسم جهة التواصل')->maxLength(255)->required(),
+                PhoneField::make('رقم هاتف جهة التواصل', required: true, phoneField: 'phone', countryField: 'phone_country'),
+                Placeholder::make('request_broker_identity')
+                    ->label('وسيط الطلب')
+                    ->content(fn (Model $record): string => $record->broker?->name ?? 'لا يوجد وسيط مرتبط بالطلب')
+                    ->visible(fn (Get $get, Model $record): bool => $get('contact_role') === 'broker' && filled($record->broker_id)),
+                Toggle::make('link_request_broker')
+                    ->label('ربط بوسيط الطلب')
+                    ->default(false)
+                    ->visible(fn (Get $get, Model $record): bool => $get('contact_role') === 'broker' && filled($record->broker_id)),
+                Hidden::make('shown_request_broker_id')
+                    ->default(fn (Model $record): ?int => $record->broker_id)
+                    ->dehydrated(),
                 Textarea::make('notes')->label('ملاحظات الفحص')->rows(2)->maxLength(10000),
             ])
             ->action(function (Model $record, array $data): void {
@@ -622,7 +643,7 @@ abstract class SectionRequestResource extends Resource
                 app(RecommendationService::class)->recordInspection($actor, static::department(), (int) $data['recommendation_id'], $data);
                 $record->refresh();
             })
-            ->successNotificationTitle('تم تسجيل الفحص الميداني');
+            ->successNotificationTitle('تم تسجيل فحص الشقة');
     }
 
     public static function scheduleViewingAction(): Action
@@ -652,7 +673,7 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-chat-bubble-left-right')
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->exists())
             ->schema([
-                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDateTime($item->scheduled_at)).' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
+                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => app(DateTimePresenter::class)->bidiText(app(DateTimePresenter::class)->formatDateTime($item->scheduled_at)).' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
                 Select::make('result')->label('النتيجة')->options(static::department() === Department::Rental
                     ? [
                         'reserved' => 'حجز',
@@ -1127,7 +1148,7 @@ abstract class SectionRequestResource extends Resource
             ->icon('heroicon-o-eye')
             ->schema([
                 Placeholder::make('deal_date')->label('تاريخ الصفقة')->content(fn (Model $record) => $record->deal?->deal_date
-                    ? app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDate($record->deal->deal_date))
+                    ? app(DateTimePresenter::class)->bidi(app(DateTimePresenter::class)->formatDate($record->deal->deal_date))
                     : '—'),
                 Placeholder::make('deal_value')->label('القيمة الإجمالية')->content(fn (Model $record): string => $record->deal ? number_format((float) $record->deal->agreed_total_value, 2).' '.$record->deal->currency : '—'),
                 Placeholder::make('deal_unit')->label('الوحدة')->content(fn (Model $record): string => implode(' — ', array_filter([$record->deal?->unit_type, $record->deal?->unit_area ? $record->deal->unit_area.' م²' : null, $record->deal?->unit_location, $record->deal?->unit_code ? 'كود '.$record->deal->unit_code : null])) ?: '—'),
