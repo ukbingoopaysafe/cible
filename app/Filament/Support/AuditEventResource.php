@@ -107,7 +107,7 @@ abstract class AuditEventResource extends Resource
                     'deal.created' => 'إنشاء صفقة',
                     'recommendation.created' => 'إضافة ترشيح',
                     'recommendation.status_changed' => 'تغيير حالة ترشيح',
-                    'field_inspection.recorded' => 'تسجيل فحص ميداني',
+                    'field_inspection.recorded' => 'تسجيل فحص الشقة',
                     'viewing.scheduled' => 'تحديد معاينة',
                     'viewing.result_recorded' => 'تسجيل نتيجة معاينة',
                     'aftercare.started' => 'بدء متابعة العميل',

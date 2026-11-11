@@ -180,7 +180,7 @@ class RecommendationService
                 throw ValidationException::withMessages(['recommendation_id' => 'الترشيح المختار لا يخص هذا الطلب.']);
             }
             if (! $recommendation->inspections()->exists()) {
-                throw ValidationException::withMessages(['recommendation_id' => 'سجل الفحص الميداني للوحدة قبل تحديد معاينة العميل.']);
+                throw ValidationException::withMessages(['recommendation_id' => 'سجل فحص الشقة للوحدة قبل تحديد معاينة العميل.']);
             }
         }
 

@@ -424,6 +424,7 @@ class FilamentUiAccessTest extends TestCase
         Livewire::actingAs($manager)
             ->test(ListRentalAuditEvents::class)
             ->assertSee('تسجيل فحص الشقة')
+            ->assertDontSee('تسجيل فحص ميداني')
             ->assertSee('فحص الشقة #'.$inspection->id)
             ->assertDontSee('اسم مالك سري')
             ->assertDontSee('+201012345678');

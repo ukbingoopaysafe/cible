@@ -50,7 +50,8 @@ class RecommendationWorkflowTest extends TestCase
                 'scheduled_at' => now()->addDays(2)->toDateTimeString(),
             ]);
             $this->fail('A linked viewing must require a field inspection first.');
-        } catch (ValidationException) {
+        } catch (ValidationException $exception) {
+            $this->assertSame('سجل فحص الشقة للوحدة قبل تحديد معاينة العميل.', $exception->errors()['recommendation_id'][0]);
             $this->assertDatabaseCount('rental_viewings', 0);
         }
 
