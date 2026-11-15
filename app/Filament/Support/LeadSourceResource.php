@@ -3,9 +3,11 @@
 namespace App\Filament\Support;
 
 use App\Enums\Department;
+use App\Enums\LeadSourceType;
 use App\Models\User;
 use App\Services\LeadSourceService;
 use Filament\Actions\Action;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\TextInput;
 use Filament\Resources\Resource;
 use Filament\Tables\Columns\IconColumn;
@@ -54,7 +56,7 @@ abstract class LeadSourceResource extends Resource
         return $table
             ->columns([
                 TextColumn::make('name')->label('مصدر الوصول')->searchable(),
-                IconColumn::make('is_other')->label('قيمة خاصة')->boolean(),
+                TextColumn::make('type')->label('تصنيف المصدر')->formatStateUsing(fn ($state): string => $state instanceof LeadSourceType ? $state->label() : '—'),
                 IconColumn::make('is_active')->label('متاح للاختيار')->boolean(),
                 TextColumn::make('updated_at')->label('آخر تحديث')->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatRelativeDateTime($state, now())))->html(),
             ])
@@ -63,12 +65,26 @@ abstract class LeadSourceResource extends Resource
                     ->label('تعطيل')
                     ->color('danger')
                     ->requiresConfirmation()
-                    ->visible(fn (Model $record): bool => $record->is_active && ! $record->is_other)
+                    ->visible(fn (Model $record): bool => $record->is_active && $record->type !== LeadSourceType::Other)
                     ->action(fn (Model $record) => static::setActive($record, false)),
                 Action::make('activate')
                     ->label('إعادة تفعيل')
-                    ->visible(fn (Model $record): bool => ! $record->is_active)
+                    ->visible(fn (Model $record): bool => ! $record->is_active && ! in_array($record->type, [LeadSourceType::LegacyContactMethod, LeadSourceType::UnclassifiedLegacy], true))
                     ->action(fn (Model $record) => static::setActive($record, true)),
+                Action::make('classify')
+                    ->label('تصنيف المصدر')
+                    ->visible(fn (Model $record): bool => $record->type === LeadSourceType::UnclassifiedLegacy)
+                    ->schema([
+                        Select::make('type')
+                            ->label('تصنيف المصدر')
+                            ->options(LeadSourceType::managerCreatableOptions())
+                            ->required(),
+                    ])
+                    ->action(function (Model $record, array $data): void {
+                        $actor = auth()->user();
+                        abort_unless($actor instanceof User, 403);
+                        app(LeadSourceService::class)->classify($actor, static::department(), (int) $record->getKey(), $data['type']);
+                    }),
             ]);
     }
 
@@ -76,7 +92,13 @@ abstract class LeadSourceResource extends Resource
     {
         return Action::make('addLeadSource')
             ->label('إضافة مصدر')
-            ->schema([TextInput::make('name')->label('اسم المصدر')->maxLength(100)->required()])
+            ->schema([
+                TextInput::make('name')->label('اسم المصدر')->maxLength(100)->required(),
+                Select::make('type')
+                    ->label('تصنيف المصدر')
+                    ->options(LeadSourceType::managerCreatableOptions())
+                    ->required(),
+            ])
             ->action(function (array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);

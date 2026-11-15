@@ -2,14 +2,15 @@
 
 namespace App\Models;
 
+use App\Enums\LeadSourceType;
 use Illuminate\Database\Eloquent\Model;
 
 class ResaleLeadSource extends Model
 {
-    protected $fillable = ['name', 'is_other', 'is_active'];
+    protected $fillable = ['name', 'type', 'is_active'];
 
     protected function casts(): array
     {
-        return ['is_other' => 'boolean', 'is_active' => 'boolean'];
+        return ['type' => LeadSourceType::class, 'is_active' => 'boolean'];
     }
 }

@@ -38,6 +38,7 @@ class RentalRequest extends Model
             'budget_declared' => 'decimal:2',
             'budget_targeted' => 'decimal:2',
             'broker_phone_numbers_snapshot' => 'array',
+            'lead_source_referrer_unknown' => 'boolean',
         ];
     }
 

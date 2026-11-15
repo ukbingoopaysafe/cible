@@ -104,6 +104,7 @@ abstract class AuditEventResource extends Resource
                     'contact_change.cancelled' => 'إلغاء طلب تعديل بيانات',
                     'lead_source.created' => 'إضافة مصدر وصول',
                     'lead_source.activation_changed' => 'تغيير إتاحة مصدر وصول',
+                    'lead_source.classified' => 'تصنيف مصدر وصول قديم',
                     'deal.created' => 'إنشاء صفقة',
                     'recommendation.created' => 'إضافة ترشيح',
                     'recommendation.status_changed' => 'تغيير حالة ترشيح',
@@ -153,6 +154,7 @@ abstract class AuditEventResource extends Resource
             'contact_change.cancelled' => 'إلغاء طلب تعديل بيانات',
             'lead_source.created' => 'إضافة مصدر وصول',
             'lead_source.activation_changed' => 'تغيير إتاحة مصدر وصول',
+            'lead_source.classified' => 'تصنيف مصدر وصول قديم',
             'deal.created' => 'إنشاء صفقة',
             'recommendation.created' => 'إضافة ترشيح',
             'recommendation.status_changed' => 'تغيير حالة ترشيح',
@@ -197,6 +199,7 @@ abstract class AuditEventResource extends Resource
             'phone_e164' => 'الهاتف',
             'phone_country' => 'رمز الدولة',
             'phones' => 'أرقام الهاتف',
+            'type' => 'تصنيف المصدر',
             'owner_user_id' => 'معرّف المسؤول',
             'target_user_id' => 'معرّف المسؤول المستهدف',
             'requested_by' => 'معرّف مقدم الطلب',
@@ -240,8 +243,19 @@ abstract class AuditEventResource extends Resource
             ->implode('، ');
     }
 
-    private static function formatValue(string $key, mixed $value, AuditEvent $record): string
+    private static function formatValue(string $key, mixed $value, ?AuditEvent $record = null): string
     {
+        if ($key === 'type') {
+            return match ($value) {
+                'awareness' => 'مصدر تعرّف',
+                'person_referral' => 'إحالة من شخص',
+                'other' => 'أخرى',
+                'legacy_contact_method' => 'وسيلة تواصل تاريخية',
+                'unclassified_legacy' => 'مصدر قديم غير مصنف',
+                default => (string) $value,
+            };
+        }
+
         if ($key === 'contact_role') {
             return match ($value) {
                 'owner' => 'مالك الوحدة',
@@ -250,7 +264,7 @@ abstract class AuditEventResource extends Resource
             };
         }
 
-        if ($record->event_key === 'viewing.result_recorded' && in_array($key, ['from', 'to'], true)) {
+        if ($record?->event_key === 'viewing.result_recorded' && in_array($key, ['from', 'to'], true)) {
             if (blank($value)) {
                 return 'لم تُسجل بعد';
             }
@@ -274,7 +288,7 @@ abstract class AuditEventResource extends Resource
                 'negotiating' => 'بدأ التفاوض',
                 'cancelled' => 'أُلغيت',
             ];
-            $resultLabels = $record->department === Department::Rental->value ? $rentalResultLabels : $resaleResultLabels;
+            $resultLabels = $record?->department === Department::Rental->value ? $rentalResultLabels : $resaleResultLabels;
 
             return $resultLabels[$value] ?? (string) $value;
         }

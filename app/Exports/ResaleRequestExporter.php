@@ -39,6 +39,12 @@ class ResaleRequestExporter extends Exporter
             static::textColumn('owner.name', 'المسؤول'),
             static::textColumn('leadSource.name', 'مصدر الوصول'),
             static::textColumn('lead_source_other', 'تفصيل مصدر الوصول'),
+            ExportColumn::make('lead_source_referrer_export')
+                ->label('الشخص المُحيل')
+                ->state(fn (Model $record): string => filled($record->lead_source_referrer_name)
+                    ? (string) $record->lead_source_referrer_name
+                    : ($record->lead_source_referrer_unknown ? 'غير معروف' : ''))
+                ->formatStateUsing(fn (mixed $state): mixed => static::safeText($state)),
             static::textColumn('area.governorate', 'المحافظة'),
             static::textColumn('area.name', 'المنطقة'),
             ExportColumn::make('contact_party')->label('جهة الاتصال')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) {

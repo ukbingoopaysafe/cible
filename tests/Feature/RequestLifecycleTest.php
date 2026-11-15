@@ -187,8 +187,8 @@ class RequestLifecycleTest extends TestCase
             'phone' => '01012345678',
             'phone_country' => 'EG',
         ]);
-        $otherSource = RentalLeadSource::query()->where('is_other', true)->firstOrFail();
-        $normalSource = RentalLeadSource::query()->where('is_other', false)->firstOrFail();
+        $otherSource = RentalLeadSource::query()->where('type', 'other')->firstOrFail();
+        $normalSource = RentalLeadSource::query()->where('type', 'awareness')->where('is_active', true)->firstOrFail();
         $request = app(RequestService::class)->create($manager, Department::Rental, [
             'customer_id' => $customer->id,
             'area_id' => RentalArea::query()->firstOrFail()->id,

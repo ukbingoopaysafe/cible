@@ -629,10 +629,13 @@ class FilamentUiAccessTest extends TestCase
 
         Livewire::actingAs($manager)
             ->test(ListRentalLeadSources::class)
-            ->callAction(TestAction::make('addLeadSource'), ['name' => 'مورد اختبار الواجهة'])
+            ->callAction(TestAction::make('addLeadSource'), [
+                'name' => 'مورد اختبار الواجهة',
+                'type' => 'awareness',
+            ])
             ->assertHasNoActionErrors();
 
-        $this->assertDatabaseHas('rental_lead_sources', ['name' => 'مورد اختبار الواجهة']);
+        $this->assertDatabaseHas('rental_lead_sources', ['name' => 'مورد اختبار الواجهة', 'type' => 'awareness']);
 
         Livewire::actingAs($manager)
             ->test(ListRentalCloseReasons::class)

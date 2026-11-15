@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\Department;
+use App\Enums\LeadSourceType;
 use App\Models\AuditEvent;
 use App\Models\RentalLeadSource;
 use App\Models\ResaleLeadSource;
@@ -16,7 +17,7 @@ use Illuminate\Validation\ValidationException;
 
 class LeadSourceService
 {
-    /** @param array{name: string} $data */
+    /** @param array{name: string, type: string} $data */
     public function create(User $actor, Department $department, array $data): Model
     {
         $this->authorizeManager($actor, $department);
@@ -26,6 +27,7 @@ class LeadSourceService
         }
         $attributes = Validator::make($data, [
             'name' => ['required', 'string', 'max:100', Rule::unique($class::query()->getModel()->getTable(), 'name')],
+            'type' => ['required', Rule::in(array_keys(LeadSourceType::managerCreatableOptions()))],
         ])->validate();
         if ($attributes['name'] === '' || mb_strtolower($attributes['name'], 'UTF-8') === 'أخرى') {
             throw ValidationException::withMessages(['name' => 'أدخل اسم مصدر صالحًا؛ خيار «أخرى» موجود بالفعل.']);
@@ -34,13 +36,40 @@ class LeadSourceService
         return DB::transaction(function () use ($class, $attributes, $actor, $department): Model {
             $source = new $class;
             $source->name = $attributes['name'];
-            $source->is_other = false;
+            $source->type = $attributes['type'];
             $source->is_active = true;
             $source->save();
 
             $this->audit($actor, $department, 'lead_source.created', $source, null, [
                 'name' => $source->name,
+                'type' => $source->type->value,
                 'is_active' => true,
+            ]);
+
+            return $source;
+        });
+    }
+
+    public function classify(User $actor, Department $department, int $sourceId, string $type): Model
+    {
+        $this->authorizeManager($actor, $department);
+        $class = $this->modelClass($department);
+        $validated = Validator::make(['type' => $type], [
+            'type' => ['required', Rule::in(array_keys(LeadSourceType::managerCreatableOptions()))],
+        ])->validate();
+
+        return DB::transaction(function () use ($class, $sourceId, $validated, $actor, $department): Model {
+            $source = $class::query()->lockForUpdate()->findOrFail($sourceId);
+            if ($source->type !== LeadSourceType::UnclassifiedLegacy) {
+                throw ValidationException::withMessages(['type' => 'يمكن تصنيف المصادر القديمة غير المصنفة فقط.']);
+            }
+
+            $before = ['type' => $source->type->value];
+            $source->type = $validated['type'];
+            $source->save();
+            $this->audit($actor, $department, 'lead_source.classified', $source, $before, [
+                'type' => $source->type->value,
+                'is_active' => (bool) $source->is_active,
             ]);
 
             return $source;
@@ -52,8 +81,14 @@ class LeadSourceService
         $this->authorizeManager($actor, $department);
         $source = $this->modelClass($department)::query()->findOrFail($sourceId);
 
-        if ($source->is_other && ! $active) {
+        if ($source->type === LeadSourceType::Other && ! $active) {
             throw ValidationException::withMessages(['source' => 'يجب أن يظل خيار «أخرى» متاحًا.']);
+        }
+        if ($active && $source->type === LeadSourceType::LegacyContactMethod) {
+            throw ValidationException::withMessages(['source' => 'لا يمكن إعادة تفعيل وسيلة تواصل تاريخية كمصدر وصول.']);
+        }
+        if ($active && $source->type === LeadSourceType::UnclassifiedLegacy) {
+            throw ValidationException::withMessages(['source' => 'صنّف المصدر القديم قبل إعادة تفعيله.']);
         }
 
         if ((bool) $source->is_active === $active) {

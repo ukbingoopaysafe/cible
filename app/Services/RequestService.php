@@ -6,6 +6,7 @@ use App\Enums\ContactParty;
 use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
+use App\Enums\LeadSourceType;
 use App\Enums\RentalRequestStage;
 use App\Enums\RentalTerm;
 use App\Enums\RequestOutcome;
@@ -262,14 +263,23 @@ class RequestService
         $request = $classes['request']::query()->findOrFail($requestId);
 
         $editable = [
-            'customer_id', 'broker_id', 'area_id', 'lead_source_id', 'lead_source_other', 'contact_party',
+            'customer_id', 'broker_id', 'area_id', 'lead_source_id', 'lead_source_other',
+            'lead_source_referrer_name', 'lead_source_referrer_unknown', 'contact_party',
             'unit_type', 'unit_type_other', 'budget_declared', 'budget_targeted', 'budget_currency',
             'other_requirements', 'notes',
         ];
         $editable = $department === Department::Rental
             ? [...$editable, 'bedrooms', 'occupants', 'household', 'rental_term', 'rental_term_count', 'finishing', 'finishing_other', 'floor_preference', 'elevator_required']
             : [...$editable, 'area_min', 'area_max'];
+        $referrerDetailsTouched = (bool) ($data['lead_source_referrer_details_touched'] ?? false);
+        unset($data['lead_source_referrer_details_touched']);
+        if (isset($data['lead_source_referrer_name']) && is_string($data['lead_source_referrer_name'])) {
+            $data['lead_source_referrer_name'] = trim($data['lead_source_referrer_name']);
+        }
         $submitted = array_intersect_key($data, array_flip($editable));
+        $referrerFieldsSubmitted = array_key_exists('lead_source_referrer_name', $submitted)
+            || array_key_exists('lead_source_referrer_unknown', $submitted);
+        $referrerDetailsChanged = $referrerDetailsTouched || $referrerFieldsSubmitted;
         $data = array_replace(
             array_intersect_key($request->getAttributes(), array_flip($editable)),
             $submitted,
@@ -287,15 +297,33 @@ class RequestService
             && ! array_key_exists('finishing_other', $submitted)) {
             $data['finishing_other'] = null;
         }
-        if (array_key_exists('lead_source_id', $submitted)
-            && (int) $data['lead_source_id'] !== (int) $request->lead_source_id
-            && ! array_key_exists('lead_source_other', $submitted)) {
-            $source = $data['lead_source_id']
-                ? $classes['lead_source']::query()->find($data['lead_source_id'])
+        $sourceChanged = array_key_exists('lead_source_id', $submitted)
+            && (string) ($data['lead_source_id'] ?? '') !== (string) ($request->lead_source_id ?? '');
+        $selectedSource = ! empty($data['lead_source_id'])
+            ? $classes['lead_source']::query()->find($data['lead_source_id'])
+            : null;
+        $sourceType = $selectedSource?->type;
+
+        if ($sourceChanged) {
+            $data['lead_source_other'] = $sourceType === LeadSourceType::Other
+                ? ($submitted['lead_source_other'] ?? null)
                 : null;
-            if (! $source?->is_other) {
-                $data['lead_source_other'] = null;
-            }
+            $data['lead_source_referrer_name'] = $sourceType === LeadSourceType::PersonReferral
+                ? ($submitted['lead_source_referrer_name'] ?? null)
+                : null;
+            $data['lead_source_referrer_unknown'] = $sourceType === LeadSourceType::PersonReferral
+                ? ($submitted['lead_source_referrer_unknown'] ?? null)
+                : null;
+        } elseif ($sourceType === LeadSourceType::PersonReferral && $referrerDetailsChanged) {
+            $data['lead_source_referrer_name'] = $submitted['lead_source_referrer_name'] ?? null;
+            $data['lead_source_referrer_unknown'] = $submitted['lead_source_referrer_unknown'] ?? false;
+        } elseif ($sourceType !== LeadSourceType::PersonReferral) {
+            $data['lead_source_referrer_name'] = null;
+            $data['lead_source_referrer_unknown'] = null;
+        }
+
+        if ($sourceType !== LeadSourceType::Other) {
+            $data['lead_source_other'] = null;
         }
 
         $rules = [
@@ -304,6 +332,8 @@ class RequestService
             'area_id' => ['required', 'integer', Rule::exists($classes['area_table'], 'id')],
             'lead_source_id' => ['nullable', 'integer', Rule::exists($classes['lead_source']::query()->getModel()->getTable(), 'id')],
             'lead_source_other' => ['nullable', 'string', 'max:255'],
+            'lead_source_referrer_name' => ['nullable', 'string', 'max:255'],
+            'lead_source_referrer_unknown' => ['nullable', 'boolean'],
             'contact_party' => ['nullable', Rule::enum(ContactParty::class)],
             'unit_type' => ['nullable', Rule::enum(RequestUnitType::class)],
             'unit_type_other' => ['nullable', 'string', 'max:255'],
@@ -334,7 +364,7 @@ class RequestService
         }
 
         $validator = Validator::make($data, $rules);
-        $validator->after(function ($validator) use ($data, $classes, $department, $request): void {
+        $validator->after(function ($validator) use ($data, $classes, $department, $request, $sourceChanged, $referrerDetailsChanged, $submitted): void {
             $customerId = $data['customer_id'];
             $brokerId = $data['broker_id'];
             $contactParty = $data['contact_party'];
@@ -368,14 +398,29 @@ class RequestService
 
             $sourceId = $data['lead_source_id'];
             $source = $sourceId ? $classes['lead_source']::query()->find($sourceId) : null;
-            if ($sourceId && (! $source || (! $source->is_active && (int) $sourceId !== (int) $request->lead_source_id))) {
+            if ($sourceId && (! $source
+                || ($sourceChanged && (! $source->is_active || ! $source->type->isSelectableForNewRequests())))) {
                 $validator->errors()->add('lead_source_id', 'مصدر الوصول غير متاح للاستخدام.');
             }
-            if ($source?->is_other && empty($data['lead_source_other'])) {
+            if ($source?->type === LeadSourceType::Other && empty($data['lead_source_other'])) {
                 $validator->errors()->add('lead_source_other', 'اكتب مصدر الوصول عند اختيار «أخرى».');
             }
-            if (! $source?->is_other && ! empty($data['lead_source_other'])) {
+            if ($source?->type !== LeadSourceType::Other && ! empty($data['lead_source_other'])) {
                 $validator->errors()->add('lead_source_other', 'يُستخدم هذا الوصف مع مصدر الوصول «أخرى» فقط.');
+            }
+            $validateReferrerDetails = $source?->type === LeadSourceType::PersonReferral
+                && ($sourceChanged || $referrerDetailsChanged);
+            if ($validateReferrerDetails) {
+                $hasName = filled($data['lead_source_referrer_name'] ?? null);
+                $isUnknown = in_array($data['lead_source_referrer_unknown'] ?? false, [true, 1, '1'], true);
+                if (! $hasName && ! $isUnknown) {
+                    $validator->errors()->add('lead_source_referrer_name', 'أدخل اسم الشخص المُحيل أو اختر «الاسم غير معروف».');
+                } elseif ($hasName && $isUnknown) {
+                    $validator->errors()->add('lead_source_referrer_name', 'اختر اسم الشخص المُحيل أو «الاسم غير معروف» فقط.');
+                }
+            } elseif ($source?->type !== LeadSourceType::PersonReferral
+                && (filled($submitted['lead_source_referrer_name'] ?? null) || in_array($submitted['lead_source_referrer_unknown'] ?? false, [true, 1, '1'], true))) {
+                $validator->errors()->add('lead_source_referrer_name', 'تُسجل بيانات الشخص المُحيل مع مصادر الإحالة من شخص فقط.');
             }
             if ($data['unit_type'] === RequestUnitType::Other->value && empty($data['unit_type_other'])) {
                 $validator->errors()->add('unit_type_other', 'اكتب نوع الوحدة عند اختيار «أخرى».');
@@ -452,6 +497,8 @@ class RequestService
             'area_id' => ['required', 'integer', Rule::exists($classes['area_table'], 'id')],
             'lead_source_id' => ['nullable', 'integer', Rule::exists($classes['lead_source']::query()->getModel()->getTable(), 'id')],
             'lead_source_other' => ['nullable', 'string', 'max:255'],
+            'lead_source_referrer_name' => ['nullable', 'string', 'max:255'],
+            'lead_source_referrer_unknown' => ['nullable', 'boolean'],
             'owner_user_id' => ['required', 'integer', 'exists:users,id'],
             'contact_party' => ['nullable', Rule::enum(ContactParty::class)],
             'next_follow_up_at' => ['required', 'date', 'after:now'],
@@ -534,14 +581,26 @@ class RequestService
 
             $leadSourceId = $data['lead_source_id'] ?? null;
             $leadSource = $leadSourceId ? $classes['lead_source']::query()->find($leadSourceId) : null;
-            if ($leadSourceId && ! $leadSource?->is_active) {
+            if ($leadSourceId && (! $leadSource?->is_active || ! $leadSource->type->isSelectableForNewRequests())) {
                 $validator->errors()->add('lead_source_id', 'مصدر الوصول غير متاح للاستخدام.');
             }
-            if ($leadSource?->is_other && empty($data['lead_source_other'])) {
+            if ($leadSource?->type === LeadSourceType::Other && empty($data['lead_source_other'])) {
                 $validator->errors()->add('lead_source_other', 'اكتب مصدر الوصول عند اختيار «أخرى».');
             }
-            if (! $leadSource?->is_other && ! empty($data['lead_source_other'])) {
+            if ($leadSource?->type !== LeadSourceType::Other && ! empty($data['lead_source_other'])) {
                 $validator->errors()->add('lead_source_other', 'يُستخدم هذا الوصف مع مصدر الوصول «أخرى» فقط.');
+            }
+            if ($leadSource?->type === LeadSourceType::PersonReferral) {
+                $hasName = filled($data['lead_source_referrer_name'] ?? null);
+                $isUnknown = in_array($data['lead_source_referrer_unknown'] ?? false, [true, 1, '1'], true);
+                if (! $hasName && ! $isUnknown) {
+                    $validator->errors()->add('lead_source_referrer_name', 'أدخل اسم الشخص المُحيل أو اختر «الاسم غير معروف».');
+                } elseif ($hasName && $isUnknown) {
+                    $validator->errors()->add('lead_source_referrer_name', 'اختر اسم الشخص المُحيل أو «الاسم غير معروف» فقط.');
+                }
+            } elseif (filled($data['lead_source_referrer_name'] ?? null)
+                || in_array($data['lead_source_referrer_unknown'] ?? false, [true, 1, '1'], true)) {
+                $validator->errors()->add('lead_source_referrer_name', 'تُسجل بيانات الشخص المُحيل مع مصادر الإحالة من شخص فقط.');
             }
 
             if (($data['unit_type'] ?? null) === RequestUnitType::Other->value && empty($data['unit_type_other'])) {
@@ -911,7 +970,7 @@ class RequestService
             return null;
         }
 
-        foreach (['notes', 'other_requirements', 'outcome_reason_text', 'outcome_notes', 'lead_source_other', 'unit_type_other', 'finishing_other'] as $field) {
+        foreach (['notes', 'other_requirements', 'outcome_reason_text', 'outcome_notes', 'lead_source_other', 'lead_source_referrer_name', 'unit_type_other', 'finishing_other'] as $field) {
             if (array_key_exists($field, $values) && filled($values[$field])) {
                 $values[$field] = '[تغير النص؛ المحتوى محفوظ في سجل الطلب]';
             }

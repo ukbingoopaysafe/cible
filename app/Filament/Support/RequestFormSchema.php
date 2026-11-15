@@ -6,6 +6,7 @@ use App\Enums\ContactParty;
 use App\Enums\Department;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
+use App\Enums\LeadSourceType;
 use App\Enums\RentalTerm;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
@@ -27,6 +28,7 @@ use Carbon\Carbon;
 use Filament\Actions\Action;
 use Filament\Forms\Components\Checkbox;
 use Filament\Forms\Components\DateTimePicker;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
@@ -189,18 +191,63 @@ final class RequestFormSchema
                         ->createOptionAction(fn ($action) => $action->visible(
                             fn (): bool => auth()->user()?->is_company_manager || (bool) auth()->user()?->canAddRentalAreas()
                         )),
+                    Hidden::make('lead_source_referrer_details_touched')->default(false),
+                    Hidden::make('lead_source_selection_changed')->default(false)->dehydrated(false),
                     Select::make('lead_source_id')
                         ->label('مصدر الوصول')
-                        ->options(fn (): array => $sourceClass::query()
-                            ->when(! $editing, fn ($query) => $query->where('is_active', true))
+                        ->options(fn (Get $get): array => $sourceClass::query()
+                            ->where(function ($query) use ($editing, $get): void {
+                                $query->where(function ($query): void {
+                                    $query->where('is_active', true)->whereIn('type', [
+                                        LeadSourceType::Awareness->value,
+                                        LeadSourceType::PersonReferral->value,
+                                        LeadSourceType::Other->value,
+                                    ]);
+                                });
+                                if ($editing && filled($get('lead_source_id'))) {
+                                    $query->orWhere($query->getModel()->getQualifiedKeyName(), $get('lead_source_id'));
+                                }
+                            })
                             ->orderBy('name')->pluck('name', 'id')->all())
                         ->searchable()
-                        ->live(),
+                        ->live()
+                        ->afterStateUpdated(function (Set $set): void {
+                            $set('lead_source_other', null);
+                            $set('lead_source_referrer_name', null);
+                            $set('lead_source_referrer_unknown', false);
+                            $set('lead_source_referrer_details_touched', false);
+                            $set('lead_source_selection_changed', true);
+                        }),
                     TextInput::make('lead_source_other')
                         ->label('توضيح مصدر الوصول')
                         ->maxLength(255)
-                        ->visible(fn (Get $get): bool => filled($get('lead_source_id')) && $sourceClass::query()->whereKey($get('lead_source_id'))->where('is_other', true)->exists())
-                        ->required(fn (Get $get): bool => filled($get('lead_source_id')) && $sourceClass::query()->whereKey($get('lead_source_id'))->where('is_other', true)->exists()),
+                        ->visible(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other)
+                        ->required(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other),
+                    TextInput::make('lead_source_referrer_name')
+                        ->label('اسم الشخص المُحيل')
+                        ->maxLength(255)
+                        ->live(debounce: 400)
+                        ->visible(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::PersonReferral)
+                        ->dehydrated(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::PersonReferral && (! $editing || (bool) $get('lead_source_referrer_details_touched') || (bool) $get('lead_source_selection_changed')))
+                        ->dehydratedWhenHidden()
+                        ->afterStateUpdated(function ($state, Set $set): void {
+                            if (filled($state)) {
+                                $set('lead_source_referrer_unknown', false);
+                            }
+                            $set('lead_source_referrer_details_touched', true);
+                        }),
+                    Checkbox::make('lead_source_referrer_unknown')
+                        ->label('الاسم غير معروف')
+                        ->live()
+                        ->visible(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::PersonReferral)
+                        ->dehydrated(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::PersonReferral && (! $editing || (bool) $get('lead_source_referrer_details_touched') || (bool) $get('lead_source_selection_changed')))
+                        ->dehydratedWhenHidden()
+                        ->afterStateUpdated(function ($state, Set $set): void {
+                            if ($state) {
+                                $set('lead_source_referrer_name', null);
+                            }
+                            $set('lead_source_referrer_details_touched', true);
+                        }),
                     ...(! $editing ? [Select::make('owner_user_id')
                         ->label('الموظف المسؤول')
                         ->options(function () use ($department): array {
@@ -384,6 +431,14 @@ final class RequestFormSchema
                         ->label('توضيح مصدر الوصول')
                         ->placeholder('—')
                         ->visible(fn (?Model $record): bool => filled($record?->lead_source_other)),
+                    TextEntry::make('lead_source_referrer_display')
+                        ->label('الشخص المُحيل')
+                        ->state(fn (?Model $record): string => match (true) {
+                            filled($record?->lead_source_referrer_name) => (string) $record->lead_source_referrer_name,
+                            $record?->lead_source_referrer_unknown === true => 'الاسم غير معروف',
+                            default => 'لم يُسجل',
+                        })
+                        ->visible(fn (?Model $record): bool => $record?->leadSource?->type === LeadSourceType::PersonReferral),
                 ])
                 ->columns(['default' => 1, 'sm' => 2]),
         ];
@@ -790,6 +845,22 @@ final class RequestFormSchema
             ->first(fn (mixed $phone): bool => (bool) data_get($phone, 'is_primary'));
 
         return data_get($snapshot, 'phone_e164') ?: $record?->broker_phone_snapshot;
+    }
+
+    /** @param class-string<Model> $sourceClass */
+    private static function selectedLeadSourceType(string $sourceClass, Get $get): ?LeadSourceType
+    {
+        if (blank($get('lead_source_id'))) {
+            return null;
+        }
+
+        $type = $sourceClass::query()->whereKey($get('lead_source_id'))->value('type');
+
+        if ($type instanceof LeadSourceType) {
+            return $type;
+        }
+
+        return is_string($type) ? LeadSourceType::tryFrom($type) : null;
     }
 
     private static function enumValue(mixed $state): ?string
