@@ -192,6 +192,7 @@ final class RequestFormSchema
                             fn (): bool => auth()->user()?->is_company_manager || (bool) auth()->user()?->canAddRentalAreas()
                         )),
                     Hidden::make('lead_source_referrer_details_touched')->default(false),
+                    Hidden::make('lead_source_details_touched')->default(false),
                     Hidden::make('lead_source_selection_changed')->default(false)->dehydrated(false),
                     Select::make('lead_source_id')
                         ->label('مصدر الوصول')
@@ -213,16 +214,39 @@ final class RequestFormSchema
                         ->live()
                         ->afterStateUpdated(function (Set $set): void {
                             $set('lead_source_other', null);
+                            $set('lead_source_details_touched', false);
                             $set('lead_source_referrer_name', null);
                             $set('lead_source_referrer_unknown', false);
                             $set('lead_source_referrer_details_touched', false);
                             $set('lead_source_selection_changed', true);
                         }),
                     TextInput::make('lead_source_other')
-                        ->label('توضيح مصدر الوصول')
+                        ->label(fn (Get $get): string => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other
+                            ? 'توضيح مصدر الوصول'
+                            : 'المنصة أو تفاصيل مصدر الوصول')
                         ->maxLength(255)
-                        ->visible(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other)
-                        ->required(fn (Get $get): bool => self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other),
+                        ->visible(fn (Get $get): bool => self::selectedLeadSourceNeedsDetails($sourceClass, $get))
+                        ->required(function (Get $get) use ($sourceClass, $editing): bool {
+                            if (! self::selectedLeadSourceNeedsDetails($sourceClass, $get)) {
+                                return false;
+                            }
+
+                            $sourceType = self::selectedLeadSourceType($sourceClass, $get);
+
+                            return ! $editing
+                                || $sourceType === LeadSourceType::Other
+                                || filled($get('lead_source_other'))
+                                || (bool) $get('lead_source_selection_changed')
+                                || (bool) $get('lead_source_details_touched');
+                        })
+                        ->dehydrated(fn (Get $get): bool => ! $editing
+                            || self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other
+                            || (bool) $get('lead_source_selection_changed')
+                            || (bool) $get('lead_source_details_touched'))
+                        ->dehydratedWhenHidden()
+                        ->afterStateUpdated(function (Set $set): void {
+                            $set('lead_source_details_touched', true);
+                        }),
                     TextInput::make('lead_source_referrer_name')
                         ->label('اسم الشخص المُحيل')
                         ->maxLength(255)
@@ -428,7 +452,9 @@ final class RequestFormSchema
                         ->icon('heroicon-m-arrow-trending-up')
                         ->placeholder('—'),
                     TextEntry::make('lead_source_other')
-                        ->label('توضيح مصدر الوصول')
+                        ->label(fn (?Model $record): string => $record?->leadSource?->type === LeadSourceType::Other
+                            ? 'توضيح مصدر الوصول'
+                            : 'المنصة أو تفاصيل مصدر الوصول')
                         ->placeholder('—')
                         ->visible(fn (?Model $record): bool => filled($record?->lead_source_other)),
                     TextEntry::make('lead_source_referrer_display')
@@ -861,6 +887,20 @@ final class RequestFormSchema
         }
 
         return is_string($type) ? LeadSourceType::tryFrom($type) : null;
+    }
+
+    /** @param class-string<Model> $sourceClass */
+    private static function selectedLeadSourceNeedsDetails(string $sourceClass, Get $get): bool
+    {
+        if (self::selectedLeadSourceType($sourceClass, $get) === LeadSourceType::Other) {
+            return true;
+        }
+
+        if (blank($get('lead_source_id'))) {
+            return false;
+        }
+
+        return (bool) $sourceClass::query()->whereKey($get('lead_source_id'))->value('requires_details');
     }
 
     private static function enumValue(mixed $state): ?string

@@ -204,7 +204,12 @@ class LeadSourceRequestServiceTest extends TestCase
     private function source(Department $department, LeadSourceType $type): RentalLeadSource|ResaleLeadSource
     {
         $class = $department === Department::Rental ? RentalLeadSource::class : ResaleLeadSource::class;
+        $query = $class::query()->where('type', $type)->where('is_active', true);
 
-        return $class::query()->where('type', $type)->where('is_active', true)->firstOrFail();
+        if ($type === LeadSourceType::Awareness) {
+            $query->where('requires_details', false);
+        }
+
+        return $query->firstOrFail();
     }
 }

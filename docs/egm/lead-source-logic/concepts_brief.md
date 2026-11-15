@@ -99,6 +99,7 @@ During design drafting, the owner confirmed the name-or-explicit-unknown rule fo
 - Store one source per request: the main source the customer identifies when asked; if several channels contributed, staff ask the customer to identify the main one.
 - Keep Rental and Resale catalogs separate while giving their options consistent source types and conditional-field rules.
 - Keep an unknown awareness source deferred; preserve old selections and descriptions without inferring source meaning from legacy labels.
+- Follow-up approved on 2026-11-15: selecting «وسائل التواصل الاجتماعي» opens a required platform/source-detail field; preserve historical blank details during unrelated edits.
 - Use stable source classification metadata and consistent conditional-field rules across Rental and Resale.
 - Include referrer names in exports and redact their literal values from request audit history.
 - Preserve schema and data after applying the migration; fix defects with forward deployments rather than rolling application or database state back.

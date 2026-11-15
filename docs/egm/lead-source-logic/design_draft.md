@@ -85,9 +85,9 @@ Managers continue to add source labels within their own department's catalog. Wh
 
 ### Request Data and Form Flow
 
-Keep one optional `lead_source_id` on each request. It represents the main source the client identifies when staff ask; if several channels contributed, staff ask the client to identify the main one rather than guessing first or most influential. Add a nullable referrer-name snapshot and a nullable `lead_source_referrer_unknown` flag to each request table; retain the existing `lead_source_other` field for the «أخرى» description. For a new person referral, require either the person's name or an explicit unknown choice. A null flag on an old request means the name was not captured under the previous workflow, not that staff confirmed it was unknown. Preserve that legacy state during unrelated edits. When it is a person referral, the shared request form reveals the name field and unknown choice. When it is `other`, the form reveals the existing required description. Changing the selected source clears its dependent values.
+Keep one optional `lead_source_id` on each request. It represents the main source the client identifies when staff ask; if several channels contributed, staff ask the client to identify the main one rather than guessing first or most influential. Add a nullable referrer-name snapshot and a nullable `lead_source_referrer_unknown` flag to each request table; retain `lead_source_other` for «أخرى» and source-specific details. Add a `requires_details` flag to each catalog row; set it for «وسائل التواصل الاجتماعي» so staff can record its platform or other detail. For a new person referral, require either the person's name or an explicit unknown choice. A null flag on an old request means the name was not captured under the previous workflow, not that staff confirmed it was unknown. Preserve that legacy state during unrelated edits. When it is a person referral, the shared request form reveals the name field and unknown choice. When it is `other` or a source has `requires_details`, the form reveals the required detail input. Preserve an old social-media request with no details during unrelated edits. Changing the selected source clears its dependent values.
 
-The shared `RequestFormSchema` reads the selected department's catalog and uses its type to control visibility. `RequestService` applies the same type-to-field rules during create and update validation, so requests cannot save a referrer name against an unrelated source or an “other” description against a normal source. Rental and Resale keep their separate model and foreign-key boundaries.
+The shared `RequestFormSchema` reads the selected department's catalog and uses its type and `requires_details` flag to control visibility. `RequestService` applies the same rules during create and update validation, so requests cannot save a referrer name or source detail against an incompatible source. Rental and Resale keep their separate model and foreign-key boundaries.
 
 ```text
 Manager adds a source label
@@ -97,7 +97,7 @@ Manager adds a source label
                          ▼
 Request form loads active, selectable sources for that department
         │
-        ├── awareness ─────────────── no dependent field
+        ├── awareness ─────────────── details only when requires_details is true
         ├── person_referral ────────── referrer name OR explicit unknown choice
         └── other ──────────────────── required source-description field
                          │
@@ -105,12 +105,12 @@ Request form loads active, selectable sources for that department
 RequestService validates the source type and dependent values
                          │
                          ▼
-Request row stores source ID, optional referrer name, and other detail
+Request row stores source ID, optional referrer name, and applicable source detail
 ```
 
 ### Migration and Historical Values
 
-Add a migration file that adds the source type to both catalogs and the referrer-name snapshot plus nullable unknown flag to both request tables. Leave the unknown flag null on historical requests so the migration does not invent whether their referrer's name was unavailable. Seed «الإدارة العليا» as a `person_referral` source in each department. Classify the built-in «أخرى» row as `other`, existing person-referral values as `person_referral`, and established awareness values as `awareness`. Mark phone call, direct visit, and WhatsApp as `legacy_contact_method` and deactivate them for new requests. Classify manager-added values only where their meaning is known; put all others in `unclassified_legacy` without changing their IDs or existing request references.
+Add a migration file that adds the source type to both catalogs and the referrer-name snapshot plus nullable unknown flag to both request tables. Leave the unknown flag null on historical requests so the migration does not invent whether their referrer's name was unavailable. Seed «الإدارة العليا» as a `person_referral` source in each department. Classify the built-in «أخرى» row as `other`, existing person-referral values as `person_referral`, and established awareness values as `awareness`. Mark phone call, direct visit, and WhatsApp as `legacy_contact_method` and deactivate them for new requests. Classify manager-added values only where their meaning is known; put all others in `unclassified_legacy` without changing their IDs or existing request references. Add a follow-up migration with a false-default `requires_details` flag in both source catalogs and enable it for «وسائل التواصل الاجتماعي».
 
 New database changes are delivered as a tracked migration for the owner to apply after pulling `main` on production. The migration must be additive, and its `down()` method must refuse rollback with a clear forward-only message rather than dropping type classifications or referral data. Once the migration is applied, keep the new application version; handle defects through a forward code or database fix. The previous application cannot write the required source type for new catalog rows and does not display the referral snapshot.
 
@@ -192,6 +192,11 @@ Rental and Resale use the same rules through shared components while retaining s
 * **Type / Scope**: Laravel schema and data migration.
 * **Proposed Changes**: Add a non-null `type` string (32 characters) to both lead-source tables, a nullable `lead_source_referrer_name` string (255 characters), and a nullable `lead_source_referrer_unknown` boolean to both request tables. Classify known seeded rows without changing IDs or request references; set phone call, direct visit, and WhatsApp rows to inactive `legacy_contact_method`; preserve unknown manager-added rows as inactive `unclassified_legacy`; insert or update `الإدارة العليا` as active `person_referral` in each catalog. Leave the unknown flag null on historical requests. Keep `is_other` synchronized with the `other` type. The migration is tracked for production application after pulling `main`. Implement `down()` as an explicit forward-only guard that stops rollback with a clear message; do not drop typed classifications or referral fields. After this migration is applied, do not roll application code back to a release that lacks the required type/referrer behavior. If a defect occurs, preserve the schema and data and deploy a forward fix.
 
+#### 1a. `database/migrations/2026_11_15_000000_add_requires_details_to_lead_sources.php` (Create)
+
+* **Type / Scope**: Follow-up catalog migration for both departments.
+* **Proposed Changes**: Add a false-default `requires_details` flag to both catalogs and set it for «وسائل التواصل الاجتماعي». Keep `down()` forward-only because the running application reads this flag to validate source details.
+
 #### 2. `app/Enums/LeadSourceType.php` (Create)
 
 * **Type / Scope**: Shared source-type enum.
@@ -200,7 +205,7 @@ Rental and Resale use the same rules through shared components while retaining s
 #### 3. `app/Models/RentalLeadSource.php` and `app/Models/ResaleLeadSource.php` (Modify)
 
 * **Type / Scope**: Department-specific Eloquent source models.
-* **Proposed Changes**: Allow and cast the new `type` value so shared form and service code can use the same type rules in both departments.
+* **Proposed Changes**: Allow and cast the source `type` and `requires_details` values so shared form and service code can use the same rules in both departments.
 
 #### 4. `app/Models/RentalRequest.php` and `app/Models/ResaleRequest.php` (Modify)
 

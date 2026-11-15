@@ -272,7 +272,9 @@ class RequestService
             ? [...$editable, 'bedrooms', 'occupants', 'household', 'rental_term', 'rental_term_count', 'finishing', 'finishing_other', 'floor_preference', 'elevator_required']
             : [...$editable, 'area_min', 'area_max'];
         $referrerDetailsTouched = (bool) ($data['lead_source_referrer_details_touched'] ?? false);
+        $leadSourceDetailsTouched = (bool) ($data['lead_source_details_touched'] ?? false);
         unset($data['lead_source_referrer_details_touched']);
+        unset($data['lead_source_details_touched']);
         if (isset($data['lead_source_referrer_name']) && is_string($data['lead_source_referrer_name'])) {
             $data['lead_source_referrer_name'] = trim($data['lead_source_referrer_name']);
         }
@@ -280,12 +282,13 @@ class RequestService
         $referrerFieldsSubmitted = array_key_exists('lead_source_referrer_name', $submitted)
             || array_key_exists('lead_source_referrer_unknown', $submitted);
         $referrerDetailsChanged = $referrerDetailsTouched || $referrerFieldsSubmitted;
+        $leadSourceDetailsChanged = $leadSourceDetailsTouched || array_key_exists('lead_source_other', $submitted);
         $data = array_replace(
             array_intersect_key($request->getAttributes(), array_flip($editable)),
             $submitted,
         );
 
-        // Clear dependent descriptions only when their selector changes away from “Other”.
+        // Clear dependent descriptions only when their selector changes to an incompatible source.
         if (array_key_exists('unit_type', $submitted)
             && $data['unit_type'] !== RequestUnitType::Other->value
             && ! array_key_exists('unit_type_other', $submitted)) {
@@ -303,9 +306,10 @@ class RequestService
             ? $classes['lead_source']::query()->find($data['lead_source_id'])
             : null;
         $sourceType = $selectedSource?->type;
+        $sourceNeedsDetails = $this->leadSourceNeedsDetails($selectedSource);
 
         if ($sourceChanged) {
-            $data['lead_source_other'] = $sourceType === LeadSourceType::Other
+            $data['lead_source_other'] = $sourceNeedsDetails
                 ? ($submitted['lead_source_other'] ?? null)
                 : null;
             $data['lead_source_referrer_name'] = $sourceType === LeadSourceType::PersonReferral
@@ -322,7 +326,7 @@ class RequestService
             $data['lead_source_referrer_unknown'] = null;
         }
 
-        if ($sourceType !== LeadSourceType::Other) {
+        if (! $sourceNeedsDetails) {
             $data['lead_source_other'] = null;
         }
 
@@ -364,7 +368,7 @@ class RequestService
         }
 
         $validator = Validator::make($data, $rules);
-        $validator->after(function ($validator) use ($data, $classes, $department, $request, $sourceChanged, $referrerDetailsChanged, $submitted): void {
+        $validator->after(function ($validator) use ($data, $classes, $department, $request, $sourceChanged, $referrerDetailsChanged, $leadSourceDetailsChanged, $submitted): void {
             $customerId = $data['customer_id'];
             $brokerId = $data['broker_id'];
             $contactParty = $data['contact_party'];
@@ -402,11 +406,17 @@ class RequestService
                 || ($sourceChanged && (! $source->is_active || ! $source->type->isSelectableForNewRequests())))) {
                 $validator->errors()->add('lead_source_id', 'مصدر الوصول غير متاح للاستخدام.');
             }
-            if ($source?->type === LeadSourceType::Other && empty($data['lead_source_other'])) {
-                $validator->errors()->add('lead_source_other', 'اكتب مصدر الوصول عند اختيار «أخرى».');
+            $sourceNeedsDetails = $this->leadSourceNeedsDetails($source);
+            $detailsRequiredNow = $source?->type === LeadSourceType::Other
+                || ($source?->requires_details && ($sourceChanged || $leadSourceDetailsChanged));
+            if ($detailsRequiredNow && empty($data['lead_source_other'])) {
+                $message = $source?->type === LeadSourceType::Other
+                    ? 'اكتب مصدر الوصول عند اختيار «أخرى».'
+                    : 'اكتب اسم المنصة أو تفاصيل مصدر الوصول.';
+                $validator->errors()->add('lead_source_other', $message);
             }
-            if ($source?->type !== LeadSourceType::Other && ! empty($data['lead_source_other'])) {
-                $validator->errors()->add('lead_source_other', 'يُستخدم هذا الوصف مع مصدر الوصول «أخرى» فقط.');
+            if (! $sourceNeedsDetails && ! empty($data['lead_source_other'])) {
+                $validator->errors()->add('lead_source_other', 'تُستخدم هذه التفاصيل فقط مع المصادر التي تتطلب توضيحًا.');
             }
             $validateReferrerDetails = $source?->type === LeadSourceType::PersonReferral
                 && ($sourceChanged || $referrerDetailsChanged);
@@ -584,11 +594,15 @@ class RequestService
             if ($leadSourceId && (! $leadSource?->is_active || ! $leadSource->type->isSelectableForNewRequests())) {
                 $validator->errors()->add('lead_source_id', 'مصدر الوصول غير متاح للاستخدام.');
             }
-            if ($leadSource?->type === LeadSourceType::Other && empty($data['lead_source_other'])) {
-                $validator->errors()->add('lead_source_other', 'اكتب مصدر الوصول عند اختيار «أخرى».');
+            $sourceNeedsDetails = $this->leadSourceNeedsDetails($leadSource);
+            if ($sourceNeedsDetails && empty($data['lead_source_other'])) {
+                $message = $leadSource?->type === LeadSourceType::Other
+                    ? 'اكتب مصدر الوصول عند اختيار «أخرى».'
+                    : 'اكتب اسم المنصة أو تفاصيل مصدر الوصول.';
+                $validator->errors()->add('lead_source_other', $message);
             }
-            if ($leadSource?->type !== LeadSourceType::Other && ! empty($data['lead_source_other'])) {
-                $validator->errors()->add('lead_source_other', 'يُستخدم هذا الوصف مع مصدر الوصول «أخرى» فقط.');
+            if (! $sourceNeedsDetails && ! empty($data['lead_source_other'])) {
+                $validator->errors()->add('lead_source_other', 'تُستخدم هذه التفاصيل فقط مع المصادر التي تتطلب توضيحًا.');
             }
             if ($leadSource?->type === LeadSourceType::PersonReferral) {
                 $hasName = filled($data['lead_source_referrer_name'] ?? null);
@@ -867,6 +881,11 @@ class RequestService
 
             return $request;
         });
+    }
+
+    private function leadSourceNeedsDetails(?Model $source): bool
+    {
+        return $source?->type === LeadSourceType::Other || (bool) ($source?->requires_details ?? false);
     }
 
     private function authorizeDepartment(User $actor, Department $department): void

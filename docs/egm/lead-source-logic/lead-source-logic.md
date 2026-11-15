@@ -1,8 +1,8 @@
 # Lead Source and Customer Awareness Attribution
 
 * **Author:** ukbingoopaysafe
-* **Status:** Approved after the five-round review cap; implementation and automated verification complete on `main`; same-engine/version production migration rehearsal remains required before rollout.
-* **Date:** 2026-11-12
+* **Status:** Approved after the five-round review cap; implementation completed on `main`. Follow-up behavior for social-media details was added on 2026-11-15; same-engine/version production migration rehearsal remains required before rollout.
+* **Date:** 2026-11-12; follow-up: 2026-11-15
 
 ## Overview
 
@@ -85,13 +85,13 @@ Managers continue to add source labels within their own department's catalog. Th
 
 ### Request Data and Form Flow
 
-Keep one optional `lead_source_id` on each request. It represents the main source the client identifies when staff ask. If several channels contributed, staff ask the client to identify the main one rather than guessing first or most influential. Add nullable `lead_source_referrer_name` and `lead_source_referrer_unknown` fields to each request table. Retain `lead_source_other` for the «أخرى» description.
+Keep one optional `lead_source_id` on each request. It represents the main source the client identifies when staff ask. If several channels contributed, staff ask the client to identify the main one rather than guessing first or most influential. Add nullable `lead_source_referrer_name` and `lead_source_referrer_unknown` fields to each request table. Keep `lead_source_other` as the detail value for «أخرى» and for any catalog source whose `requires_details` flag is true; «وسائل التواصل الاجتماعي» requires the platform name or other source detail.
 
 Require exactly one of a name or explicit unknown when creating a request with a `person_referral` source, changing a request's source to `person_referral`, or explicitly changing referral details for that source. If both referrer fields are null on a historical request, preserve that state during unrelated edits.
 
-Show the name and unknown choice only for `person_referral`, and require the existing description only for `other`. When staff change the selected source, clear the old dependent form values immediately so they can enter details for the new type. On submission, discard stored values belonging to the previous source, keep submitted values valid for the new type, clear incompatible values, and then validate.
+Show the name and unknown choice only for `person_referral`. Require a description for `other` and for sources marked `requires_details`. When staff change the selected source, clear the old dependent form values immediately so they can enter details for the new source. On submission, discard stored values belonging to the previous source, keep submitted values valid for the new source, clear incompatible values, and then validate. For an old social-media request without details, preserve the missing value during unrelated edits; require details when the source is newly selected or its details are explicitly changed.
 
-The shared `RequestFormSchema` reads selectable options from the selected department's catalog and uses each option's type to control visibility. It offers only active `awareness`, `person_referral`, and built-in `other` values for new requests. On edit, it retains the request's currently selected inactive value for display; it never offers an inactive or legacy type for a new or changed selection.
+The shared `RequestFormSchema` reads selectable options from the selected department's catalog and uses each option's type and `requires_details` flag to control visibility. It offers only active `awareness`, `person_referral`, and built-in `other` values for new requests. On edit, it retains the request's currently selected inactive value for display; it never offers an inactive or legacy type for a new or changed selection.
 
 `RequestService` enforces eligibility and active state on the server for new or changed selections. It permits the exact currently stored source to remain unchanged, including a historical inactive legacy source, while unrelated request fields are edited. Rental and Resale keep their separate model and foreign-key boundaries.
 
@@ -103,7 +103,7 @@ Manager adds a source label
                          ▼
 Request form loads active, eligible sources for that department
         │
-        ├── awareness ─────────────── no dependent field
+        ├── awareness ─────────────── details only when requires_details is true
         ├── person_referral ────────── referrer name OR explicit unknown choice
         └── other ──────────────────── required source-description field
                          │
@@ -111,21 +111,21 @@ Request form loads active, eligible sources for that department
 RequestService enforces eligible types and validates dependent values
                          │
                          ▼
-Request row stores source ID and the applicable referral or other details
+Request row stores source ID and any applicable referral or source details
 ```
 
 ### Migration and Historical Values
 
-Add a tracked migration for source types and request-level referrer snapshots in both departments. Backfill known sources, set «أخرى» active, preserve unknown manager-added rows as inactive and unclassified, and keep historical referral fields null. Preserve source IDs, request links, and the legacy `is_other` value; enforce non-null `type` only after backfill. The exact mappings, assertions, and forward-only rollback behavior are specified in Detailed Implementation item 1.
+The source-type migration adds types and request-level referrer snapshots in both departments. A follow-up migration adds `requires_details` to both source catalogs with a false default and sets it for «وسائل التواصل الاجتماعي». No request-table column is needed for this follow-up: existing `lead_source_other` stores the typed details and is already included in audit redaction and exports. Preserve source IDs, request links, and the legacy `is_other` value. Historical social-media requests with no details remain valid on unrelated edits.
 
 Keep the migration as a tracked file for the owner to apply after pulling `main` on production. The rollback and application compatibility policy is defined under Non-Functional Requirements.
 
 ### Related Components
 
 * `LeadSourceResource` and `LeadSourceService` add only `awareness` and `person_referral` types, classify legacy rows, and keep department authorization and audit behavior. The built-in `other` cannot be deactivated and `legacy_contact_method` cannot be reactivated; a classified `unclassified_legacy` row can be activated as a separate manager action.
-* `RentalLeadSource` and `ResaleLeadSource` expose the stored type to the shared request form.
-* `RequestFormSchema` shows the referrer name/unknown choice or source-description field according to type.
-* `RequestService` validates type, source ID, eligibility, and dependent values on request creation and update. A new or changed selection of `person_referral`, or an explicit change to its referral details, requires exactly one of a name or explicit unknown choice. A historical request with both referrer fields null remains unchanged during unrelated edits. Broker-first requests stay source-null until the client's source is known; the linked property broker is not used as an inferred referrer.
+* `RentalLeadSource` and `ResaleLeadSource` expose the stored type and `requires_details` flag to the shared request form.
+* `RequestFormSchema` shows the referrer name/unknown choice or source-detail field according to type and catalog flag.
+* `RequestService` validates type, source ID, eligibility, and dependent values on request creation and update. A new or changed selection of `person_referral`, or an explicit change to its referral details, requires exactly one of a name or explicit unknown choice. A new or changed selection of a source with `requires_details` requires source details; a historical blank social-media detail remains blank on unrelated edits. Broker-first requests stay source-null until the client's source is known; the linked property broker is not used as an inferred referrer.
 * The Rental and Resale request exporters include the referrer name, displaying «غير معروف» for an explicit unknown choice. Request audit snapshots record that the name changed without copying the name into the audit payload.
 
 ## Alternatives Considered
@@ -204,6 +204,11 @@ Rental and Resale use the same rules through shared components while retaining s
   * Confirm no catalog row has a null type, then alter `type` to non-null.
   * Preserve catalog IDs and request foreign keys. Leave historical referral fields null. Leave `is_other` unchanged and unused by runtime behavior.
   * Keep this migration's `down()` behavior and production sequence as specified under Non-Functional Requirements.
+
+#### 1a. `database/migrations/2026_11_15_000000_add_requires_details_to_lead_sources.php` (Create)
+
+* **Type / Scope**: Follow-up catalog migration for both departments.
+* **Proposed Changes**: Add `requires_details` with a false default to each lead-source catalog and set it true for the existing «وسائل التواصل الاجتماعي» row. The field controls the existing request detail input; it does not create a new request-table column.
 
 #### 2. `app/Enums/LeadSourceType.php` (Create)
 
