@@ -74,7 +74,11 @@ class OperationalRequestsOverview extends StatsOverviewWidget
                 ->color('info');
             $stats[] = Stat::make($department->label().' • متوقفة مؤقتًا', (clone $baseQuery)->where('status', RequestStatus::Paused->value)->count())
                 ->color('gray');
-            $customerFollowUpQuery = $customerFollowUpClass::query();
+            $customerFollowUpQuery = $customerFollowUpClass::query()
+                ->whereNotNull('category')
+                ->where(fn ($query) => $query
+                    ->whereNull('legacy_customer_id')
+                    ->orWhereDoesntHave('customer.requests'));
             $stats[] = Stat::make($department->label().' • متابعة العميل (متأخرة)', (clone $customerFollowUpQuery)->where('next_follow_up_at', '<', $now)->count())
                 ->color('danger')
                 ->url($customerFollowUpResource::getUrl().'?tableFilters[urgency][value]=overdue');

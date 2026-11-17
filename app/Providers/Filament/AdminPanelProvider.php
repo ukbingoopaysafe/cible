@@ -33,6 +33,7 @@ class AdminPanelProvider extends PanelProvider
             ->default()
             ->id('admin')
             ->path('admin')
+            ->databaseNotifications()
             ->maxContentWidth('full')
             ->sidebarCollapsibleOnDesktop()
             ->sidebarWidth('16rem')

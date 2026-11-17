@@ -72,7 +72,7 @@ final class ContactChangeApprovalService
                 'status' => ContactChangeRequestStatus::Pending->value,
             ]);
 
-            $this->recordAudit(
+            $auditEvent = $this->recordAudit(
                 $actor,
                 $department,
                 'contact_change.requested',
@@ -80,6 +80,7 @@ final class ContactChangeApprovalService
                 $before,
                 $after,
             );
+            app(WorkflowNotificationService::class)->notifyContactChangeRequested($request, $lockedSubject, $auditEvent);
 
             return $request;
         });
@@ -131,6 +132,7 @@ final class ContactChangeApprovalService
                 }
 
                 $this->applyApprovedValues($actor, $department, $subject, $request);
+                $subject->refresh();
             }
 
             $beforeDecision = ['status' => $request->status->value];
@@ -142,7 +144,7 @@ final class ContactChangeApprovalService
             $request->decided_at = now();
             $request->save();
 
-            $this->recordAudit(
+            $auditEvent = $this->recordAudit(
                 $actor,
                 $department,
                 $approved ? 'contact_change.approved' : 'contact_change.rejected',
@@ -151,6 +153,7 @@ final class ContactChangeApprovalService
                 ['status' => $request->status->value, 'decided_by' => $actor->id],
                 $approved ? null : $reason,
             );
+            app(WorkflowNotificationService::class)->notifyContactChangeDecision($request, $subject, $auditEvent, $approved);
 
             return $request->refresh();
         });
@@ -197,6 +200,7 @@ final class ContactChangeApprovalService
                 $beforeDecision + ['request_id' => $request->id],
                 ['status' => $request->status->value],
             );
+            app(WorkflowNotificationService::class)->retireContactChangeRequestNotifications($request);
 
             return $request->refresh();
         });
@@ -284,8 +288,8 @@ final class ContactChangeApprovalService
         ?array $before,
         ?array $after,
         ?string $reason = null,
-    ): void {
-        AuditEvent::query()->create([
+    ): AuditEvent {
+        return AuditEvent::query()->create([
             'actor_user_id' => $actor->id,
             'department' => $department->value,
             'event_key' => $event,

@@ -5,6 +5,8 @@ namespace App\Exports;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
 use App\Enums\Department;
+use App\Enums\ElectricityMeterType;
+use App\Enums\RequestClientCategory;
 use App\Enums\RequestUnitType;
 use App\Exports\Concerns\FormatsSpreadsheetData;
 use App\Filament\Support\RequestFormSchema;
@@ -68,10 +70,19 @@ class ResaleRequestExporter extends Exporter
             ExportColumn::make('unit_type')->label('نوع الوحدة')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) {
                 RequestUnitType::Apartment->value => 'شقة', RequestUnitType::Studio->value => 'استوديو', RequestUnitType::Villa->value => 'فيلا', RequestUnitType::Other->value => 'أخرى', default => '',
             }),
+            ExportColumn::make('client_category')->label('نوع العميل')->formatStateUsing(fn (mixed $state): string => RequestClientCategory::tryFrom(static::enumValue($state) ?? '')?->label() ?? ''),
+            ExportColumn::make('occupants')->label('عدد الأفراد'),
+            ExportColumn::make('bedrooms')->label('عدد الغرف'),
+            ExportColumn::make('bathrooms')->label('عدد الحمامات'),
+            ExportColumn::make('building_year')->label('سنة البناء'),
+            ExportColumn::make('elevator_required')->label('المصعد')->formatStateUsing(fn (mixed $state): string => match ($state) { true, 1, '1' => 'مطلوب', false, 0, '0' => 'غير مطلوب', default => '' }),
+            ExportColumn::make('water_meter')->label('عداد المياه')->formatStateUsing(fn (mixed $state): string => match ($state) { true, 1, '1' => 'يوجد', false, 0, '0' => 'لا يوجد', default => '' }),
+            ExportColumn::make('electricity_meter_type')->label('عداد الكهرباء')->formatStateUsing(fn (mixed $state): string => ElectricityMeterType::tryFrom(static::enumValue($state) ?? '')?->label() ?? ''),
+            ExportColumn::make('gas_available')->label('عداد الغاز')->formatStateUsing(fn (mixed $state): string => match ($state) { true, 1, '1' => 'يوجد', false, 0, '0' => 'لا يوجد', default => '' }),
             ExportColumn::make('area_min')->label('المساحة من (م²)'),
             ExportColumn::make('area_max')->label('المساحة إلى (م²)'),
-            ExportColumn::make('budget_declared')->label('الميزانية المعلنة'),
-            ExportColumn::make('budget_targeted')->label('الميزانية المستهدفة'),
+            ExportColumn::make('budget_declared')->label('ميزانية العميل'),
+            ExportColumn::make('budget_targeted')->label('ميزانية السوق'),
             ExportColumn::make('budget_currency')->label('العملة'),
             static::textColumn('other_requirements', 'متطلبات أخرى'),
             static::textColumn('notes', 'ملاحظات'),

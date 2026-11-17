@@ -7,6 +7,8 @@ use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
+use App\Enums\RentalFurnishingType;
+use App\Enums\RequestClientCategory;
 use App\Exports\Concerns\FormatsSpreadsheetData;
 use App\Filament\Support\RequestFormSchema;
 use App\Models\RentalRequest;
@@ -69,22 +71,31 @@ class RentalRequestExporter extends Exporter
             ExportColumn::make('unit_type')->label('نوع الوحدة')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) {
                 RequestUnitType::Apartment->value => 'شقة', RequestUnitType::Studio->value => 'استوديو', RequestUnitType::Villa->value => 'فيلا', RequestUnitType::Other->value => 'أخرى', default => '',
             }),
+            ExportColumn::make('client_category')->label('نوع العميل')->formatStateUsing(fn (mixed $state): string => RequestClientCategory::tryFrom(static::enumValue($state) ?? '')?->label() ?? ''),
             static::textColumn('unit_type_other', 'تفصيل نوع الوحدة'),
             ExportColumn::make('bedrooms')->label('عدد الغرف'),
             ExportColumn::make('occupants')->label('عدد الأفراد'),
-            ExportColumn::make('household')->label('أسرة')->formatStateUsing(fn (mixed $state): string => match ($state) { true, 1, '1' => 'نعم', false, 0, '0' => 'لا', default => '' }),
+            ExportColumn::make('household')->label('قيمة الأسرة القديمة')->formatStateUsing(fn (mixed $state): string => match ($state) { true, 1, '1' => 'نعم', false, 0, '0' => 'لا', default => '' }),
             ExportColumn::make('rental_term')->label('مدة الإيجار')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) { 'daily' => 'يومي', 'monthly' => 'شهري', 'half_yearly' => 'نصف سنوي', 'yearly' => 'سنوي', default => '' }),
             ExportColumn::make('rental_term_count')->label('عدد وحدات المدة'),
-            ExportColumn::make('finishing')->label('التشطيب')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) {
-                FinishingLevel::Unfinished->value => 'بدون تشطيب', FinishingLevel::HalfFinished->value => 'نصف تشطيب', FinishingLevel::SuperLux->value => 'سوبر لوكس', FinishingLevel::UltraSuperLux->value => 'ألترا سوبر لوكس', FinishingLevel::Hotel->value => 'فندقي', FinishingLevel::Smart->value => 'ذكي', FinishingLevel::Other->value => 'أخرى', default => '',
+            ExportColumn::make('finishing')->label('نوع الفرش')->formatStateUsing(function (mixed $state): string {
+                $value = static::enumValue($state);
+
+                return RentalFurnishingType::tryFrom($value ?? '')?->label() ?? match ($value) {
+                    FinishingLevel::Unfinished->value => 'قيمة قديمة — بدون تشطيب',
+                    FinishingLevel::HalfFinished->value => 'قيمة قديمة — نصف تشطيب',
+                    FinishingLevel::UltraSuperLux->value => 'قيمة قديمة — ألترا سوبر لوكس',
+                    FinishingLevel::Smart->value => 'قيمة قديمة — ذكي',
+                    default => '',
+                };
             }),
-            static::textColumn('finishing_other', 'تفصيل التشطيب'),
+            static::textColumn('finishing_other', 'تفصيل نوع الفرش'),
             ExportColumn::make('floor_preference')->label('تفضيل الدور')->formatStateUsing(fn (mixed $state): string => match (static::enumValue($state)) {
                 FloorPreference::Ground->value => 'أرضي', FloorPreference::Low->value => 'منخفض', FloorPreference::Middle->value => 'متوسط', FloorPreference::High->value => 'مرتفع', FloorPreference::Top->value => 'أخير', FloorPreference::NoPreference->value => 'لا تفضيل', default => '',
             }),
             ExportColumn::make('elevator_required')->label('المصعد مطلوب')->formatStateUsing(fn (mixed $state): string => match ($state) { true, 1, '1' => 'نعم', false, 0, '0' => 'لا', default => '' }),
-            ExportColumn::make('budget_declared')->label('الميزانية المعلنة'),
-            ExportColumn::make('budget_targeted')->label('الميزانية المستهدفة'),
+            ExportColumn::make('budget_declared')->label('ميزانية العميل'),
+            ExportColumn::make('budget_targeted')->label('ميزانية السوق'),
             ExportColumn::make('budget_currency')->label('العملة'),
             static::textColumn('other_requirements', 'متطلبات أخرى'),
             static::textColumn('notes', 'ملاحظات'),

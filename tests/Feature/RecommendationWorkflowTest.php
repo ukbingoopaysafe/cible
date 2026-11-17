@@ -69,6 +69,7 @@ class RecommendationWorkflowTest extends TestCase
             'scheduled_at' => now()->addDays(2)->toDateTimeString(),
             'field_representative_name' => 'مندوب معاينة',
         ]);
+        $service->completeViewing($manager, Department::Rental, $viewing->id);
 
         $service->recordViewingResult($manager, Department::Rental, $viewing->id, [
             'result' => 'unsuitable',

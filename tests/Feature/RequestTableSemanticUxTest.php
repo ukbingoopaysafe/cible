@@ -100,7 +100,7 @@ class RequestTableSemanticUxTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => RequestStatus::Active,
-            'stage' => RentalRequestStage::Intake,
+            'stage' => RentalRequestStage::UnitSearch,
             'next_follow_up_at' => Carbon::parse('2026-11-01 10:00:00'),
         ]);
 
@@ -115,7 +115,7 @@ class RequestTableSemanticUxTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => RequestStatus::Active,
-            'stage' => RentalRequestStage::Intake,
+            'stage' => RentalRequestStage::UnitSearch,
             'next_follow_up_at' => Carbon::parse('2026-11-01 16:00:00'),
         ]);
 
@@ -130,7 +130,7 @@ class RequestTableSemanticUxTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => RequestStatus::Active,
-            'stage' => RentalRequestStage::Intake,
+            'stage' => RentalRequestStage::UnitSearch,
             'next_follow_up_at' => Carbon::parse('2026-11-05 14:00:00'),
         ]);
 
@@ -145,7 +145,7 @@ class RequestTableSemanticUxTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => RequestStatus::Active,
-            'stage' => RentalRequestStage::Intake,
+            'stage' => RentalRequestStage::UnitSearch,
             'next_follow_up_at' => null,
         ]);
 

@@ -77,7 +77,7 @@ class RecordCodeSearchTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => 'active',
-            'stage' => 'intake',
+            'stage' => 'unit_search',
             'next_follow_up_at' => now()->addDay(),
         ]);
         $otherRequest = RentalRequest::query()->forceCreate([
@@ -87,7 +87,7 @@ class RecordCodeSearchTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => 'active',
-            'stage' => 'intake',
+            'stage' => 'unit_search',
             'next_follow_up_at' => now()->addDay(),
         ]);
 
@@ -132,7 +132,7 @@ class RecordCodeSearchTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => 'active',
-            'stage' => 'intake',
+            'stage' => 'unit_search',
             'next_follow_up_at' => now()->addDay(),
         ]);
         $otherRequest = ResaleRequest::query()->forceCreate([
@@ -142,7 +142,7 @@ class RecordCodeSearchTest extends TestCase
             'area_id' => $area->id,
             'contact_party' => 'customer',
             'status' => 'active',
-            'stage' => 'intake',
+            'stage' => 'unit_search',
             'next_follow_up_at' => now()->addDay(),
         ]);
 

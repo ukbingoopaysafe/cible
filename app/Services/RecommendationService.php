@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\ContactParty;
 use App\Enums\Department;
+use App\Enums\ViewingAppointmentStatus;
 use App\Models\AuditEvent;
 use App\Models\RentalFieldInspection;
 use App\Models\RentalRecommendation;
@@ -171,7 +172,7 @@ class RecommendationService
         $recommendationTable = $department->value.'_recommendations';
         $validated = Validator::make($data, [
             'recommendation_id' => ['nullable', 'integer', Rule::exists($recommendationTable, 'id')],
-            'scheduled_at' => ['required', 'date', 'after:now'],
+            'scheduled_at' => ['nullable', 'date', 'after:now'],
             'field_representative_name' => ['nullable', 'string', 'max:160'],
         ])->validate();
         if (! empty($validated['recommendation_id'])) {
@@ -185,8 +186,126 @@ class RecommendationService
         }
 
         return DB::transaction(function () use ($actor, $department, $request, $validated): Model {
-            $viewing = $this->viewingClass($department)::query()->create([...$validated, 'request_id' => $request->id, 'recorded_by' => $actor->id]);
-            $this->audit($actor, $department, 'viewing.scheduled', $viewing, ['request_id' => $request->id, 'recommendation_id' => $viewing->recommendation_id]);
+            $viewing = $this->viewingClass($department)::query()->create([
+                ...$validated,
+                'appointment_status' => filled($validated['scheduled_at'] ?? null)
+                    ? ViewingAppointmentStatus::Scheduled
+                    : ViewingAppointmentStatus::PendingSchedule,
+                'request_id' => $request->id,
+                'recorded_by' => $actor->id,
+            ]);
+            $auditEvent = $this->audit($actor, $department, 'viewing.attempt_created', $viewing, [
+                'request_id' => $request->id,
+                'recommendation_id' => $viewing->recommendation_id,
+                'appointment_status' => $viewing->appointment_status->value,
+            ]);
+            app(WorkflowNotificationService::class)->notifyViewing($request, $viewing, 'created', $auditEvent);
+
+            return $viewing;
+        });
+    }
+
+    public function setViewingSchedule(User $actor, Department $department, int $viewingId, ?string $scheduledAt): Model
+    {
+        $this->authorize($actor, $department);
+        $validated = Validator::make(['scheduled_at' => $scheduledAt], [
+            'scheduled_at' => ['required', 'date', 'after:now'],
+        ])->validate();
+        $viewing = $this->viewingClass($department)::query()->findOrFail($viewingId);
+        $this->ensureOpen($viewing->request);
+        if (! in_array($viewing->appointment_status, [ViewingAppointmentStatus::PendingSchedule, ViewingAppointmentStatus::Scheduled], true)) {
+            throw ValidationException::withMessages(['viewing_id' => 'لا يمكن تغيير موعد هذه المحاولة بعد إتمامها أو إلغائها أو تأجيلها.']);
+        }
+
+        return DB::transaction(function () use ($actor, $department, $viewing, $validated): Model {
+            $viewing->scheduled_at = $validated['scheduled_at'];
+            $viewing->appointment_status = ViewingAppointmentStatus::Scheduled;
+            $viewing->save();
+            $auditEvent = $this->audit($actor, $department, 'viewing.scheduled', $viewing, ['scheduled_at' => $viewing->scheduled_at->toISOString()]);
+            app(WorkflowNotificationService::class)->notifyViewing($viewing->request, $viewing, 'scheduled', $auditEvent);
+
+            return $viewing;
+        });
+    }
+
+    public function completeViewing(User $actor, Department $department, int $viewingId): Model
+    {
+        $this->authorize($actor, $department);
+        $viewing = $this->viewingClass($department)::query()->findOrFail($viewingId);
+        $this->ensureOpen($viewing->request);
+        if ($viewing->appointment_status !== ViewingAppointmentStatus::Scheduled || ! $viewing->scheduled_at) {
+            throw ValidationException::withMessages(['viewing_id' => 'لا يمكن إتمام المعاينة قبل تحديد موعدها.']);
+        }
+
+        return DB::transaction(function () use ($actor, $department, $viewing): Model {
+            $viewing->appointment_status = ViewingAppointmentStatus::Completed;
+            $viewing->save();
+            $this->audit($actor, $department, 'viewing.completed', $viewing, ['appointment_status' => ViewingAppointmentStatus::Completed->value]);
+
+            return $viewing;
+        });
+    }
+
+    public function postponeViewing(User $actor, Department $department, int $viewingId, array $data = []): Model
+    {
+        $this->authorize($actor, $department);
+        $validated = Validator::make($data, [
+            'scheduled_at' => ['nullable', 'date', 'after:now'],
+            'field_representative_name' => ['nullable', 'string', 'max:160'],
+        ])->validate();
+        $viewing = $this->viewingClass($department)::query()->findOrFail($viewingId);
+        $this->ensureOpen($viewing->request);
+        if (! in_array($viewing->appointment_status, [ViewingAppointmentStatus::PendingSchedule, ViewingAppointmentStatus::Scheduled], true)) {
+            throw ValidationException::withMessages(['viewing_id' => 'لا يمكن تأجيل محاولة أُغلقت بالفعل.']);
+        }
+
+        return DB::transaction(function () use ($actor, $department, $viewing, $validated): Model {
+            $viewing->appointment_status = ViewingAppointmentStatus::Postponed;
+            $viewing->result = null;
+            $viewing->customer_feedback = null;
+            $viewing->rejection_reason = null;
+            $viewing->save();
+            $this->audit($actor, $department, 'viewing.postponed', $viewing, ['appointment_status' => ViewingAppointmentStatus::Postponed->value]);
+
+            $replacement = $this->viewingClass($department)::query()->create([
+                'request_id' => $viewing->request_id,
+                'recommendation_id' => $viewing->recommendation_id,
+                'scheduled_at' => $validated['scheduled_at'] ?? null,
+                'appointment_status' => filled($validated['scheduled_at'] ?? null)
+                    ? ViewingAppointmentStatus::Scheduled
+                    : ViewingAppointmentStatus::PendingSchedule,
+                'rescheduled_from_id' => $viewing->id,
+                'field_representative_name' => $validated['field_representative_name'] ?? $viewing->field_representative_name,
+                'recorded_by' => $actor->id,
+            ]);
+            $auditEvent = $this->audit($actor, $department, 'viewing.attempt_created', $replacement, [
+                'request_id' => $viewing->request_id,
+                'rescheduled_from_id' => $viewing->id,
+                'appointment_status' => $replacement->appointment_status->value,
+            ]);
+            app(WorkflowNotificationService::class)->notifyViewing($viewing->request, $replacement, 'rescheduled', $auditEvent);
+
+            return $replacement;
+        });
+    }
+
+    public function cancelViewing(User $actor, Department $department, int $viewingId): Model
+    {
+        $this->authorize($actor, $department);
+        $viewing = $this->viewingClass($department)::query()->findOrFail($viewingId);
+        $this->ensureOpen($viewing->request);
+        if (! in_array($viewing->appointment_status, [ViewingAppointmentStatus::PendingSchedule, ViewingAppointmentStatus::Scheduled], true)) {
+            throw ValidationException::withMessages(['viewing_id' => 'لا يمكن إلغاء محاولة أُغلقت بالفعل.']);
+        }
+
+        return DB::transaction(function () use ($actor, $department, $viewing): Model {
+            $viewing->appointment_status = ViewingAppointmentStatus::Cancelled;
+            $viewing->result = null;
+            $viewing->customer_feedback = null;
+            $viewing->rejection_reason = null;
+            $viewing->save();
+            $auditEvent = $this->audit($actor, $department, 'viewing.cancelled', $viewing, ['appointment_status' => ViewingAppointmentStatus::Cancelled->value]);
+            app(WorkflowNotificationService::class)->notifyViewing($viewing->request, $viewing, 'cancelled', $auditEvent);
 
             return $viewing;
         });
@@ -197,8 +316,11 @@ class RecommendationService
         $this->authorize($actor, $department);
         $viewing = $this->viewingClass($department)::query()->findOrFail($viewingId);
         $this->ensureOpen($viewing->request);
+        if ($viewing->appointment_status !== ViewingAppointmentStatus::Completed) {
+            throw ValidationException::withMessages(['viewing_id' => 'سجّل إتمام المعاينة قبل تسجيل نتيجتها.']);
+        }
         $rentalResultOptions = ['reserved', 'unsuitable', 'other_apartment_viewing', 'rented_same_unit', 'awaiting_customer_reply'];
-        $resaleResultOptions = ['interested', 'not_interested', 'second_viewing', 'negotiating', 'cancelled'];
+        $resaleResultOptions = ['interested', 'not_interested', 'second_viewing', 'negotiating'];
         $reasonRequiredResult = $department === Department::Rental ? 'unsuitable' : 'not_interested';
         $validated = Validator::make($data, [
             'result' => ['required', Rule::in($department === Department::Rental ? $rentalResultOptions : $resaleResultOptions)],
@@ -231,12 +353,13 @@ class RecommendationService
         return DB::transaction(function () use ($actor, $department, $viewing, $validated): Model {
             $before = ['result' => $viewing->result];
             $viewing->update($validated);
-            $this->audit($actor, $department, 'viewing.result_recorded', $viewing, [
+            $auditEvent = $this->audit($actor, $department, 'viewing.result_recorded', $viewing, [
                 'from' => $before['result'],
                 'to' => $validated['result'],
                 'has_customer_feedback' => filled($validated['customer_feedback'] ?? null),
                 'has_rejection_reason' => filled($validated['rejection_reason'] ?? null),
             ]);
+            app(WorkflowNotificationService::class)->notifyViewing($viewing->request, $viewing, 'result_recorded', $auditEvent);
 
             return $viewing;
         });
@@ -276,9 +399,9 @@ class RecommendationService
         return $department === Department::Rental ? RentalViewing::class : ResaleViewing::class;
     }
 
-    private function audit(User $actor, Department $department, string $event, Model $subject, array $after): void
+    private function audit(User $actor, Department $department, string $event, Model $subject, array $after): AuditEvent
     {
-        AuditEvent::query()->create([
+        return AuditEvent::query()->create([
             'actor_user_id' => $actor->id,
             'department' => $department->value,
             'event_key' => $event,

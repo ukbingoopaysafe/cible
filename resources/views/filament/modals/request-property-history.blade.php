@@ -45,9 +45,16 @@
 
     <section>
         <h3 class="mb-3 text-base font-semibold">معاينات العميل</h3>
-        @forelse ($record->viewings()->with('recommendation')->orderByDesc('scheduled_at')->get() as $viewing)
+        @forelse ($record->viewings()->with('recommendation')->orderByDesc('id')->get() as $viewing)
             <article class="mb-2 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-                <strong><bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($viewing->scheduled_at) }}</bdi></strong>
+                <strong>
+                    @if ($viewing->scheduled_at)
+                        <bdi dir="ltr" class="bidi-isolate">{{ app(\App\Support\DateTimePresenter::class)->formatDateTime($viewing->scheduled_at) }}</bdi>
+                    @else
+                        موعد غير محدد
+                    @endif
+                </strong>
+                — {{ $viewing->appointment_status->label() }}
                 @if ($viewing->recommendation) — {{ $viewing->recommendation->unit_code ?: 'وحدة دون كود' }} @endif
                 @if ($viewing->field_representative_name) — المندوب: {{ $viewing->field_representative_name }} @endif
                 @php
@@ -62,19 +69,22 @@
                             'not_interested' => 'غير مهتم',
                             'second_viewing' => 'يرغب بمعاينة أخرى',
                             'negotiating' => 'بدأ التفاوض',
-                            'cancelled' => 'أُلغيت',
                         ]
                         : [
                             'interested' => 'مهتم',
                             'not_interested' => 'غير مهتم',
                             'second_viewing' => 'يرغب بمعاينة أخرى',
                             'negotiating' => 'بدأ التفاوض',
-                            'cancelled' => 'أُلغيت',
                         ];
                 @endphp
-                <p class="mt-1">النتيجة: {{ $resultLabels[$viewing->result] ?? 'لم تُسجل بعد' }}</p>
-                @if ($viewing->customer_feedback)<p class="mt-1">رأي العميل: {{ $viewing->customer_feedback }}</p>@endif
-                @if ($viewing->rejection_reason)<p class="mt-1">{{ $viewing->result === 'unsuitable' ? 'سبب عدم المناسبة' : 'سبب عدم الاهتمام' }}: {{ $viewing->rejection_reason }}</p>@endif
+                @if ($viewing->appointment_status === \App\Enums\ViewingAppointmentStatus::Completed)
+                    <p class="mt-1">النتيجة: {{ $resultLabels[$viewing->result] ?? 'لم تُسجل بعد' }}</p>
+                    @if ($viewing->customer_feedback)<p class="mt-1">رأي العميل: {{ $viewing->customer_feedback }}</p>@endif
+                    @if ($viewing->rejection_reason)<p class="mt-1">{{ $viewing->result === 'unsuitable' ? 'سبب عدم المناسبة' : 'سبب عدم الاهتمام' }}: {{ $viewing->rejection_reason }}</p>@endif
+                @endif
+                @if ($viewing->rescheduled_from_id)
+                    <p class="mt-1 text-gray-600 dark:text-gray-300">محاولة جديدة بدل المعاينة السابقة رقم {{ $viewing->rescheduled_from_id }}</p>
+                @endif
             </article>
         @empty
             <p class="text-gray-500">لا توجد معاينات مسجلة لهذا الطلب.</p>

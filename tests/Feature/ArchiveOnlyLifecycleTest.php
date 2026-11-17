@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Enums\Department;
 use App\Models\RentalArea;
+use App\Models\RentalRequestCloseReason;
 use App\Models\ResaleArea;
 use App\Models\User;
 use App\Services\AreaArchiveService;
@@ -43,7 +44,7 @@ class ArchiveOnlyLifecycleTest extends TestCase
 
         $requestService->close($manager, Department::Rental, $request->id, [
             'outcome' => 'unsuccessful',
-            'outcome_reason_text' => 'أُغلق الطلب قبل الأرشفة',
+            'outcome_reason_id' => RentalRequestCloseReason::query()->where('is_active', true)->firstOrFail()->id,
         ]);
         $customers->archive($manager, Department::Rental, $customer->id);
 

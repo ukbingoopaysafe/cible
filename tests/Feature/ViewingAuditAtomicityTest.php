@@ -28,12 +28,13 @@ class ViewingAuditAtomicityTest extends TestCase
             'owner_user_id' => $employee->getKey(),
             'contact_party' => 'broker',
             'status' => 'active',
-            'stage' => 'intake',
+            'stage' => 'unit_search',
             'next_follow_up_at' => now()->addDay(),
         ]);
         $viewing = RentalViewing::query()->create([
             'request_id' => $request->getKey(),
             'scheduled_at' => now()->addDays(2),
+            'appointment_status' => 'completed',
             'recorded_by' => $employee->getKey(),
         ]);
 

@@ -43,3 +43,11 @@ Schedule::command('backup:monitor')
     ->when($backupIsConfigured)
     ->appendOutputTo(storage_path('logs/backups.log'))
     ->onFailure(static fn () => Log::critical('The scheduled off-site backup health check failed.'));
+
+Schedule::command('workflow:process-notifications')
+    ->everyMinute()
+    ->timezone(config('app.timezone', 'Africa/Cairo'))
+    ->withoutOverlapping()
+    ->onOneServer()
+    ->appendOutputTo(storage_path('logs/workflow-notifications.log'))
+    ->onFailure(static fn () => Log::critical('The scheduled workflow notification processor failed.'));

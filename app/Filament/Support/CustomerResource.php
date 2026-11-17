@@ -4,6 +4,7 @@ namespace App\Filament\Support;
 
 use App\Enums\ContactActivityChannel;
 use App\Enums\ContactChangeRequestStatus;
+use App\Enums\CustomerFollowUpCategory;
 use App\Enums\Department;
 use App\Exports\RentalCustomerExporter;
 use App\Exports\ResaleCustomerExporter;
@@ -54,7 +55,8 @@ abstract class CustomerResource extends Resource
         $actor = auth()->user();
 
         return parent::getEloquentQuery()
-            ->with(['customerFollowUp.owner', 'phoneNumbers'])
+            ->with(['customerFollowUps.owner', 'phoneNumbers'])
+            ->withCount('customerFollowUps')
             ->withCount('requests')
             ->withCount(['contactChangeRequests as pending_contact_change_requests_count' => fn (Builder $query): Builder => $query->where('status', ContactChangeRequestStatus::Pending->value)])
             ->when(
@@ -127,8 +129,7 @@ abstract class CustomerResource extends Resource
                     ->toggleable(),
                 TextColumn::make('nationality')->label('الجنسية')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('requests_count')->label('الطلبات')->sortable()->toggleable(),
-                TextColumn::make('customerFollowUp.owner.name')->label('مسؤول المتابعة')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
-                TextColumn::make('customerFollowUp.next_follow_up_at')->label('المتابعة القادمة')->formatStateUsing(fn ($state) => $state ? app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)) : null)->html()->placeholder('—')->sortable()->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('customer_follow_ups_count')->label('سجلات المتابعة')->badge()->color('info')->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('created_at')->label('تاريخ التسجيل')->formatStateUsing(fn ($state) => app(\App\Support\DateTimePresenter::class)->bidi(app(\App\Support\DateTimePresenter::class)->formatDateTime($state)))->html()->sortable()->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('deleted_at')->label('الحالة')->badge()
                     ->state(fn (Model $record): string => $record->trashed() ? 'مؤرشف' : 'نشط')
@@ -245,9 +246,9 @@ abstract class CustomerResource extends Resource
                         if ($record->trashed()) {
                             return false;
                         }
-                        $dealClass = static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class;
 
-                        return $record->customerFollowUp === null && $dealClass::query()->where('customer_id', $record->getKey())->exists();
+                        return ! $record->requests()->exists()
+                            && ! $record->customerFollowUps()->whereNotNull('legacy_customer_id')->exists();
                     })
                     ->successNotificationTitle('تم بدء سجل متابعة العميل'),
                 Action::make('recordCustomerFollowUpActivity')
@@ -259,9 +260,20 @@ abstract class CustomerResource extends Resource
                     ->schema([
                         Grid::make(['default' => 1, 'sm' => 2])
                             ->schema([
-                                Select::make('deal_id')->label('الصفقة المرتبطة')->options(fn (Model $record): array => (static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class)::query()
-                                    ->where('customer_id', $record->getKey())->orderByDesc('deal_date')->get()
-                                ->mapWithKeys(fn (Model $deal): array => [$deal->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDate($deal->deal_date)).' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])->all())->searchable(),
+                                Select::make('follow_up_id')
+                                    ->label('سجل المتابعة')
+                                    ->options(fn (Model $record): array => self::actionableCustomerFollowUps($record)
+                                        ->with('request')->orderByDesc('id')->get()
+                                        ->mapWithKeys(fn (Model $followUp): array => [$followUp->id => $followUp->category->label().($followUp->request_id ? ' — طلب '.RecordCode::request(static::department(), $followUp->request_id) : '')])
+                                        ->all())
+                                    ->live()
+                                    ->searchable()
+                                    ->required(),
+                                Select::make('deal_id')
+                                    ->label('الصفقة المرتبطة')
+                                    ->options(fn (Get $get, Model $record): array => self::followUpDealOptions($record, $get('follow_up_id')))
+                                    ->visible(fn (Get $get, Model $record): bool => self::followUpHasDeal($record, $get('follow_up_id')))
+                                    ->searchable(),
                                 Select::make('channel')->label('وسيلة التواصل')->options(collect(ContactActivityChannel::cases())->mapWithKeys(fn (ContactActivityChannel $channel): array => [$channel->value => $channel->label()])->all())->required(),
                                 DateTimePicker::make('occurred_at')->label('وقت التواصل')->default(now())->native(false)->seconds(false)->maxDate(now())->required(),
                                 DateTimePicker::make('next_follow_up_at')->label('المتابعة القادمة')->native(false)->seconds(false)->minDate(now()->addMinute()),
@@ -273,9 +285,9 @@ abstract class CustomerResource extends Resource
                     ->action(function (Model $record, array $data): void {
                         $actor = auth()->user();
                         abort_unless($actor instanceof User, 403);
-                        app(CustomerFollowUpService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), $data);
+                        app(CustomerFollowUpService::class)->recordActivity($actor, static::department(), (int) $record->getKey(), (int) $data['follow_up_id'], $data);
                     })
-                    ->visible(fn (Model $record): bool => ! $record->trashed() && $record->customerFollowUp !== null)
+                    ->visible(fn (Model $record): bool => ! $record->trashed() && self::actionableCustomerFollowUps($record)->exists())
                     ->successNotificationTitle('تم تسجيل التواصل وتحديث موعد المتابعة'),
                 Action::make('customerFollowUpHistory')
                     ->label('سجل متابعة العميل')
@@ -285,9 +297,9 @@ abstract class CustomerResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('إغلاق')
                     ->modalContent(fn (Model $record) => view('filament.modals.customer-follow-up-history', [
-                        'customerFollowUp' => $record->customerFollowUp?->load(['owner', 'activities.actor', 'activities.deal']),
+                        'customerFollowUps' => $record->customerFollowUps()->with(['owner', 'request', 'deal', 'activities.actor', 'activities.deal'])->orderByDesc('id')->get(),
                     ]))
-                    ->visible(fn (Model $record): bool => $record->customerFollowUp !== null),
+                    ->visible(fn (Model $record): bool => $record->customerFollowUps()->exists()),
             ])
                 ->label('متابعة العميل')
                 ->icon('heroicon-o-heart')
@@ -438,6 +450,42 @@ abstract class CustomerResource extends Resource
                 );
             })
             ->successNotificationTitle('تمت إضافة العميل');
+    }
+
+    private static function actionableCustomerFollowUps(Model $record): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $record->customerFollowUps()
+            ->whereNotNull('category')
+            ->where(function (Builder $query): void {
+                $query->whereNull('legacy_customer_id')
+                    ->orWhereDoesntHave('customer.requests');
+            });
+    }
+
+    private static function followUpHasDeal(Model $record, mixed $followUpId): bool
+    {
+        $followUp = self::actionableCustomerFollowUps($record)->whereKey($followUpId)->first();
+
+        return $followUp?->category === CustomerFollowUpCategory::Successful && (bool) $followUp->request_id;
+    }
+
+    /** @return array<int, string> */
+    private static function followUpDealOptions(Model $record, mixed $followUpId): array
+    {
+        $followUp = self::actionableCustomerFollowUps($record)->whereKey($followUpId)->first();
+        if ($followUp?->category !== CustomerFollowUpCategory::Successful || ! $followUp->request_id) {
+            return [];
+        }
+
+        $dealClass = static::department() === Department::Rental ? RentalDeal::class : ResaleDeal::class;
+
+        return $dealClass::query()
+            ->where('customer_id', $record->getKey())
+            ->where('request_id', $followUp->request_id)
+            ->orderByDesc('deal_date')
+            ->get()
+            ->mapWithKeys(fn (Model $deal): array => [$deal->id => app(\App\Support\DateTimePresenter::class)->bidiText(app(\App\Support\DateTimePresenter::class)->formatDate($deal->deal_date)).' — '.number_format((float) $deal->agreed_total_value, 2).' '.$deal->currency])
+            ->all();
     }
 
     /** @return array<int, Component> */

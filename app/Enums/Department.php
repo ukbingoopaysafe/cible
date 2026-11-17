@@ -11,7 +11,7 @@ enum Department: string
     {
         return match ($this) {
             self::Rental => 'الإيجار',
-            self::Resale => 'إعادة البيع',
+            self::Resale => 'البيع',
         };
     }
 

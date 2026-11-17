@@ -6,7 +6,6 @@ use App\Models\Concerns\HasCustomerIdentity;
 use App\Models\Concerns\HasContactPhoneNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class ResaleCustomer extends Model
@@ -20,8 +19,8 @@ class ResaleCustomer extends Model
         return $this->hasMany(ResaleRequest::class, 'customer_id');
     }
 
-    public function customerFollowUp(): HasOne
+    public function customerFollowUps(): HasMany
     {
-        return $this->hasOne(ResaleCustomerFollowUp::class, 'customer_id');
+        return $this->hasMany(ResaleCustomerFollowUp::class, 'customer_id');
     }
 }

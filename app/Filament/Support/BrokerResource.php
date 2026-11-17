@@ -114,6 +114,18 @@ abstract class BrokerResource extends Resource
                     ->modalSubmitAction(false)
                     ->modalCancelActionLabel('إغلاق')
                     ->action(fn () => null),
+                Action::make('viewBrokerRequests')
+                    ->label('طلبات الوسيط')
+                    ->icon('heroicon-o-clipboard-document-list')
+                    ->modalHeading(fn (Model $record): string => "طلبات الوسيط: {$record->name}")
+                    ->modalDescription('سجل للقراءة فقط بالطلبات المرتبطة بهذا الوسيط في هذا القسم.')
+                    ->modalSubmitAction(false)
+                    ->modalCancelActionLabel('إغلاق')
+                    ->modalContent(fn (Model $record) => view('filament.modals.broker-requests', [
+                        'requests' => $record->requests()->with(['customer', 'area', 'owner'])->latest()->get(),
+                        'department' => static::department(),
+                    ]))
+                    ->visible(fn (Model $record): bool => $record->requests()->exists()),
                 Action::make('editBroker')
                     ->label('تعديل الوسيط')
                     ->icon('heroicon-o-pencil-square')

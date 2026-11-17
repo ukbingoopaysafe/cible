@@ -11,7 +11,7 @@ use Tests\TestCase;
 
 class RequestActionsMenuStructureTest extends TestCase
 {
-    public function test_request_actions_menu_has_four_logical_categories_and_twenty_one_actions(): void
+    public function test_request_actions_menu_has_four_logical_categories_and_twenty_five_actions(): void
     {
         $group = RentalRequestResource::getRequestActionsGroup();
 
@@ -43,6 +43,10 @@ class RequestActionsMenuStructureTest extends TestCase
             'createRecommendation',
             'changeRecommendationStatus',
             'scheduleViewing',
+            'setViewingSchedule',
+            'completeViewing',
+            'postponeViewing',
+            'cancelViewing',
             'recordViewingResult',
             'recordFieldInspection',
             'viewPropertyHistory',
@@ -55,9 +59,9 @@ class RequestActionsMenuStructureTest extends TestCase
         $cat4Actions = array_map(fn ($action) => $action->getName(), $subGroups[3]->getActions());
         $this->assertSame(['createDeal', 'viewDeal', 'pause', 'resume', 'close'], $cat4Actions);
 
-        // Verify total flat actions count in the group is exactly 21
+        // Verify total flat actions count in the group is exactly 25
         $flatActions = $group->getFlatActions();
-        $this->assertCount(21, $flatActions, 'Expected exactly 21 flat actions in the dropdown group.');
+        $this->assertCount(25, $flatActions, 'Expected exactly 25 flat actions in the dropdown group.');
 
         // The admin theme attaches a heading to each list using this attribute.
         // It must be present on every action so headings follow hidden groups.

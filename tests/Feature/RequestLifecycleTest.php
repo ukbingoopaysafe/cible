@@ -6,6 +6,7 @@ use App\Enums\Department;
 use App\Enums\RequestStatus;
 use App\Models\RentalArea;
 use App\Models\RentalLeadSource;
+use App\Models\RentalRequestCloseReason;
 use App\Models\ResaleArea;
 use App\Models\User;
 use App\Services\CustomerFollowUpService;
@@ -39,12 +40,12 @@ class RequestLifecycleTest extends TestCase
             'budget_declared' => 25000,
         ]);
 
-        $this->assertSame('intake', $request->stage->value);
+        $this->assertSame('unit_search', $request->stage->value);
         $this->assertSame('EGP', $request->budget_currency);
         $this->assertDatabaseHas('rental_request_stage_histories', [
             'request_id' => $request->id,
             'from_stage' => null,
-            'to_stage' => 'intake',
+            'to_stage' => 'unit_search',
         ]);
 
         $activity = app(ContactActivityService::class)->record($manager, Department::Rental, $request->id, [
@@ -60,7 +61,16 @@ class RequestLifecycleTest extends TestCase
         ]);
 
         $service->changeStage($manager, Department::Rental, $request->id, 'negotiation');
-        $service->pause($manager, Department::Rental, $request->id, 'انتظار رد العميل');
+        $resumeAt = now()->addDays(7)->startOfMinute();
+        $resumeFollowUpAt = $resumeAt->copy()->addDay();
+        $service->pause(
+            $manager,
+            Department::Rental,
+            $request->id,
+            'انتظار رد العميل',
+            $resumeAt->toDateTimeString(),
+            $resumeFollowUpAt->toDateTimeString(),
+        );
         $this->assertSame(RequestStatus::Paused, $request->fresh()->status);
         $this->assertNull($request->fresh()->next_follow_up_at);
 
@@ -70,7 +80,7 @@ class RequestLifecycleTest extends TestCase
 
         $service->close($manager, Department::Rental, $request->id, [
             'outcome' => 'unsuccessful',
-            'outcome_reason_text' => 'لم تناسب الوحدات المتاحة الميزانية',
+            'outcome_reason_id' => RentalRequestCloseReason::query()->where('is_active', true)->firstOrFail()->id,
         ]);
 
         $this->assertSame(RequestStatus::Closed, $request->fresh()->status);
@@ -151,7 +161,8 @@ class RequestLifecycleTest extends TestCase
 
         $nextCustomerFollowUpAt = now()->addWeek()->toDateTimeString();
 
-        app(CustomerFollowUpService::class)->recordActivity($manager, Department::Rental, $customer->id, [
+        $customerFollowUp = \App\Models\RentalCustomerFollowUp::query()->where('request_id', $request->id)->sole();
+        app(CustomerFollowUpService::class)->recordActivity($manager, Department::Rental, $customer->id, $customerFollowUp->id, [
             'deal_id' => $deal->id,
             'channel' => 'whatsapp',
             'occurred_at' => now()->subMinute()->toDateTimeString(),
@@ -188,7 +199,11 @@ class RequestLifecycleTest extends TestCase
             'phone_country' => 'EG',
         ]);
         $otherSource = RentalLeadSource::query()->where('type', 'other')->firstOrFail();
-        $normalSource = RentalLeadSource::query()->where('type', 'awareness')->where('is_active', true)->firstOrFail();
+        $normalSource = RentalLeadSource::query()
+            ->where('type', 'awareness')
+            ->where('requires_details', false)
+            ->where('is_active', true)
+            ->firstOrFail();
         $request = app(RequestService::class)->create($manager, Department::Rental, [
             'customer_id' => $customer->id,
             'area_id' => RentalArea::query()->firstOrFail()->id,
@@ -210,7 +225,7 @@ class RequestLifecycleTest extends TestCase
 
         $service->updateDetails($manager, Department::Rental, $request->id, [
             'unit_type' => 'apartment',
-            'finishing' => 'unfinished',
+            'finishing' => 'tiles',
             'lead_source_id' => $normalSource->id,
         ]);
         $request->refresh();
@@ -296,7 +311,8 @@ class RequestLifecycleTest extends TestCase
             'seller_name' => 'بائع مستقل',
         ]);
 
-        app(CustomerFollowUpService::class)->recordActivity($manager, Department::Rental, $rentalCustomer->id, [
+        $rentalFollowUp = \App\Models\RentalCustomerFollowUp::query()->where('request_id', $rentalRequest->id)->sole();
+        app(CustomerFollowUpService::class)->recordActivity($manager, Department::Rental, $rentalCustomer->id, $rentalFollowUp->id, [
             'deal_id' => $rentalDeal->id,
             'channel' => 'phone',
             'occurred_at' => now()->subMinute()->toDateTimeString(),

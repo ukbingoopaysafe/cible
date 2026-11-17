@@ -4,11 +4,14 @@ namespace App\Services;
 
 use App\Enums\ContactParty;
 use App\Enums\Department;
+use App\Enums\ElectricityMeterType;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
 use App\Enums\LeadSourceType;
+use App\Enums\RentalFurnishingType;
 use App\Enums\RentalRequestStage;
 use App\Enums\RentalTerm;
+use App\Enums\RequestClientCategory;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
@@ -84,7 +87,7 @@ class RequestService
                 'reason' => trim($validated['reason']),
                 'status' => 'pending',
             ]);
-            $this->recordAuditEvent($actor, $department, 'request.reassignment.requested', $request, [
+            $auditEvent = $this->recordAuditEvent($actor, $department, 'request.reassignment.requested', $request, [
                 'owner_user_id' => $request->owner_user_id,
             ], [
                 'owner_user_id' => $request->owner_user_id,
@@ -92,6 +95,7 @@ class RequestService
                 'reassignment_id' => $reassignment->getKey(),
                 'status' => 'pending',
             ], $validated['reason']);
+            app(WorkflowNotificationService::class)->notifyReassignmentRequested($request, $reassignment, $department, $auditEvent);
 
             return $reassignment;
         });
@@ -142,7 +146,7 @@ class RequestService
                 $request->save();
             }
 
-            $this->recordAuditEvent(
+            $auditEvent = $this->recordAuditEvent(
                 $actor,
                 $department,
                 $approved ? 'request.reassignment.approved' : 'request.reassignment.rejected',
@@ -158,6 +162,11 @@ class RequestService
                 ],
                 $reassignment->reason,
             );
+
+            if ($approved) {
+                app(WorkflowNotificationService::class)->notifyAssignment($request, $auditEvent);
+            }
+            app(WorkflowNotificationService::class)->notifyReassignmentDecision($request, $reassignment, $department, $auditEvent, $approved);
 
             return $request;
         });
@@ -197,6 +206,7 @@ class RequestService
                 ],
                 $reassignment->reason,
             );
+            app(WorkflowNotificationService::class)->retirePendingReassignmentNotifications($request);
 
             return $reassignment;
         });
@@ -243,13 +253,14 @@ class RequestService
             $followUpAt = $request->next_follow_up_at?->toIso8601String();
             $request->owner_user_id = $target->id;
             $request->save();
-            $this->recordAuditEvent($actor, $department, 'request.reassignment.direct', $request, [
+            $auditEvent = $this->recordAuditEvent($actor, $department, 'request.reassignment.direct', $request, [
                 'owner_user_id' => $previousOwnerId,
                 'next_follow_up_at' => $followUpAt,
             ], [
                 'owner_user_id' => $target->id,
                 'next_follow_up_at' => $followUpAt,
             ], $validated['reason']);
+            app(WorkflowNotificationService::class)->notifyAssignment($request, $auditEvent);
 
             return $request;
         });
@@ -265,12 +276,12 @@ class RequestService
         $editable = [
             'customer_id', 'broker_id', 'area_id', 'lead_source_id', 'lead_source_other',
             'lead_source_referrer_name', 'lead_source_referrer_unknown', 'contact_party',
-            'unit_type', 'unit_type_other', 'budget_declared', 'budget_targeted', 'budget_currency',
+            'client_category', 'unit_type', 'unit_type_other', 'budget_declared', 'budget_targeted', 'budget_currency',
             'other_requirements', 'notes',
         ];
         $editable = $department === Department::Rental
-            ? [...$editable, 'bedrooms', 'occupants', 'household', 'rental_term', 'rental_term_count', 'finishing', 'finishing_other', 'floor_preference', 'elevator_required']
-            : [...$editable, 'area_min', 'area_max'];
+            ? [...$editable, 'bedrooms', 'occupants', 'rental_term', 'rental_term_count', 'finishing', 'finishing_other', 'floor_preference', 'elevator_required']
+            : [...$editable, 'area_min', 'area_max', 'occupants', 'bedrooms', 'bathrooms', 'building_year', 'elevator_required', 'water_meter', 'electricity_meter_type', 'gas_available'];
         $referrerDetailsTouched = (bool) ($data['lead_source_referrer_details_touched'] ?? false);
         $leadSourceDetailsTouched = (bool) ($data['lead_source_details_touched'] ?? false);
         unset($data['lead_source_referrer_details_touched']);
@@ -296,7 +307,7 @@ class RequestService
         }
         if ($department === Department::Rental
             && array_key_exists('finishing', $submitted)
-            && $data['finishing'] !== FinishingLevel::Other->value
+            && $data['finishing'] !== RentalFurnishingType::Other->value
             && ! array_key_exists('finishing_other', $submitted)) {
             $data['finishing_other'] = null;
         }
@@ -339,6 +350,7 @@ class RequestService
             'lead_source_referrer_name' => ['nullable', 'string', 'max:255'],
             'lead_source_referrer_unknown' => ['nullable', 'boolean'],
             'contact_party' => ['nullable', Rule::enum(ContactParty::class)],
+            'client_category' => ['nullable', Rule::enum(RequestClientCategory::class)],
             'unit_type' => ['nullable', Rule::enum(RequestUnitType::class)],
             'unit_type_other' => ['nullable', 'string', 'max:255'],
             'budget_declared' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
@@ -352,10 +364,9 @@ class RequestService
             $rules += [
                 'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
-                'household' => ['nullable', 'boolean'],
                 'rental_term' => ['nullable', Rule::enum(RentalTerm::class)],
                 'rental_term_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
-                'finishing' => ['nullable', Rule::enum(FinishingLevel::class)],
+                'finishing' => ['nullable', 'string', 'max:40'],
                 'finishing_other' => ['nullable', 'string', 'max:255'],
                 'floor_preference' => ['nullable', Rule::enum(FloorPreference::class)],
                 'elevator_required' => ['nullable', 'boolean'],
@@ -364,6 +375,14 @@ class RequestService
             $rules += [
                 'area_min' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
                 'area_max' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
+                'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
+                'bathrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
+                'building_year' => ['nullable', 'integer', 'min:1800', 'max:'.now()->format('Y')],
+                'elevator_required' => ['nullable', 'boolean'],
+                'water_meter' => ['nullable', 'boolean'],
+                'electricity_meter_type' => ['nullable', Rule::enum(ElectricityMeterType::class)],
+                'gas_available' => ['nullable', 'boolean'],
             ];
         }
 
@@ -439,11 +458,20 @@ class RequestService
                 $validator->errors()->add('unit_type_other', 'يُستخدم هذا الوصف مع نوع الوحدة «أخرى» فقط.');
             }
             if ($department === Department::Rental) {
-                if ($data['finishing'] === FinishingLevel::Other->value && empty($data['finishing_other'])) {
-                    $validator->errors()->add('finishing_other', 'اكتب مستوى التشطيب عند اختيار «أخرى».');
+                $finishing = $data['finishing'] ?? null;
+                $isNewFurnishing = filled($finishing) && array_key_exists($finishing, RentalFurnishingType::options());
+                $isUnchangedLegacy = filled($finishing)
+                    && $finishing === $request->getRawOriginal('finishing')
+                    && in_array($finishing, array_map(fn (FinishingLevel $level): string => $level->value, FinishingLevel::cases()), true);
+
+                if (filled($finishing) && ! $isNewFurnishing && ! $isUnchangedLegacy) {
+                    $validator->errors()->add('finishing', 'اختر نوع فرش متاحًا.');
                 }
-                if ($data['finishing'] !== FinishingLevel::Other->value && ! empty($data['finishing_other'])) {
-                    $validator->errors()->add('finishing_other', 'يُستخدم هذا الوصف مع مستوى التشطيب «أخرى» فقط.');
+                if ($finishing === RentalFurnishingType::Other->value && empty($data['finishing_other'])) {
+                    $validator->errors()->add('finishing_other', 'اكتب نوع الفرش عند اختيار «أخرى».');
+                }
+                if ($finishing !== RentalFurnishingType::Other->value && ! empty($data['finishing_other'])) {
+                    $validator->errors()->add('finishing_other', 'يُستخدم هذا الوصف مع نوع الفرش «أخرى» فقط.');
                 }
             } elseif ($data['area_min'] && $data['area_max'] && $data['area_min'] > $data['area_max']) {
                 $validator->errors()->add('area_max', 'يجب ألا تقل المساحة القصوى عن المساحة الدنيا.');
@@ -511,6 +539,7 @@ class RequestService
             'lead_source_referrer_unknown' => ['nullable', 'boolean'],
             'owner_user_id' => ['required', 'integer', 'exists:users,id'],
             'contact_party' => ['nullable', Rule::enum(ContactParty::class)],
+            'client_category' => ['nullable', Rule::enum(RequestClientCategory::class)],
             'next_follow_up_at' => ['required', 'date', 'after:now'],
             'notes' => ['nullable', 'string', 'max:10000'],
             'budget_declared' => ['nullable', 'numeric', 'min:0.01', 'max:9999999999999.99'],
@@ -524,10 +553,9 @@ class RequestService
                 'unit_type_other' => ['nullable', 'string', 'max:255'],
                 'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
                 'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
-                'household' => ['nullable', 'boolean'],
                 'rental_term' => ['nullable', Rule::enum(RentalTerm::class)],
                 'rental_term_count' => ['nullable', 'integer', 'min:1', 'max:3650'],
-                'finishing' => ['nullable', Rule::enum(FinishingLevel::class)],
+                'finishing' => ['nullable', Rule::enum(RentalFurnishingType::class)],
                 'finishing_other' => ['nullable', 'string', 'max:255'],
                 'floor_preference' => ['nullable', Rule::enum(FloorPreference::class)],
                 'elevator_required' => ['nullable', 'boolean'],
@@ -539,6 +567,14 @@ class RequestService
                 'unit_type_other' => ['nullable', 'string', 'max:255'],
                 'area_min' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
                 'area_max' => ['nullable', 'numeric', 'gt:0', 'max:99999999.99'],
+                'occupants' => ['nullable', 'integer', 'min:1', 'max:1000'],
+                'bedrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
+                'bathrooms' => ['nullable', 'integer', 'min:1', 'max:100'],
+                'building_year' => ['nullable', 'integer', 'min:1800', 'max:'.now()->format('Y')],
+                'elevator_required' => ['nullable', 'boolean'],
+                'water_meter' => ['nullable', 'boolean'],
+                'electricity_meter_type' => ['nullable', Rule::enum(ElectricityMeterType::class)],
+                'gas_available' => ['nullable', 'boolean'],
                 'other_requirements' => ['nullable', 'string', 'max:10000'],
             ];
         }
@@ -624,11 +660,11 @@ class RequestService
                 $validator->errors()->add('unit_type_other', 'يُستخدم هذا الوصف مع نوع الوحدة «أخرى» فقط.');
             }
             if ($department === Department::Rental) {
-                if (($data['finishing'] ?? null) === FinishingLevel::Other->value && empty($data['finishing_other'])) {
-                    $validator->errors()->add('finishing_other', 'اكتب مستوى التشطيب عند اختيار «أخرى».');
+                if (($data['finishing'] ?? null) === RentalFurnishingType::Other->value && empty($data['finishing_other'])) {
+                    $validator->errors()->add('finishing_other', 'اكتب نوع الفرش عند اختيار «أخرى».');
                 }
-                if (($data['finishing'] ?? null) !== FinishingLevel::Other->value && ! empty($data['finishing_other'])) {
-                    $validator->errors()->add('finishing_other', 'يُستخدم هذا الوصف مع مستوى التشطيب «أخرى» فقط.');
+                if (($data['finishing'] ?? null) !== RentalFurnishingType::Other->value && ! empty($data['finishing_other'])) {
+                    $validator->errors()->add('finishing_other', 'يُستخدم هذا الوصف مع نوع الفرش «أخرى» فقط.');
                 }
             }
         });
@@ -639,8 +675,8 @@ class RequestService
         $request->fill($attributes);
         $request->status = RequestStatus::Active;
         $request->stage = $department === Department::Rental
-            ? RentalRequestStage::Intake
-            : ResaleRequestStage::Intake;
+            ? RentalRequestStage::UnitSearch
+            : ResaleRequestStage::UnitSearch;
         if (! empty($attributes['budget_declared']) || ! empty($attributes['budget_targeted'])) {
             $request->budget_currency ??= 'EGP';
         } else {
@@ -655,14 +691,18 @@ class RequestService
 
         return DB::transaction(function () use ($request, $department, $actor): Model {
             $request->save();
-            $this->recordStageChange($department, $request, null, 'intake', $actor);
-            $this->recordAuditEvent($actor, $department, 'request.created', $request, null, [
+            if ($request->customer_id) {
+                app(CustomerFollowUpService::class)->retireLegacyCaseReminder($department, (int) $request->customer_id);
+            }
+            $this->recordStageChange($department, $request, null, 'unit_search', $actor);
+            $auditEvent = $this->recordAuditEvent($actor, $department, 'request.created', $request, null, [
                 'status' => RequestStatus::Active->value,
                 'stage' => $request->stage->value,
                 'customer_id' => $request->customer_id,
                 'broker_id' => $request->broker_id,
                 'owner_user_id' => $request->owner_user_id,
             ], null);
+            app(WorkflowNotificationService::class)->notifyAssignment($request, $auditEvent);
 
             return $request;
         });
@@ -696,6 +736,14 @@ class RequestService
                 $request->contact_party = ContactParty::Customer;
             }
             $request->save();
+
+            if ($customerId) {
+                app(CustomerFollowUpService::class)->retireLegacyCaseReminder($department, $customerId);
+            }
+
+            if ($request->status === RequestStatus::Closed) {
+                app(CustomerFollowUpService::class)->createForClosedRequest($actor, $department, $request);
+            }
 
             $deal = $request->deal;
             if ($deal) {
@@ -740,6 +788,7 @@ class RequestService
         DB::transaction(function () use ($request, $validated, $before, $department, $actor): void {
             $request->next_follow_up_at = $validated['next_follow_up_at'];
             $request->save();
+            app(WorkflowNotificationService::class)->retireRequestFollowUpReminders($request);
             $this->recordAuditEvent($actor, $department, 'request.follow_up_changed', $request,
                 ['next_follow_up_at' => $before],
                 ['next_follow_up_at' => $request->next_follow_up_at?->toDateTimeString()],
@@ -779,10 +828,28 @@ class RequestService
         });
     }
 
-    public function pause(User $actor, Department $department, int $requestId, ?string $notes = null): Model
+    public function pause(
+        User $actor,
+        Department $department,
+        int $requestId,
+        string $pauseReason,
+        string $resumeAt,
+        string $resumeFollowUpAt,
+        ?string $notes = null,
+    ): Model
     {
         $this->authorizeDepartment($actor, $department);
-        $notes = Validator::make(['notes' => $notes], ['notes' => ['nullable', 'string', 'max:10000']])->validate()['notes'] ?? null;
+        $validated = Validator::make([
+            'pause_reason' => $pauseReason,
+            'resume_at' => $resumeAt,
+            'resume_follow_up_at' => $resumeFollowUpAt,
+            'notes' => $notes,
+        ], [
+            'pause_reason' => ['required', 'string', 'max:10000'],
+            'resume_at' => ['required', 'date', 'after:now'],
+            'resume_follow_up_at' => ['required', 'date', 'after:resume_at'],
+            'notes' => ['nullable', 'string', 'max:10000'],
+        ])->validate();
         $classes = $this->classesFor($department);
         $request = $classes['request']::query()->findOrFail($requestId);
 
@@ -790,12 +857,16 @@ class RequestService
             throw ValidationException::withMessages(['status' => 'يمكن إيقاف الطلب النشط مؤقتًا فقط.']);
         }
 
-        return DB::transaction(function () use ($request, $department, $actor, $notes): Model {
+        return DB::transaction(function () use ($request, $department, $actor, $validated): Model {
             $request->status = RequestStatus::Paused;
             $request->paused_at = now();
+            $request->pause_reason = $validated['pause_reason'];
+            $request->resume_at = $validated['resume_at'];
+            $request->resume_follow_up_at = $validated['resume_follow_up_at'];
             $request->next_follow_up_at = null;
             $request->save();
-            $this->recordStatusChange($department, $request, RequestStatus::Active, RequestStatus::Paused, $actor, $notes);
+            $this->recordStatusChange($department, $request, RequestStatus::Active, RequestStatus::Paused, $actor, $validated['notes'] ?? null);
+            app(WorkflowNotificationService::class)->notifyRequestPaused($request);
 
             return $request;
         });
@@ -816,17 +887,22 @@ class RequestService
         }
 
         return DB::transaction(function () use ($request, $validated, $department, $actor): Model {
+            $previousResumeAt = $request->resume_at;
             $request->status = RequestStatus::Active;
             $request->paused_at = null;
+            $request->pause_reason = null;
+            $request->resume_at = null;
+            $request->resume_follow_up_at = null;
             $request->next_follow_up_at = $validated['next_follow_up_at'];
             $request->save();
-            $this->recordStatusChange($department, $request, RequestStatus::Paused, RequestStatus::Active, $actor, $validated['notes'] ?? null);
+            $auditEvent = $this->recordStatusChange($department, $request, RequestStatus::Paused, RequestStatus::Active, $actor, $validated['notes'] ?? null);
+            app(WorkflowNotificationService::class)->notifyRequestResumed($request, $auditEvent, $previousResumeAt);
 
             return $request;
         });
     }
 
-    /** @param array{outcome: string, outcome_reason_text?: string|null, outcome_reason_id?: int|null, outcome_notes?: string|null} $data */
+    /** @param array{outcome: string, outcome_reason_id?: int|null, outcome_reason_text?: string|null, outcome_notes?: string|null} $data */
     public function close(User $actor, Department $department, int $requestId, array $data): Model
     {
         $this->authorizeDepartment($actor, $department);
@@ -846,11 +922,8 @@ class RequestService
             throw ValidationException::withMessages(['outcome_reason_id' => 'تصنيف سبب الإغلاق غير متاح.']);
         }
 
-        if ($validated['outcome'] === RequestOutcome::Unsuccessful->value && blank($validated['outcome_reason_text'] ?? null)) {
-            throw ValidationException::withMessages(['outcome_reason_text' => 'اكتب سبب إغلاق الطلب دون نجاح.']);
-        }
-        if ($validated['outcome'] === RequestOutcome::Successful->value && (! empty($validated['outcome_reason_id']) || ! empty($validated['outcome_reason_text']))) {
-            throw ValidationException::withMessages(['outcome_reason_text' => 'لا يسجل سبب إغلاق غير ناجح عند نجاح الطلب.']);
+        if ($validated['outcome'] === RequestOutcome::Unsuccessful->value && ! $reason) {
+            throw ValidationException::withMessages(['outcome_reason_id' => 'اختر تصنيف إغلاق للطلب غير الناجح.']);
         }
 
         $request = $classes['request']::query()->findOrFail($requestId);
@@ -868,16 +941,18 @@ class RequestService
             $request->closed_at = now();
             $request->next_follow_up_at = null;
             $request->outcome = $validated['outcome'];
-            $request->outcome_reason_id = $validated['outcome_reason_id'] ?? null;
-            $request->outcome_reason_text = $validated['outcome_reason_text'] ?? null;
-            $request->outcome_reason_other = null;
+            $request->outcome_reason_id = $validated['outcome'] === RequestOutcome::Unsuccessful->value
+                ? ($validated['outcome_reason_id'] ?? null)
+                : null;
             $request->outcome_notes = $validated['outcome_notes'] ?? null;
+            $request->pause_reason = null;
+            $request->resume_at = null;
+            $request->resume_follow_up_at = null;
             $request->save();
-            $historyNotes = trim(implode("\n\n", array_filter([
-                $validated['outcome_reason_text'] ?? null,
-                $validated['outcome_notes'] ?? null,
-            ])));
-            $this->recordStatusChange($department, $request, $from, RequestStatus::Closed, $actor, $historyNotes !== '' ? $historyNotes : null);
+            app(CustomerFollowUpService::class)->createForClosedRequest($actor, $department, $request);
+            $historyNotes = trim((string) ($validated['outcome_notes'] ?? ''));
+            $auditEvent = $this->recordStatusChange($department, $request, $from, RequestStatus::Closed, $actor, $historyNotes !== '' ? $historyNotes : null);
+            app(WorkflowNotificationService::class)->notifyRequestClosed($request, $auditEvent);
 
             return $request;
         });
@@ -934,7 +1009,7 @@ class RequestService
             ['stage' => $from], ['stage' => $to], null);
     }
 
-    private function recordStatusChange(Department $department, Model $request, RequestStatus $from, RequestStatus $to, User $actor, ?string $notes = null): void
+    private function recordStatusChange(Department $department, Model $request, RequestStatus $from, RequestStatus $to, User $actor, ?string $notes = null): AuditEvent
     {
         DB::table($department === Department::Rental ? 'rental_request_status_histories' : 'resale_request_status_histories')->insert([
             'request_id' => $request->getKey(),
@@ -944,7 +1019,7 @@ class RequestService
             'notes' => $notes,
             'created_at' => now(),
         ]);
-        $this->recordAuditEvent($actor, $department, 'request.status_changed', $request,
+        return $this->recordAuditEvent($actor, $department, 'request.status_changed', $request,
             ['status' => $from->value],
             ['status' => $to->value, ...($to === RequestStatus::Closed ? ['outcome' => $request->outcome?->value] : [])],
             null,
@@ -968,8 +1043,8 @@ class RequestService
         ?array $before,
         array $after,
         ?string $reason,
-    ): void {
-        AuditEvent::query()->create([
+    ): AuditEvent {
+        return AuditEvent::query()->create([
             'actor_user_id' => $actor->id,
             'department' => $department->value,
             'event_key' => $eventKey,

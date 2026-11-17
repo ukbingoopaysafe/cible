@@ -34,7 +34,9 @@ abstract class AuditEventResource extends Resource
             )
             ->when(
                 $actor instanceof User && ! $actor->canManageDepartment(static::department()),
-                fn (Builder $query): Builder => $query->where('actor_user_id', $actor->id),
+                fn (Builder $query): Builder => $query->where(fn (Builder $actorQuery): Builder => $actorQuery
+                    ->where('actor_user_id', $actor->id)
+                    ->orWhereNull('actor_user_id')),
             );
     }
 
@@ -66,7 +68,7 @@ abstract class AuditEventResource extends Resource
                     ->formatStateUsing(fn ($state) => app(DateTimePresenter::class)->bidi(app(DateTimePresenter::class)->formatDateTime($state)))
                     ->html()
                     ->sortable(),
-                TextColumn::make('actor.name')->label('المنفذ')->searchable(),
+                TextColumn::make('actor.name')->label('المنفذ')->state(fn (AuditEvent $record): string => $record->actor?->name ?? 'النظام')->searchable(),
                 TextColumn::make('event_key')->label('العملية')->badge()->formatStateUsing(fn (string $state): string => self::eventLabel($state)),
                 TextColumn::make('subject_id')->label('السجل')->formatStateUsing(fn (int|string $state, AuditEvent $record): string => self::subjectLabel($record)." #{$state}"),
                 TextColumn::make('before_values')->label('قبل')->formatStateUsing(fn ($state, AuditEvent $record): string => self::formatValues($state, $record))->wrap()->toggleable(),
@@ -91,6 +93,7 @@ abstract class AuditEventResource extends Resource
                     'request.customer_linked' => 'ربط عميل بالطلب',
                     'request.stage_changed' => 'تغيير مرحلة طلب',
                     'request.status_changed' => 'تغيير حالة طلب',
+                    'request.auto_resumed' => 'استئناف تلقائي لطلب',
                     'request.follow_up_changed' => 'تغيير موعد متابعة',
                     'contact.activity_recorded' => 'تسجيل تواصل على طلب',
                     'request.reassignment.requested' => 'طلب إعادة تعيين',
@@ -109,7 +112,11 @@ abstract class AuditEventResource extends Resource
                     'recommendation.created' => 'إضافة ترشيح',
                     'recommendation.status_changed' => 'تغيير حالة ترشيح',
                     'field_inspection.recorded' => 'تسجيل فحص الشقة',
-                    'viewing.scheduled' => 'تحديد معاينة',
+                    'viewing.attempt_created' => 'تسجيل محاولة معاينة',
+                    'viewing.scheduled' => 'تحديد موعد معاينة',
+                    'viewing.completed' => 'تأكيد إتمام معاينة',
+                    'viewing.postponed' => 'تأجيل معاينة',
+                    'viewing.cancelled' => 'إلغاء معاينة',
                     'viewing.result_recorded' => 'تسجيل نتيجة معاينة',
                     'aftercare.started' => 'بدء متابعة العميل',
                     'aftercare.activity.recorded' => 'تسجيل تواصل ضمن متابعة العميل',
@@ -141,6 +148,7 @@ abstract class AuditEventResource extends Resource
             'request.customer_linked' => 'ربط عميل بالطلب',
             'request.stage_changed' => 'تغيير مرحلة طلب',
             'request.status_changed' => 'تغيير حالة طلب',
+            'request.auto_resumed' => 'استئناف تلقائي لطلب',
             'request.follow_up_changed' => 'تغيير موعد متابعة',
             'contact.activity_recorded' => 'تسجيل تواصل على طلب',
             'request.reassignment.requested' => 'طلب إعادة تعيين',
@@ -159,7 +167,11 @@ abstract class AuditEventResource extends Resource
             'recommendation.created' => 'إضافة ترشيح',
             'recommendation.status_changed' => 'تغيير حالة ترشيح',
             'field_inspection.recorded' => 'تسجيل فحص الشقة',
-            'viewing.scheduled' => 'تحديد معاينة',
+            'viewing.attempt_created' => 'تسجيل محاولة معاينة',
+            'viewing.scheduled' => 'تحديد موعد معاينة',
+            'viewing.completed' => 'تأكيد إتمام معاينة',
+            'viewing.postponed' => 'تأجيل معاينة',
+            'viewing.cancelled' => 'إلغاء معاينة',
             'viewing.result_recorded' => 'تسجيل نتيجة معاينة',
             'aftercare.started' => 'بدء متابعة العميل',
             'aftercare.activity.recorded' => 'تسجيل تواصل ضمن متابعة العميل',
@@ -234,6 +246,8 @@ abstract class AuditEventResource extends Resource
             'photo_match' => 'مطابقة الصور',
             'has_observed_defects' => 'تسجيل عيوب',
             'contact_role' => 'صفة جهة التواصل',
+            'appointment_status' => 'حالة المعاينة',
+            'rescheduled_from_id' => 'المحاولة السابقة',
             'broker_link_confirmed' => 'تم تأكيد ربط وسيط الطلب',
             'linked_broker_id' => 'معرّف وسيط الطلب',
         ];
@@ -279,18 +293,27 @@ abstract class AuditEventResource extends Resource
                 'not_interested' => 'غير مهتم',
                 'second_viewing' => 'يرغب بمعاينة أخرى',
                 'negotiating' => 'بدأ التفاوض',
-                'cancelled' => 'أُلغيت',
             ];
             $resaleResultLabels = [
                 'interested' => 'مهتم',
                 'not_interested' => 'غير مهتم',
                 'second_viewing' => 'يرغب بمعاينة أخرى',
                 'negotiating' => 'بدأ التفاوض',
-                'cancelled' => 'أُلغيت',
             ];
             $resultLabels = $record?->department === Department::Rental->value ? $rentalResultLabels : $resaleResultLabels;
 
             return $resultLabels[$value] ?? (string) $value;
+        }
+
+        if ($key === 'appointment_status') {
+            return match ($value) {
+                'pending_schedule' => 'بانتظار تحديد الموعد',
+                'scheduled' => 'موعد محدد',
+                'completed' => 'تمت المعاينة',
+                'postponed' => 'مؤجلة',
+                'cancelled' => 'ملغاة',
+                default => (string) $value,
+            };
         }
 
         if ($key === 'deal_date' && is_scalar($value)) {

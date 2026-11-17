@@ -6,7 +6,6 @@ use App\Models\Concerns\HasCustomerIdentity;
 use App\Models\Concerns\HasContactPhoneNumbers;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 class RentalCustomer extends Model
@@ -20,8 +19,8 @@ class RentalCustomer extends Model
         return $this->hasMany(RentalRequest::class, 'customer_id');
     }
 
-    public function customerFollowUp(): HasOne
+    public function customerFollowUps(): HasMany
     {
-        return $this->hasOne(RentalCustomerFollowUp::class, 'customer_id');
+        return $this->hasMany(RentalCustomerFollowUp::class, 'customer_id');
     }
 }

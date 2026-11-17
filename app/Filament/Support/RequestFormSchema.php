@@ -4,10 +4,13 @@ namespace App\Filament\Support;
 
 use App\Enums\ContactParty;
 use App\Enums\Department;
+use App\Enums\ElectricityMeterType;
 use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
 use App\Enums\LeadSourceType;
+use App\Enums\RentalFurnishingType;
 use App\Enums\RentalTerm;
+use App\Enums\RequestClientCategory;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
 use App\Models\Area;
@@ -310,23 +313,26 @@ final class RequestFormSchema
             $components[] = Section::make('متطلبات الإيجار')
                 ->icon('heroicon-o-home-modern')
                 ->schema([
+                    Select::make('client_category')->label('نوع العميل')->options(RequestClientCategory::options()),
                     Select::make('unit_type')->label('نوع الوحدة')->options(self::unitTypeOptions())->live(),
                     TextInput::make('unit_type_other')->label('توضيح نوع الوحدة')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value)
                         ->required(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value),
                     TextInput::make('bedrooms')->label('غرف النوم')->numeric()->integer()->minValue(1)->maxValue(100),
                     TextInput::make('occupants')->label('الأفراد')->numeric()->integer()->minValue(1)->maxValue(1000),
-                    Toggle::make('household')->label('أسرة'),
                     Select::make('rental_term')
                         ->label('مدة الإيجار')
                         ->options(self::rentalTermOptions())
                         ->helperText('في الإيجار نصف السنوي والسنوي يكون السداد شهريًا.')
                         ->live(),
                     TextInput::make('rental_term_count')->label('مدة العقد (بالأرقام)')->numeric()->integer()->minValue(1)->maxValue(3650),
-                    Select::make('finishing')->label('مستوى التشطيب')->options(self::finishingOptions())->live(),
-                    TextInput::make('finishing_other')->label('توضيح مستوى التشطيب')->maxLength(255)
-                        ->visible(fn (Get $get): bool => $get('finishing') === FinishingLevel::Other->value)
-                        ->required(fn (Get $get): bool => $get('finishing') === FinishingLevel::Other->value),
+                    Select::make('finishing')
+                        ->label('نوع الفرش')
+                        ->options(fn (Get $get): array => self::finishingOptions($editing, $get('finishing')))
+                        ->live(),
+                    TextInput::make('finishing_other')->label('توضيح نوع الفرش')->maxLength(255)
+                        ->visible(fn (Get $get): bool => $get('finishing') === RentalFurnishingType::Other->value)
+                        ->required(fn (Get $get): bool => $get('finishing') === RentalFurnishingType::Other->value),
                     Select::make('floor_preference')->label('الدور المفضل')->options(self::floorPreferenceOptions()),
                     Toggle::make('elevator_required')->label('يشترط مصعد'),
                 ])
@@ -335,25 +341,31 @@ final class RequestFormSchema
             $components[] = Section::make('متطلبات الشراء')
                 ->icon('heroicon-o-home-modern')
                 ->schema([
+                    Select::make('client_category')->label('نوع العميل')->options(RequestClientCategory::options()),
                     Select::make('unit_type')->label('نوع الوحدة')->options(self::unitTypeOptions())->live(),
                     TextInput::make('unit_type_other')->label('توضيح نوع الوحدة')->maxLength(255)
                         ->visible(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value)
                         ->required(fn (Get $get): bool => $get('unit_type') === RequestUnitType::Other->value),
                     TextInput::make('area_min')->label('المساحة من (م²)')->numeric()->minValue(0.01),
                     TextInput::make('area_max')->label('المساحة إلى (م²)')->numeric()->minValue(0.01),
+                    TextInput::make('occupants')->label('عدد الأفراد')->numeric()->integer()->minValue(1)->maxValue(1000),
+                    TextInput::make('bedrooms')->label('عدد الغرف')->numeric()->integer()->minValue(1)->maxValue(100),
+                    TextInput::make('bathrooms')->label('عدد الحمامات')->numeric()->integer()->minValue(1)->maxValue(100),
+                    TextInput::make('building_year')->label('سنة البناء')->numeric()->integer()->minValue(1800)->maxValue((int) now()->format('Y')),
+                    Select::make('elevator_required')->label('المصعد')->options(self::booleanPreferenceOptions('مطلوب', 'غير مطلوب'))->placeholder('غير محدد'),
+                    Select::make('water_meter')->label('عداد المياه')->options(self::booleanPreferenceOptions('يوجد', 'لا يوجد'))->placeholder('غير محدد'),
+                    Select::make('electricity_meter_type')->label('عداد الكهرباء')->options(ElectricityMeterType::options())->placeholder('غير محدد'),
+                    Select::make('gas_available')->label('عداد الغاز')->options(self::booleanPreferenceOptions('يوجد', 'لا يوجد'))->placeholder('غير محدد'),
                 ])
                 ->columns(2);
         }
-
-        $budgetDeclaredLabel = $department === Department::Rental ? 'الميزانية المعلنة (القسط الشهري)' : 'الميزانية المعلنة (إجمالي الشراء)';
-        $budgetTargetedLabel = $department === Department::Rental ? 'الميزانية المستهدفة (القسط الشهري)' : 'الميزانية المستهدفة (إجمالي الشراء)';
 
         $components[] = Section::make('الميزانية والملاحظات')
             ->icon('heroicon-o-banknotes')
             ->columnSpanFull()
             ->schema([
-                TextInput::make('budget_declared')->label($budgetDeclaredLabel)->numeric()->minValue(0.01),
-                TextInput::make('budget_targeted')->label($budgetTargetedLabel)->numeric()->minValue(0.01),
+                TextInput::make('budget_declared')->label('ميزانية العميل')->numeric()->minValue(0.01),
+                TextInput::make('budget_targeted')->label('ميزانية السوق')->numeric()->minValue(0.01),
                 Select::make('budget_currency')
                     ->label('العملة')
                     ->options(['EGP' => 'جنيه مصري', 'USD' => 'دولار أمريكي'])
@@ -482,6 +494,10 @@ final class RequestFormSchema
                         ->label('توضيح نوع الوحدة')
                         ->placeholder('—')
                         ->visible(fn (?Model $record): bool => filled($record?->unit_type_other)),
+                    TextEntry::make('client_category')
+                        ->label('نوع العميل')
+                        ->badge()
+                        ->formatStateUsing(fn ($state): string => RequestClientCategory::options()[self::enumValue($state) ?? ''] ?? '—'),
                     TextEntry::make('rental_term_summary')
                         ->label('مدة الإيجار')
                         ->icon('heroicon-m-calendar-days')
@@ -495,12 +511,12 @@ final class RequestFormSchema
                             return $count ? "{$term} ({$count})" : $term;
                         }),
                     TextEntry::make('finishing')
-                        ->label('مستوى التشطيب')
+                        ->label('نوع الفرش')
                         ->badge()
                         ->color('gray')
-                        ->formatStateUsing(fn ($state): string => self::finishingOptions()[self::enumValue($state) ?? ''] ?? '—'),
+                        ->formatStateUsing(fn ($state): string => self::finishingOptions(true, $state)[self::enumValue($state) ?? ''] ?? '—'),
                     TextEntry::make('finishing_other')
-                        ->label('توضيح مستوى التشطيب')
+                        ->label('توضيح نوع الفرش')
                         ->placeholder('—')
                         ->visible(fn (?Model $record): bool => filled($record?->finishing_other)),
                     TextEntry::make('bedrooms')
@@ -511,11 +527,6 @@ final class RequestFormSchema
                         ->label('الأفراد')
                         ->icon('heroicon-m-user-group')
                         ->placeholder('—'),
-                    TextEntry::make('household')
-                        ->label('طبيعة الساكنين')
-                        ->badge()
-                        ->color(fn ($state): string => $state === null ? 'gray' : ($state ? 'info' : 'warning'))
-                        ->formatStateUsing(fn ($state): string => $state === null ? '—' : ($state ? 'أسرة' : 'أفراد')),
                     TextEntry::make('floor_preference')
                         ->label('الدور المفضل')
                         ->formatStateUsing(fn ($state): string => self::floorPreferenceOptions()[self::enumValue($state) ?? ''] ?? '—'),
@@ -568,6 +579,26 @@ final class RequestFormSchema
                         ->label('المساحة إلى (م²)')
                         ->numeric(decimalPlaces: 2)
                         ->placeholder('—'),
+                    TextEntry::make('client_category')
+                        ->label('نوع العميل')
+                        ->badge()
+                        ->formatStateUsing(fn ($state): string => RequestClientCategory::options()[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('occupants')->label('عدد الأفراد')->placeholder('—'),
+                    TextEntry::make('bedrooms')->label('عدد الغرف')->placeholder('—'),
+                    TextEntry::make('bathrooms')->label('عدد الحمامات')->placeholder('—'),
+                    TextEntry::make('building_year')->label('سنة البناء')->placeholder('—'),
+                    TextEntry::make('elevator_required')
+                        ->label('المصعد')
+                        ->formatStateUsing(fn ($state): string => $state === null ? 'غير محدد' : ($state ? 'مطلوب' : 'غير مطلوب')),
+                    TextEntry::make('water_meter')
+                        ->label('عداد المياه')
+                        ->formatStateUsing(fn ($state): string => $state === null ? 'غير محدد' : ($state ? 'يوجد' : 'لا يوجد')),
+                    TextEntry::make('electricity_meter_type')
+                        ->label('عداد الكهرباء')
+                        ->formatStateUsing(fn ($state): string => ElectricityMeterType::tryFrom(self::enumValue($state) ?? '')?->label() ?? 'غير محدد'),
+                    TextEntry::make('gas_available')
+                        ->label('عداد الغاز')
+                        ->formatStateUsing(fn ($state): string => $state === null ? 'غير محدد' : ($state ? 'يوجد' : 'لا يوجد')),
                 ])
                 ->columns(['default' => 1, 'sm' => 2, 'md' => 3]);
         }
@@ -576,7 +607,7 @@ final class RequestFormSchema
             ->icon('heroicon-o-banknotes')
             ->schema([
                 TextEntry::make('budget_declared')
-                    ->label($department === Department::Rental ? 'الميزانية المعلنة (القسط الشهري)' : 'الميزانية المعلنة (إجمالي الشراء)')
+                    ->label('ميزانية العميل')
                     ->weight(FontWeight::Bold)
                     ->size(TextSize::Large)
                     ->color('primary')
@@ -590,7 +621,7 @@ final class RequestFormSchema
                     })
                     ->placeholder('—'),
                 TextEntry::make('budget_targeted')
-                    ->label($department === Department::Rental ? 'الميزانية المستهدفة (القسط الشهري)' : 'الميزانية المستهدفة (إجمالي الشراء)')
+                    ->label('ميزانية السوق')
                     ->weight(FontWeight::SemiBold)
                     ->size(TextSize::Medium)
                     ->formatStateUsing(function ($state, ?Model $record): string {
@@ -648,9 +679,13 @@ final class RequestFormSchema
                     ->label('تصنيف الإغلاق')
                     ->placeholder('—'),
                 TextEntry::make('outcome_reason_text')
-                    ->label('سبب الإغلاق')
+                    ->label('سبب الإغلاق (سجل قديم)')
                     ->placeholder('—')
                     ->columnSpanFull(),
+                TextEntry::make('closed_at')
+                    ->label('تاريخ ووقت الإغلاق')
+                    ->dateTime('d/m/Y H:i')
+                    ->placeholder('—'),
                 TextEntry::make('outcome_notes')
                     ->label('ملاحظات الإغلاق')
                     ->placeholder('—')
@@ -683,6 +718,15 @@ final class RequestFormSchema
                         ->badge()
                         ->color('primary')
                         ->formatStateUsing(fn ($state): string => $stageOptions[self::enumValue($state) ?? ''] ?? '—'),
+                    TextEntry::make('pause_reason')
+                        ->label('سبب الإيقاف المؤقت')
+                        ->placeholder('—')
+                        ->visible(fn (?Model $record): bool => $record?->status === RequestStatus::Paused),
+                    TextEntry::make('resume_at')
+                        ->label('موعد الاستئناف المخطط')
+                        ->dateTime('d/m/Y H:i')
+                        ->placeholder('—')
+                        ->visible(fn (?Model $record): bool => $record?->status === RequestStatus::Paused),
                     TextEntry::make('next_follow_up_at')
                         ->label('موعد المتابعة القادمة')
                         ->icon('heroicon-m-calendar')
@@ -802,10 +846,8 @@ final class RequestFormSchema
     public static function stageOptions(Department $department): array
     {
         return [
-            'intake' => 'استقبال',
-            'qualification' => 'تأهيل',
             'unit_search' => 'بحث عن وحدات',
-            'recommendation' => $department === Department::Rental ? 'ترشيح' : 'عرض / ترشيح',
+            'recommendation' => 'ترشيح',
             'viewing' => 'معاينة',
             'negotiation' => 'تفاوض',
         ];
@@ -834,17 +876,33 @@ final class RequestFormSchema
     }
 
     /** @return array<string, string> */
-    private static function finishingOptions(): array
+    private static function finishingOptions(bool $includeLegacy = false, mixed $current = null): array
     {
-        return [
+        $options = RentalFurnishingType::options();
+        $currentValue = self::enumValue($current);
+
+        if ($includeLegacy && filled($currentValue) && ! array_key_exists($currentValue, $options)) {
+            $options[$currentValue] = self::legacyFinishingLabel($currentValue);
+        }
+
+        return $options;
+    }
+
+    private static function legacyFinishingLabel(string $value): string
+    {
+        return 'قيمة قديمة — '.match ($value) {
             FinishingLevel::Unfinished->value => 'بدون تشطيب',
             FinishingLevel::HalfFinished->value => 'نصف تشطيب',
-            FinishingLevel::SuperLux->value => 'سوبر لوكس',
             FinishingLevel::UltraSuperLux->value => 'ألترا سوبر لوكس',
-            FinishingLevel::Hotel->value => 'فندقي',
             FinishingLevel::Smart->value => 'ذكي',
-            FinishingLevel::Other->value => 'أخرى',
-        ];
+            default => $value,
+        };
+    }
+
+    /** @return array<string, string> */
+    private static function booleanPreferenceOptions(string $yes, string $no): array
+    {
+        return ['1' => $yes, '0' => $no];
     }
 
     /** @return array<string, string> */

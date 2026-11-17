@@ -30,6 +30,7 @@ use App\Models\RentalCustomer;
 use App\Models\RentalCustomerFollowUp;
 use App\Models\RentalFieldInspection;
 use App\Models\RentalRecommendation;
+use App\Models\RentalRequestCloseReason;
 use App\Models\RentalRequest;
 use App\Models\RentalViewing;
 use App\Models\ResaleArea;
@@ -229,12 +230,12 @@ class FilamentUiAccessTest extends TestCase
             ->assertActionExists('create');
 
         $page->callAction(TestAction::make('changeStage')->table($request), [
-            'stage' => 'qualification',
+            'stage' => 'recommendation',
             'notes' => 'تمت مراجعة الاحتياج',
         ])->assertHasNoTableActionErrors();
 
         $request->refresh();
-        $this->assertSame('qualification', $request->stage->value);
+        $this->assertSame('recommendation', $request->stage->value);
 
         $page->callAction(TestAction::make('recordContact')->table($request), [
             'channel' => 'phone',
@@ -249,7 +250,11 @@ class FilamentUiAccessTest extends TestCase
             'result' => 'تم التواصل مع العميل',
         ]);
 
-        $page->callAction(TestAction::make('pause')->table($request))
+        $page->callAction(TestAction::make('pause')->table($request), [
+                'pause_reason' => 'انتظار رد العميل',
+                'resume_at' => now()->addDays(7)->toDateTimeString(),
+                'resume_follow_up_at' => now()->addDays(8)->toDateTimeString(),
+            ])
             ->assertHasNoTableActionErrors();
 
         $request->refresh();
@@ -265,14 +270,13 @@ class FilamentUiAccessTest extends TestCase
 
         $page->callAction(TestAction::make('close')->table($request), [
             'outcome' => 'unsuccessful',
-            'outcome_reason_text' => 'تأجلت خطة الاستئجار',
+            'outcome_reason_id' => RentalRequestCloseReason::query()->where('is_active', true)->firstOrFail()->id,
         ])->assertHasNoTableActionErrors();
 
         $this->assertDatabaseHas('rental_requests', [
             'id' => $request->id,
             'status' => 'closed',
             'outcome' => 'unsuccessful',
-            'outcome_reason_text' => 'تأجلت خطة الاستئجار',
         ]);
     }
 
@@ -346,6 +350,7 @@ class FilamentUiAccessTest extends TestCase
         Livewire::actingAs($manager)
             ->test(ListRentalCustomers::class)
             ->callAction(TestAction::make('recordCustomerFollowUpActivity')->table($customer), [
+                'follow_up_id' => RentalCustomerFollowUp::query()->where('customer_id', $customer->id)->firstOrFail()->id,
                 'channel' => 'whatsapp',
                 'occurred_at' => now()->subMinute()->toDateTimeString(),
                 'result' => 'تم الاطمئنان على العميل',
@@ -354,7 +359,7 @@ class FilamentUiAccessTest extends TestCase
             ->assertHasNoTableActionErrors();
 
         $this->assertDatabaseHas('rental_aftercare_activities', [
-            'aftercare_id' => RentalCustomerFollowUp::query()->where('customer_id', $customer->id)->sole()->id,
+            'aftercare_id' => RentalCustomerFollowUp::query()->where('customer_id', $customer->id)->firstOrFail()->id,
             'channel' => 'whatsapp',
             'result' => 'تم الاطمئنان على العميل',
         ]);
@@ -402,6 +407,9 @@ class FilamentUiAccessTest extends TestCase
         ])->assertHasNoTableActionErrors();
 
         $viewing = RentalViewing::query()->sole();
+        $page->callAction(TestAction::make('completeViewing')->table($request), [
+            'viewing_id' => $viewing->id,
+        ])->assertHasNoTableActionErrors();
         $page->callAction(TestAction::make('recordViewingResult')->table($request), [
             'viewing_id' => $viewing->id,
             'result' => 'awaiting_customer_reply',
@@ -609,6 +617,30 @@ class FilamentUiAccessTest extends TestCase
         ]);
     }
 
+    public function test_broker_action_shows_only_its_section_requests_as_read_only_history(): void
+    {
+        $manager = User::factory()->create(['is_company_manager' => true]);
+        $manager->saveAppAuthenticationSecret('JBSWY3DPEHPK3PXP');
+        $broker = RentalBroker::query()->create(['name' => 'وسيط سجل الطلبات']);
+        $request = $this->createRentalRequest($manager);
+        $request->forceFill(['broker_id' => $broker->id])->save();
+
+        $this->assertSame(1, $broker->requests()->count());
+        Livewire::actingAs($manager)
+            ->test(ListRentalBrokers::class)
+            ->assertActionVisible(TestAction::make('viewBrokerRequests')->table($broker))
+            ->callAction(TestAction::make('viewBrokerRequests')->table($broker))
+            ->assertHasNoTableActionErrors();
+
+        $history = $this->view('filament.modals.broker-requests', [
+            'requests' => $broker->requests()->with(['customer', 'area', 'owner'])->get(),
+            'department' => Department::Rental,
+        ]);
+        $history->assertSee(\App\Support\RecordCode::request(Department::Rental, $request->id))
+            ->assertSee($request->customer->name)
+            ->assertSee('بحث عن وحدات');
+    }
+
     public function test_manager_can_manage_rental_reference_lists_through_list_actions(): void
     {
         $manager = User::factory()->create(['is_company_manager' => true]);
@@ -808,19 +840,19 @@ class FilamentUiAccessTest extends TestCase
         Livewire::actingAs($employee)
             ->test(OperationalRequestsOverview::class)
             ->assertSee('الإيجار • طلبات نشطة')
-            ->assertDontSee('إعادة البيع • طلبات نشطة');
+            ->assertDontSee('البيع • طلبات نشطة');
 
         $employee->departmentMemberships()->create(['department' => Department::Resale]);
 
         Livewire::actingAs($employee)
             ->test(OperationalRequestsOverview::class)
             ->assertSee('الإيجار • طلبات نشطة')
-            ->assertSee('إعادة البيع • طلبات نشطة');
+            ->assertSee('البيع • طلبات نشطة');
 
         Livewire::actingAs($manager)
             ->test(OperationalRequestsOverview::class)
             ->assertSee('الإيجار • طلبات نشطة')
-            ->assertSee('إعادة البيع • طلبات نشطة');
+            ->assertSee('البيع • طلبات نشطة');
     }
 
     public function test_request_forms_require_location_and_follow_up_and_unsuccessful_close_reason(): void
@@ -859,7 +891,7 @@ class FilamentUiAccessTest extends TestCase
             ->callAction(TestAction::make('close')->table($request), [
                 'outcome' => 'unsuccessful',
             ])
-            ->assertHasTableActionErrors(['outcome_reason_text' => 'required']);
+            ->assertHasTableActionErrors(['outcome_reason_id' => 'required']);
 
         $this->assertDatabaseHas('rental_requests', [
             'id' => $request->id,
@@ -990,7 +1022,11 @@ class FilamentUiAccessTest extends TestCase
             ->test(ViewRentalRequest::class, ['record' => $rentalRequest->id])
             ->assertActionVisible('pause')
             ->assertActionHidden('resume')
-            ->callAction('pause')
+            ->callAction('pause', [
+                'pause_reason' => 'انتظار رد العميل',
+                'resume_at' => now()->addDays(7)->toDateTimeString(),
+                'resume_follow_up_at' => now()->addDays(8)->toDateTimeString(),
+            ])
             ->assertHasNoActionErrors()
             ->assertActionHidden('pause')
             ->assertActionVisible('resume');
@@ -1003,7 +1039,11 @@ class FilamentUiAccessTest extends TestCase
             ->test(ViewResaleRequest::class, ['record' => $resaleRequest->id])
             ->assertActionVisible('pause')
             ->assertActionHidden('resume')
-            ->callAction('pause')
+            ->callAction('pause', [
+                'pause_reason' => 'انتظار رد العميل',
+                'resume_at' => now()->addDays(7)->toDateTimeString(),
+                'resume_follow_up_at' => now()->addDays(8)->toDateTimeString(),
+            ])
             ->assertHasNoActionErrors()
             ->assertActionHidden('pause')
             ->assertActionVisible('resume');

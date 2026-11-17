@@ -3,8 +3,8 @@
 namespace App\Models;
 
 use App\Enums\ContactParty;
-use App\Enums\FinishingLevel;
 use App\Enums\FloorPreference;
+use App\Enums\RequestClientCategory;
 use App\Enums\RentalRequestStage;
 use App\Enums\RentalTerm;
 use App\Enums\RequestUnitType;
@@ -13,6 +13,7 @@ use App\Enums\RequestStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class RentalRequest extends Model
 {
@@ -28,12 +29,15 @@ class RentalRequest extends Model
             'rental_term' => RentalTerm::class,
             'rental_term_count' => 'integer',
             'unit_type' => RequestUnitType::class,
-            'finishing' => FinishingLevel::class,
+            'client_category' => RequestClientCategory::class,
             'floor_preference' => FloorPreference::class,
             'household' => 'boolean',
+            'occupants' => 'integer',
             'elevator_required' => 'boolean',
             'next_follow_up_at' => 'datetime',
             'paused_at' => 'datetime',
+            'resume_at' => 'datetime',
+            'resume_follow_up_at' => 'datetime',
             'closed_at' => 'datetime',
             'budget_declared' => 'decimal:2',
             'budget_targeted' => 'decimal:2',
@@ -95,5 +99,10 @@ class RentalRequest extends Model
     public function viewings(): HasMany
     {
         return $this->hasMany(RentalViewing::class, 'request_id');
+    }
+
+    public function customerFollowUp(): HasOne
+    {
+        return $this->hasOne(RentalCustomerFollowUp::class, 'request_id');
     }
 }

@@ -4,6 +4,7 @@ namespace App\Filament\Support;
 
 use App\Enums\ContactActivityChannel;
 use App\Enums\Department;
+use App\Enums\RequestClientCategory;
 use App\Enums\RentalRequestStage;
 use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
@@ -310,6 +311,12 @@ abstract class SectionRequestResource extends Resource
                     ->badge()
                     ->color(fn ($state): string => (int) $state > 0 ? 'warning' : 'gray')
                     ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('client_category')
+                    ->label('نوع العميل')
+                    ->formatStateUsing(fn ($state): string => RequestClientCategory::options()[$state instanceof \BackedEnum ? $state->value : (string) $state] ?? '—')
+                    ->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('budget_declared')->label('ميزانية العميل')->money(fn (Model $record): string => $record->budget_currency ?? 'EGP')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
+                TextColumn::make('budget_targeted')->label('ميزانية السوق')->money(fn (Model $record): string => $record->budget_currency ?? 'EGP')->placeholder('—')->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('stage')
                     ->label('المرحلة')
                     ->badge()
@@ -371,6 +378,7 @@ abstract class SectionRequestResource extends Resource
                         ->all())
                     ->searchable(),
                 SelectFilter::make('stage')->label('المرحلة')->options(RequestFormSchema::stageOptions(static::department())),
+                SelectFilter::make('client_category')->label('نوع العميل')->options(RequestClientCategory::options()),
                 SelectFilter::make('follow_up_window')
                     ->label('موعد المتابعة')
                     ->options([
@@ -484,6 +492,10 @@ abstract class SectionRequestResource extends Resource
                 static::createRecommendationAction(),
                 static::changeRecommendationStatusAction(),
                 static::scheduleViewingAction(),
+                static::setViewingScheduleAction(),
+                static::completeViewingAction(),
+                static::postponeViewingAction(),
+                static::cancelViewingAction(),
                 static::recordViewingResultAction(),
                 static::recordFieldInspectionAction(),
                 static::viewPropertyHistoryAction(),
@@ -649,12 +661,12 @@ abstract class SectionRequestResource extends Resource
     public static function scheduleViewingAction(): Action
     {
         return Action::make('scheduleViewing')
-            ->label('تحديد معاينة')
+            ->label('تسجيل محاولة معاينة')
             ->icon('heroicon-o-calendar-days')
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
             ->schema([
                 Select::make('recommendation_id')->label('الوحدة المرشحة')->options(fn (Model $record): array => $record->recommendations()->orderByDesc('id')->get()->mapWithKeys(fn ($item): array => [$item->id => trim(($item->unit_code ?: 'وحدة').' — '.($item->unit_type ?: 'بدون نوع').' — '.$item->getKey())])->all())->searchable(),
-                DateTimePicker::make('scheduled_at')->label('موعد المعاينة')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
+                DateTimePicker::make('scheduled_at')->label('موعد المعاينة (اختياري)')->native(false)->seconds(false)->minDate(now()->addMinute()),
                 TextInput::make('field_representative_name')->label('المندوب الميداني')->maxLength(160),
             ])
             ->action(function (Model $record, array $data): void {
@@ -666,14 +678,93 @@ abstract class SectionRequestResource extends Resource
             ->successNotificationTitle('تم تحديد موعد المعاينة');
     }
 
+    public static function setViewingScheduleAction(): Action
+    {
+        return Action::make('setViewingSchedule')
+            ->label('تحديد موعد لمحاولة قائمة')
+            ->icon('heroicon-o-calendar')
+            ->schema([
+                Select::make('viewing_id')->label('محاولة المعاينة')->options(fn (Model $record): array => static::viewingOptions($record, ['pending_schedule', 'scheduled']))->searchable()->required(),
+                DateTimePicker::make('scheduled_at')->label('موعد المعاينة')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->whereIn('appointment_status', ['pending_schedule', 'scheduled'])->exists())
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                abort_unless(static::viewingBelongsToRequest($record, (int) $data['viewing_id']), 404);
+                app(RecommendationService::class)->setViewingSchedule($actor, static::department(), (int) $data['viewing_id'], $data['scheduled_at']);
+                $record->refresh();
+            })
+            ->successNotificationTitle('تم تحديد موعد المعاينة');
+    }
+
+    public static function completeViewingAction(): Action
+    {
+        return Action::make('completeViewing')
+            ->label('تأكيد إتمام المعاينة')
+            ->icon('heroicon-o-check-circle')
+            ->schema([
+                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => static::viewingOptions($record, ['scheduled']))->searchable()->required(),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->where('appointment_status', 'scheduled')->exists())
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                abort_unless(static::viewingBelongsToRequest($record, (int) $data['viewing_id']), 404);
+                app(RecommendationService::class)->completeViewing($actor, static::department(), (int) $data['viewing_id']);
+                $record->refresh();
+            })
+            ->successNotificationTitle('تم تسجيل إتمام المعاينة');
+    }
+
+    public static function postponeViewingAction(): Action
+    {
+        return Action::make('postponeViewing')
+            ->label('تأجيل المعاينة')
+            ->icon('heroicon-o-arrow-uturn-left')
+            ->schema([
+                Select::make('viewing_id')->label('المحاولة المؤجلة')->options(fn (Model $record): array => static::viewingOptions($record, ['pending_schedule', 'scheduled']))->searchable()->required(),
+                DateTimePicker::make('scheduled_at')->label('الموعد الجديد (اختياري)')->native(false)->seconds(false)->minDate(now()->addMinute()),
+                TextInput::make('field_representative_name')->label('المندوب الميداني (اختياري)')->maxLength(160),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->whereIn('appointment_status', ['pending_schedule', 'scheduled'])->exists())
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                abort_unless(static::viewingBelongsToRequest($record, (int) $data['viewing_id']), 404);
+                app(RecommendationService::class)->postponeViewing($actor, static::department(), (int) $data['viewing_id'], $data);
+                $record->refresh();
+            })
+            ->successNotificationTitle('تم حفظ المحاولة المؤجلة وإنشاء محاولة جديدة');
+    }
+
+    public static function cancelViewingAction(): Action
+    {
+        return Action::make('cancelViewing')
+            ->label('إلغاء المعاينة')
+            ->icon('heroicon-o-x-circle')
+            ->schema([
+                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => static::viewingOptions($record, ['pending_schedule', 'scheduled']))->searchable()->required(),
+            ])
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->whereIn('appointment_status', ['pending_schedule', 'scheduled'])->exists())
+            ->action(function (Model $record, array $data): void {
+                $actor = auth()->user();
+                abort_unless($actor instanceof User, 403);
+                abort_unless(static::viewingBelongsToRequest($record, (int) $data['viewing_id']), 404);
+                app(RecommendationService::class)->cancelViewing($actor, static::department(), (int) $data['viewing_id']);
+                $record->refresh();
+            })
+            ->successNotificationTitle('تم إلغاء المعاينة');
+    }
+
     public static function recordViewingResultAction(): Action
     {
         return Action::make('recordViewingResult')
             ->label('تسجيل نتيجة معاينة')
             ->icon('heroicon-o-chat-bubble-left-right')
-            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->exists())
+            ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active && $record->viewings()->where('appointment_status', 'completed')->exists())
             ->schema([
-                Select::make('viewing_id')->label('المعاينة')->options(fn (Model $record): array => $record->viewings()->orderByDesc('scheduled_at')->get()->mapWithKeys(fn ($item): array => [$item->id => app(DateTimePresenter::class)->bidiText(app(DateTimePresenter::class)->formatDateTime($item->scheduled_at)).' — '.($item->field_representative_name ?: 'دون مندوب مسجل')])->all())->searchable()->required(),
+                Select::make('viewing_id')->label('المعاينة المكتملة')->options(fn (Model $record): array => static::viewingOptions($record, ['completed']))->searchable()->required(),
                 Select::make('result')->label('النتيجة')->options(static::department() === Department::Rental
                     ? [
                         'reserved' => 'حجز',
@@ -687,7 +778,6 @@ abstract class SectionRequestResource extends Resource
                         'not_interested' => 'غير مهتم',
                         'second_viewing' => 'يرغب بمعاينة أخرى',
                         'negotiating' => 'بدأ التفاوض',
-                        'cancelled' => 'أُلغيت',
                     ])->live()->required(),
                 Textarea::make('customer_feedback')->label('رأي العميل')->rows(3)->maxLength(10000),
                 Textarea::make('rejection_reason')
@@ -706,6 +796,35 @@ abstract class SectionRequestResource extends Resource
                 $record->refresh();
             })
             ->successNotificationTitle('تم تسجيل نتيجة المعاينة');
+    }
+
+    /** @param list<string> $statuses */
+    private static function viewingOptions(Model $record, array $statuses): array
+    {
+        $viewingClass = static::department() === Department::Rental ? RentalViewing::class : ResaleViewing::class;
+
+        return $viewingClass::query()
+            ->where('request_id', $record->getKey())
+            ->whereIn('appointment_status', $statuses)
+            ->orderByDesc('id')
+            ->get()
+            ->mapWithKeys(function ($viewing): array {
+                $appointment = $viewing->scheduled_at
+                    ? app(DateTimePresenter::class)->bidiText(app(DateTimePresenter::class)->formatDateTime($viewing->scheduled_at))
+                    : 'موعد غير محدد';
+                $status = $viewing->appointment_status->label();
+                $representative = $viewing->field_representative_name ?: 'دون مندوب مسجل';
+
+                return [$viewing->id => "{$appointment} — {$status} — {$representative}"];
+            })
+            ->all();
+    }
+
+    private static function viewingBelongsToRequest(Model $record, int $viewingId): bool
+    {
+        $viewingClass = static::department() === Department::Rental ? RentalViewing::class : ResaleViewing::class;
+
+        return $viewingClass::query()->whereKey($viewingId)->where('request_id', $record->getKey())->exists();
     }
 
     public static function viewPropertyHistoryAction(): Action
@@ -1018,12 +1137,25 @@ abstract class SectionRequestResource extends Resource
         return Action::make('pause')
             ->label('إيقاف مؤقت')
             ->icon('heroicon-o-pause-circle')
-            ->requiresConfirmation()
+            ->schema([
+                Textarea::make('pause_reason')->label('سبب الإيقاف المؤقت')->rows(3)->required()->maxLength(10000),
+                DateTimePicker::make('resume_at')->label('موعد استئناف الطلب')->native(false)->seconds(false)->minDate(now()->addMinute())->required(),
+                DateTimePicker::make('resume_follow_up_at')->label('موعد المتابعة بعد الاستئناف')->native(false)->seconds(false)->required(),
+                Textarea::make('notes')->label('ملاحظات إضافية')->rows(2),
+            ])
             ->visible(fn (Model $record): bool => $record->status === RequestStatus::Active)
-            ->action(function (Model $record): void {
+            ->action(function (Model $record, array $data): void {
                 $actor = auth()->user();
                 abort_unless($actor instanceof User, 403);
-                app(RequestService::class)->pause($actor, static::department(), (int) $record->getKey());
+                app(RequestService::class)->pause(
+                    $actor,
+                    static::department(),
+                    (int) $record->getKey(),
+                    $data['pause_reason'],
+                    $data['resume_at'],
+                    $data['resume_follow_up_at'],
+                    $data['notes'] ?? null,
+                );
                 $record->refresh();
             })
             ->successNotificationTitle('تم إيقاف الطلب مؤقتًا');
@@ -1063,17 +1195,12 @@ abstract class SectionRequestResource extends Resource
                     ])
                     ->live()
                     ->required(),
-                Textarea::make('outcome_reason_text')
-                    ->label('سبب الإغلاق')
-                    ->rows(3)
-                    ->dehydrated(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
-                    ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
-                    ->required(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
                 Select::make('outcome_reason_id')
                     ->label('تصنيف الإغلاق')
                     ->options(fn (): array => self::closeReasonOptions())
                     ->dehydrated(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
-                    ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
+                    ->visible(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value)
+                    ->required(fn (Get $get): bool => $get('outcome') === RequestOutcome::Unsuccessful->value),
                 Textarea::make('outcome_notes')->label('ملاحظات إضافية')->rows(2),
             ])
             ->visible(fn (Model $record): bool => $record->status !== RequestStatus::Closed)

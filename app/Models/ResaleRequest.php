@@ -7,9 +7,12 @@ use App\Enums\RequestOutcome;
 use App\Enums\RequestStatus;
 use App\Enums\RequestUnitType;
 use App\Enums\ResaleRequestStage;
+use App\Enums\ElectricityMeterType;
+use App\Enums\RequestClientCategory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class ResaleRequest extends Model
 {
@@ -23,8 +26,19 @@ class ResaleRequest extends Model
             'stage' => ResaleRequestStage::class,
             'outcome' => RequestOutcome::class,
             'unit_type' => RequestUnitType::class,
+            'client_category' => RequestClientCategory::class,
+            'occupants' => 'integer',
+            'bedrooms' => 'integer',
+            'bathrooms' => 'integer',
+            'building_year' => 'integer',
+            'elevator_required' => 'boolean',
+            'water_meter' => 'boolean',
+            'electricity_meter_type' => ElectricityMeterType::class,
+            'gas_available' => 'boolean',
             'next_follow_up_at' => 'datetime',
             'paused_at' => 'datetime',
+            'resume_at' => 'datetime',
+            'resume_follow_up_at' => 'datetime',
             'closed_at' => 'datetime',
             'area_min' => 'decimal:2',
             'area_max' => 'decimal:2',
@@ -88,5 +102,10 @@ class ResaleRequest extends Model
     public function viewings(): HasMany
     {
         return $this->hasMany(ResaleViewing::class, 'request_id');
+    }
+
+    public function customerFollowUp(): HasOne
+    {
+        return $this->hasOne(ResaleCustomerFollowUp::class, 'request_id');
     }
 }
